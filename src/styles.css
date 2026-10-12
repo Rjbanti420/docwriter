@@ -87,7 +87,95 @@
   color: var(--color-text);
 }
 
-/* Phase 2: a [data-theme="mocha"] block overrides the colour tokens above. */
+/* Phase 2: theme overrides --------------------------------------------------- */
+
+/* Catppuccin Mocha (dark, default) */
+[data-theme="mocha"] {
+  color-scheme: dark;
+
+  --color-base: #1e1e2e;        /* base */
+  --color-surface: #181825;     /* mantle */
+  --color-surface-2: #313244;   /* surface0 */
+  --color-overlay: rgba(17, 17, 27, 0.6); /* crust with alpha */
+
+  --color-text: #cdd6f4;           /* text */
+  --color-text-secondary: #a6adc8; /* subtext0 */
+  --color-text-faint: #6c7086;     /* overlay0 */
+  --color-text-subtle: #bac2de;    /* subtext1 */
+  --color-text-reading: #cdd6f4;   /* text */
+
+  --color-border: #313244;         /* surface0 */
+  --color-border-strong: #585b70;  /* surface2 */
+
+  --color-accent: #b4befe;         /* lavender */
+  --color-accent-hover: #cba6f7;   /* mauve */
+  --color-accent-ink: #11111b;     /* crust */
+  --color-accent-soft: #45475a;    /* surface1 */
+  --color-focus-ring: rgba(180, 190, 254, 0.25); /* lavender translucent */
+
+  --color-hover: rgba(255, 255, 255, 0.08);
+  --color-hover-soft: rgba(255, 255, 255, 0.06);
+  --color-hover-softer: rgba(255, 255, 255, 0.05);
+  --color-chip-bg: #45475a;        /* surface1 */
+  --color-tag-bg: #313244;         /* surface0 */
+
+  --color-mark-unknown: #6c7086;           /* overlay0 */
+  --color-mark-unknown-text: #a6adc8;      /* subtext0 */
+  --color-mark-unknown-hover: rgba(255, 255, 255, 0.08);
+
+  --color-danger: #f38ba8;          /* red */
+  --color-danger-border: #7f849c;   /* overlay1 */
+  --color-danger-bg: rgba(243, 139, 168, 0.12);
+  --color-warn-bg: rgba(250, 179, 135, 0.12);      /* peach tint */
+  --color-warn-border: rgba(250, 179, 135, 0.4);
+  --color-warn-text: #fab387;        /* peach */
+  --color-positive: #a6e3a1;         /* green */
+  --color-caution: #fab387;          /* peach (matches warn tone) */
+}
+
+/* Explicit light theme (so it can be selected even if default changes later) */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --color-base: #f6f6f4;
+  --color-surface: #ffffff;
+  --color-surface-2: #fbfbfa;
+  --color-overlay: rgba(20, 20, 24, 0.42);
+
+  --color-text: #1f2328;
+  --color-text-secondary: #6b7280;
+  --color-text-faint: #9ca3af;
+  --color-text-subtle: #4b5563;
+  --color-text-reading: #23272e;
+
+  --color-border: #e6e6e3;
+  --color-border-strong: #d4d4d0;
+
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #eef2ff;
+  --color-focus-ring: rgba(79, 70, 229, 0.25);
+
+  --color-hover: rgba(0, 0, 0, 0.05);
+  --color-hover-soft: rgba(0, 0, 0, 0.045);
+  --color-hover-softer: rgba(0, 0, 0, 0.03);
+  --color-chip-bg: #f1f1ef;
+  --color-tag-bg: #f4f4f2;
+
+  --color-mark-unknown: #b0b0b0;
+  --color-mark-unknown-text: #6b7280;
+  --color-mark-unknown-hover: #fff7ed;
+
+  --color-danger: #b91c1c;
+  --color-danger-border: #f0caca;
+  --color-danger-bg: #fef2f2;
+  --color-warn-bg: #fffbeb;
+  --color-warn-border: #fde68a;
+  --color-warn-text: #92400e;
+  --color-positive: #047857;
+  --color-caution: #b45309;
+}
 
 * {
   box-sizing: border-box;
