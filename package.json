@@ -3,13 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "electron/main.cjs",
+  "description": "Offline paste-to-worldbible writing companion.",
+  "author": "DocWriter",
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:server": "node --watch server/index.mjs",
     "dev:web": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server/index.mjs"
+    "start": "node server/index.mjs",
+    "desktop": "vite build && electron .",
+    "desktop:dev": "DOCWRITER_DEV=1 electron .",
+    "dist": "vite build && electron-builder --linux"
   },
   "dependencies": {
     "an-array-of-english-words": "^2.0.0",
@@ -21,7 +27,32 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.7.2",
     "vite": "^6.0.7"
+  },
+  "build": {
+    "appId": "com.docwriter.app",
+    "productName": "DocWriter",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "server/**/*",
+      "dist/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office",
+      "synopsis": "Paste chapters, build a story bible",
+      "description": "DocWriter is an offline writing companion: paste a chapter, it detects names, and you triage them into a typed, cross-linked worldbible. One file per book."
+    }
   }
 }

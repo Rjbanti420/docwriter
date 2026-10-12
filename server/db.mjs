@@ -5,9 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = join(root, 'data');
-mkdirSync(dataDir, { recursive: true });
 
-// DOCWRITER_DB lets tests point at a throwaway/copied database.
+// DOCWRITER_DB lets the desktop app and tests point at another database file.
 const dbPath = process.env.DOCWRITER_DB || join(dataDir, 'docwriter.db');
 mkdirSync(dirname(dbPath), { recursive: true });
 

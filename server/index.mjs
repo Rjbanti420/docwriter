@@ -520,4 +520,7 @@ if (existsSync(dist)) {
 }
 
 const PORT = Number(process.env.PORT ?? 5178);
-app.listen(PORT, () => console.log(`[server] listening on http://localhost:${PORT}`));
+const HOST = process.env.HOST || undefined;
+const onListen = () => console.log(`[server] listening on http://${HOST || 'localhost'}:${PORT}`);
+if (HOST) app.listen(PORT, HOST, onListen);
+else app.listen(PORT, onListen);
