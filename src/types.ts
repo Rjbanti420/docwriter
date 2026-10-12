@@ -55,6 +55,7 @@ export interface Candidate {
   signals: string;
   possible_entity_id: number | null;
   entity_id: number | null;
+  tier: string;
   status: string;
   chapter_number?: string;
   chapter_title?: string;
@@ -84,6 +85,7 @@ export interface Entity {
   fields: string;
   tracking: string;
   gap_threshold: number | null;
+  trashed_at?: string | null;
   type_name?: string;
   type_color?: string;
   type_icon?: string;
@@ -124,6 +126,12 @@ export interface ChapterDetail {
 export interface ReviewData {
   pending: Candidate[];
   alerts: Alert[];
+}
+
+export interface IgnoredToken {
+  id: number;
+  normalized: string;
+  created_at: string;
 }
 
 export type View = 'read' | 'review' | 'bible';

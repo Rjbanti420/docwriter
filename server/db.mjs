@@ -7,7 +7,11 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = join(root, 'data');
 mkdirSync(dataDir, { recursive: true });
 
-export const db = new DatabaseSync(join(dataDir, 'docwriter.db'));
+// DOCWRITER_DB lets tests point at a throwaway/copied database.
+const dbPath = process.env.DOCWRITER_DB || join(dataDir, 'docwriter.db');
+mkdirSync(dirname(dbPath), { recursive: true });
+
+export const db = new DatabaseSync(dbPath);
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA foreign_keys = ON;');
 
@@ -48,6 +52,7 @@ CREATE TABLE IF NOT EXISTS entities (
   fields TEXT DEFAULT '{}',
   tracking TEXT DEFAULT 'off',
   gap_threshold INTEGER,
+  trashed_at TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -84,6 +89,7 @@ CREATE TABLE IF NOT EXISTS candidates (
   signals TEXT DEFAULT '[]',
   possible_entity_id INTEGER,
   entity_id INTEGER,
+  tier TEXT DEFAULT 'primary',
   status TEXT DEFAULT 'pending',
   created_at TEXT DEFAULT (datetime('now'))
 );
@@ -128,8 +134,16 @@ const BUILTIN_TYPES = [
   { name: 'Item', icon: '🗡', color: '#db2777', hints: [] },
 ];
 
+function ensureColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+}
+
 export function migrate() {
   db.exec(SCHEMA);
+  // forward-compatible migrations for existing databases
+  ensureColumn('entities', 'trashed_at', 'trashed_at TEXT');
+  ensureColumn('candidates', 'tier', "tier TEXT DEFAULT 'primary'");
   const count = db.prepare('SELECT COUNT(*) AS n FROM types').get().n;
   if (count === 0) {
     const insert = db.prepare(

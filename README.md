@@ -23,6 +23,9 @@ Then open http://localhost:5173 — a demo chapter is pre-loaded so you can see 
 Other scripts: `npm run build` (production bundle), `npm start` (serve the built app + API
 from `:5178` alone).
 
+Set `DOCWRITER_DB=/path/to/copy.db` to point the server at another project file (used by the
+tests so they never touch your real data).
+
 ## The loop
 
 ```
@@ -41,18 +44,40 @@ PASTE a chapter → store revision → detect candidates
   `Kael`) shows a "same thing / different" prompt. "Same thing" stores it as an alias.
 - **Triage is keyboard-first:** `Enter` accept, `1–9` accept as type, `←/→` change type,
   `L` later, `X` ignore, `Esc` close.
-- **Review** is one inbox with two tabs: *New names* and *Trail alerts*.
+- **Review** is one inbox with four tabs: *New names*, *Trail alerts*, *Rejected*, *Trash*.
 - **Tracking** is opt-in per entity: `off` / `reappearance` / `absence`, each with a manual
   required gap threshold.
-- **Delete chapter** cascades its mentions/scans/alerts, asks keep-gap vs renumber, and
-  never deletes a card that still has notes (unreferenced cards are flagged instead).
+- **Delete chapter** cascades its mentions/scans/alerts and asks keep-gap vs renumber. A card
+  that loses its only appearance is moved to **Trash**, not destroyed (recoverable).
+
+## Cutting the noise
+
+Capitalised common words ("Then", "Rain", "Hearing") used to flood triage. Two filters now
+keep the queue short:
+
+1. **Dictionary filter.** A bundled ~275k-word English list suppresses words that are plainly
+   common (with simple inflections and contractions, so "looking"/"didn't" are caught). It is
+   used as a *demotion* signal, never a hard drop, so a real name that is also a word
+   (`Grace`, `Rose`) is never lost.
+2. **Signal gating.** A candidate is only *primary* if it has a real reason to be a name:
+   dialogue attribution (`Kael said` / `said Kael`), a type keyword (`Order`, `River`), an
+   unusual non-dictionary token, or enough repetition. Weak candidates are **demoted** and
+   hidden behind **"Show more low-confidence"** — still one click away, so nothing is buried
+   completely.
+
+Names are ranked by confidence, primary first. Punctuation breaks name groups, so
+`"Nodding, Ash said"` correctly links `Ash` rather than inventing "Nodding Ash".
+
+**Rejected** lists everything you've ignored, with a *Restore* button if you change your mind.
+**Trash** lists cards orphaned by chapter deletion, with *Restore* and *Delete forever*.
 
 ## What's implemented (first slice)
 
 Paste → detect → triage → typed entities + mentions, the reader with colored underlines
-for known entities and dotted underlines for un-triaged names, Review inbox, trail alerts,
-entity cards (type, summary, aliases, tracking, threshold), editable chapter text with
-rescan, chapter delete with gap/renumber, manual entity creation.
+for known entities and dotted underlines for un-triaged names, Review inbox (New names /
+Trail alerts / Rejected / Trash), precision-first detection with dictionary + signal tiers,
+trail alerts, entity cards (type, summary, aliases, tracking, threshold), editable chapter
+text with rescan, chapter delete with gap/renumber and orphan-to-Trash, manual entity creation.
 
 ## Deferred / not yet built
 

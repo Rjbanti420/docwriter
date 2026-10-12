@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Candidate, ReviewData, Type } from '../types';
+import type { Candidate, Entity, IgnoredToken, ReviewData, Type } from '../types';
 
 function CandidateRow({
   c,
@@ -20,6 +20,13 @@ function CandidateRow({
       return [];
     }
   })();
+  const signals: string[] = (() => {
+    try {
+      return JSON.parse(c.signals || '[]');
+    } catch {
+      return [];
+    }
+  })();
 
   return (
     <div className="card">
@@ -32,6 +39,15 @@ function CandidateRow({
             </span>
           </div>
           {contexts[0] && <div className="cand-context">{contexts[0]}</div>}
+          {signals.length > 0 && (
+            <div style={{ marginTop: 6, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {signals.map((s) => (
+                <span className="chip" key={s}>
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
           {c.possible_name && (
             <div className="lookalike">
               Looks like <strong>{c.possible_name}</strong> —{' '}
@@ -63,7 +79,7 @@ function CandidateRow({
           Accept
         </button>
         <button onClick={() => onResolve(c, 'later')}>Later</button>
-        <button onClick={() => onResolve(c, 'ignore')}>Ignore</button>
+        <button onClick={() => onResolve(c, 'ignore')}>Ignore — never ask again</button>
       </div>
     </div>
   );
@@ -72,19 +88,33 @@ function CandidateRow({
 export default function ReviewView({
   review,
   types,
+  ignored,
+  trash,
   onResolve,
   onAlertState,
   onOpenEntity,
   onTriageAll,
+  onUnignore,
+  onRestore,
+  onDeleteForever,
 }: {
   review: ReviewData;
   types: Type[];
+  ignored: IgnoredToken[];
+  trash: Entity[];
   onResolve: (c: Candidate, action: string, extra?: Record<string, unknown>) => void;
   onAlertState: (id: number, state: string) => void;
   onOpenEntity: (id: number) => void;
   onTriageAll: () => void;
+  onUnignore: (id: number) => void;
+  onRestore: (id: number) => void;
+  onDeleteForever: (id: number) => void;
 }) {
-  const [tab, setTab] = useState<'names' | 'alerts'>('names');
+  const [tab, setTab] = useState<'names' | 'alerts' | 'rejected' | 'trash'>('names');
+  const [showMore, setShowMore] = useState(false);
+
+  const primary = review.pending.filter((c) => c.tier !== 'demoted');
+  const demoted = review.pending.filter((c) => c.tier === 'demoted');
   const unread = review.alerts.filter((a) => a.state === 'unread').length;
 
   return (
@@ -95,29 +125,57 @@ export default function ReviewView({
       </p>
       <div className="tabs">
         <button className={tab === 'names' ? 'active' : ''} onClick={() => setTab('names')}>
-          New names {review.pending.length > 0 && <span className="badge">{review.pending.length}</span>}
+          New names {primary.length > 0 && <span className="badge">{primary.length}</span>}
         </button>
         <button className={tab === 'alerts' ? 'active' : ''} onClick={() => setTab('alerts')}>
           Trail alerts {unread > 0 && <span className="badge">{unread}</span>}
+        </button>
+        <button className={tab === 'rejected' ? 'active' : ''} onClick={() => setTab('rejected')}>
+          Rejected {ignored.length > 0 && <span className="badge">{ignored.length}</span>}
+        </button>
+        <button className={tab === 'trash' ? 'active' : ''} onClick={() => setTab('trash')}>
+          Trash {trash.length > 0 && <span className="badge">{trash.length}</span>}
         </button>
       </div>
 
       {tab === 'names' && (
         <>
-          {review.pending.length > 1 && (
+          {primary.length > 1 && (
             <div className="toolbar">
               <button className="primary" onClick={onTriageAll}>
-                Triage one by one ({review.pending.length})
+                Triage one by one ({primary.length})
               </button>
             </div>
           )}
-          {review.pending.length === 0 ? (
+          {primary.length === 0 && demoted.length === 0 ? (
             <div className="empty-state">No new names waiting. Paste a chapter to scan it.</div>
           ) : (
             <div className="list">
-              {review.pending.map((c) => (
+              {primary.map((c) => (
                 <CandidateRow key={c.id} c={c} types={types} onResolve={onResolve} />
               ))}
+            </div>
+          )}
+
+          {demoted.length > 0 && (
+            <div style={{ marginTop: 18 }}>
+              {!showMore ? (
+                <button onClick={() => setShowMore(true)}>
+                  Show {demoted.length} more low-confidence
+                </button>
+              ) : (
+                <>
+                  <p className="progress">
+                    Low confidence — mostly capitalised common words. Accept any that are real names;
+                    ignore the rest and they never come back.
+                  </p>
+                  <div className="list">
+                    {demoted.map((c) => (
+                      <CandidateRow key={c.id} c={c} types={types} onResolve={onResolve} />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </>
@@ -151,6 +209,64 @@ export default function ReviewView({
                       <button onClick={() => onAlertState(a.id, 'resolved')}>Resolve</button>
                     </div>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === 'rejected' && (
+        <>
+          <p className="progress">
+            Words you ignored. The scanner will never surface these again in this book. Restore one if you
+            ignored it by mistake.
+          </p>
+          {ignored.length === 0 ? (
+            <div className="empty-state">Nothing rejected yet.</div>
+          ) : (
+            <div className="list">
+              {ignored.map((t) => (
+                <div className="card" key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ flex: 1 }} className="cand-name">
+                    {t.normalized}
+                  </div>
+                  <button onClick={() => onUnignore(t.id)}>Restore</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === 'trash' && (
+        <>
+          <p className="progress">
+            Cards that lost their last appearance (usually because their only chapter was deleted). Restore
+            one, or delete it for good.
+          </p>
+          {trash.length === 0 ? (
+            <div className="empty-state">Trash is empty.</div>
+          ) : (
+            <div className="list">
+              {trash.map((e) => (
+                <div className="card" key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span className="dot" style={{ background: e.type_color }} />
+                  <div style={{ flex: 1 }}>
+                    <div className="cand-name">{e.name}</div>
+                    <div className="cand-meta">
+                      {e.type_name || 'Uncategorised'} · trashed {e.trashed_at}
+                    </div>
+                  </div>
+                  <button onClick={() => onRestore(e.id)}>Restore</button>
+                  <button
+                    className="danger"
+                    onClick={() => {
+                      if (confirm(`Permanently delete "${e.name}"? This cannot be undone.`)) onDeleteForever(e.id);
+                    }}
+                  >
+                    Delete forever
+                  </button>
                 </div>
               ))}
             </div>

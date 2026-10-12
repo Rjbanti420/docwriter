@@ -12,6 +12,7 @@
     "start": "node server/index.mjs"
   },
   "dependencies": {
+    "an-array-of-english-words": "^2.0.0",
     "express": "^4.21.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

@@ -35,4 +35,8 @@ export const api = {
   removeAlias: (id: number, aliasId: number) => req(`/entities/${id}/aliases/${aliasId}`, { method: 'DELETE' }),
   setAlertState: (id: number, state: string) =>
     req(`/alerts/${id}/state`, { method: 'POST', body: JSON.stringify({ state }) }),
+  ignored: () => req('/ignored'),
+  unignore: (id: number) => req(`/ignored/${id}`, { method: 'DELETE' }),
+  trash: () => req('/trash'),
+  restore: (id: number) => req(`/entities/${id}/restore`, { method: 'POST' }),
 };

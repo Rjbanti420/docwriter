@@ -1,5 +1,9 @@
 // Entity detector. Precision-first: it prefers to miss a name than to flood the
-// triage queue. Everything here is heuristic and deliberately simple to tune.
+// triage queue. Candidates are split into two tiers:
+//   primary  — has a reason to be a name (dialogue, a type keyword, recurs, or is
+//              an unusual capitalised word)
+//   demoted  — plausible but weak (usually a capitalised common word); hidden
+//              behind "Show more" so a real name is never lost.
 
 const TITLES = new Set([
   'mr', 'mrs', 'ms', 'miss', 'dr', 'sir', 'madam', 'madame', 'lord', 'lady',
@@ -17,7 +21,7 @@ const CONNECTORS = new Set([
   'and', 'del', 'dos', 'das', 'bin', 'ibn', 'ap', 'mac', 'o', 'y',
 ]);
 
-// Single capitalized words that should never become an entity on their own.
+// Single capitalised words that should never become an entity on their own.
 const STOPWORDS = new Set(
   (
     'the a an and but or nor for yet so if then than that this these those there here ' +
@@ -32,6 +36,7 @@ const STOPWORDS = new Set(
     'also even still just only very too well now again once soon later always never often sometimes ' +
     'usually really quite rather almost already perhaps maybe probably certainly indeed instead ' +
     'oh ah eh hmm mm um uh hey hi hello goodbye alright okay ok yeah yep nope please thanks thank welcome sorry ' +
+    'ahh ahhh ohh ohhh huh tsk argh arghh ugh oof ouch whoa gah meh ha haha hmph shh mhm ' +
     'monday tuesday wednesday thursday friday saturday sunday ' +
     'january february april june july august september october november december ' +
     'one two three four five six seven eight nine ten eleven twelve twenty thirty forty fifty ' +
@@ -41,9 +46,23 @@ const STOPWORDS = new Set(
     'heaven hell earth sun moon stars sky world ' +
     'each every both few many much more most less least several all any some ' +
     'new old good bad great big small long short high low young little large ' +
-    'god gods lord lords king kings queen queens prince princess '
-  ).split(/\s+/).filter(Boolean)
+    'god gods lord lords king kings queen queens prince princess ' +
+    "i'm i've i'll i'd you're you've it's that's there's we're they're he's she's " +
+    "let's don't didn't doesn't can't won't isn't wasn't aren't weren't couldn't wouldn't shouldn't"
+  )
+    .split(/\s+/)
+    .filter(Boolean)
 );
+
+const FUNCTION_WORDS = new Set([
+  'the', 'a', 'an', 'of', 'to', 'in', 'on', 'at', 'by', 'for', 'with', 'from',
+  'as', 'and', 'or', 'but', 'if', 'not', 'is', 'are', 'was', 'were', 'be',
+  'been', 'being', 'am', 'has', 'have', 'had', 'do', 'does', 'did', 'will',
+  'would', 'shall', 'should', 'can', 'could', 'may', 'might', 'must', 'your',
+  'my', 'his', 'her', 'their', 'our', 'its', 'you', 'we', 'they', 'he', 'she',
+  'it', 'this', 'that', 'these', 'those', 'there', 'here', 'when', 'where',
+  'why', 'how', 'what', 'which', 'who', 'then', 'than', 'so',
+]);
 
 const COUNTRY_KW = new Set([
   'kingdom', 'empire', 'republic', 'federation', 'union', 'nation', 'country',
@@ -71,7 +90,6 @@ const LOC_KW = new Set([
   'dock', 'docks', 'outpost', 'camp', 'settlement', 'colony', 'province',
   'region', 'frontier', 'wastes', 'barrens',
 ]);
-
 const ITEM_KW = new Set([
   'sword', 'blade', 'amulet', 'ring', 'crown', 'stone', 'book', 'scroll',
   'staff', 'wand', 'shield', 'armor', 'armour', 'dagger', 'spear', 'bow',
@@ -82,12 +100,19 @@ const ITEM_KW = new Set([
 
 const DIALOGUE_VERBS = new Set([
   'said', 'says', 'asked', 'replied', 'answered', 'shouted', 'whispered',
-  'muttered', 'murmured', 'told', 'called', 'exclaimed', 'cried', 'laughed',
+  'muttered', 'murmured', 'told', 'exclaimed', 'cried', 'laughed',
   'sighed', 'breathed', 'repeated', 'added', 'continued', 'responded',
   'snapped', 'grunted', 'growled', 'hissed', 'barked', 'yelled', 'screamed',
   'mumbled', 'stammered', 'began', 'agreed', 'insisted', 'admitted',
   'announced', 'declared', 'demanded', 'warned', 'noted', 'offered',
   'pleaded', 'promised', 'roared', 'thought', 'wondered', 'mused', 'recalled',
+]);
+
+const ADVERBS = new Set([
+  'softly', 'quietly', 'loudly', 'calmly', 'angrily', 'quickly', 'slowly',
+  'coldly', 'warmly', 'sharply', 'flatly', 'tersely', 'sadly', 'happily',
+  'nervously', 'anxiously', 'eagerly', 'firmly', 'gently', 'simply',
+  'finally', 'suddenly', 'carefully', 'bluntly', 'dryly', 'grimly',
 ]);
 
 function isCapitalized(w) {
@@ -96,6 +121,36 @@ function isCapitalized(w) {
 
 function isConnector(w) {
   return CONNECTORS.has(w.toLowerCase());
+}
+
+// Is this a common English word (including simple inflections and contractions)?
+function commonWord(w, dict) {
+  if (!w) return false;
+  if (dict.has(w)) return true;
+  if (/n['’]t$/.test(w)) {
+    const b = w.replace(/n['’]t$/, '');
+    if (b && (dict.has(b) || STOPWORDS.has(b))) return true;
+    const irregular = { ca: 'can', wo: 'will', sha: 'shall' };
+    if (irregular[b] && (dict.has(irregular[b]) || STOPWORDS.has(irregular[b]))) return true;
+  }
+  if (/['’]/.test(w)) {
+    const base = w.split(/['’]/)[0];
+    if (base && (dict.has(base) || STOPWORDS.has(base))) return true;
+  }
+  const forms = [];
+  if (w.endsWith('ies')) forms.push(w.slice(0, -3) + 'y');
+  if (w.endsWith('es')) forms.push(w.slice(0, -2));
+  if (w.endsWith('s')) forms.push(w.slice(0, -1));
+  if (w.endsWith('ed')) {
+    forms.push(w.slice(0, -2));
+    forms.push(w.slice(0, -1));
+  }
+  if (w.endsWith('ing')) {
+    forms.push(w.slice(0, -3));
+    forms.push(w.slice(0, -3) + 'e');
+  }
+  if (w.endsWith('ly')) forms.push(w.slice(0, -2));
+  return forms.some((f) => f.length > 1 && dict.has(f));
 }
 
 const ABBREVIATIONS = /^(mr|mrs|ms|dr|st|jr|sr|vs|etc|prof|gen|col|sgt|capt|ltd|inc)\.$/i;
@@ -157,28 +212,33 @@ export function normalizeKey(phrase) {
     .replace(/^(the|a|an)\s+/, '');
 }
 
-function contextFor(text, sentence) {
-  return text.slice(sentence.start, sentence.end).trim();
-}
-
 /**
  * @param {string} text
  * @param {Map<string, number>} entityKeys normalized name/alias -> entity id
  * @param {Set<string>} ignoredKeys
+ * @param {Set<string>} dictionary
  * @returns {{ candidates: object[], mentions: object[] }}
  */
-export function detect(text, entityKeys, ignoredKeys) {
+export function detect(text, entityKeys, ignoredKeys, dictionary = new Set()) {
   const sentences = splitSentences(text);
   const groups = new Map();
+
+  // Whitespace only between two tokens keeps them in one name; punctuation breaks it.
+  const adjacent = (a, b) => !/[^\s]/.test(text.slice(a.offset + a.word.length, b.offset));
 
   for (const sentence of sentences) {
     const slice = text.slice(sentence.start, sentence.end);
     const tokens = tokenize(slice).map((t) => ({ ...t, offset: t.offset + sentence.start }));
-    const context = contextFor(text, sentence);
-    const hasQuote = /["“”]/.test(slice);
-    const dialogueVerb = [...slice.matchAll(/[A-Za-z]+/g)].some((m) =>
-      DIALOGUE_VERBS.has(m[0].toLowerCase())
-    );
+    const context = text.slice(sentence.start, sentence.end).trim();
+    // Dialogue attribution only: a dialogue verb within two tokens of the name
+    // ("Kael said", "said Kael"). A quote somewhere in the sentence is too coarse
+    // and would tag every common word in dialogue-heavy prose.
+    const dialogueNear = (idx) =>
+      idx >= 0 && idx < tokens.length && DIALOGUE_VERBS.has(tokens[idx].word.toLowerCase());
+    const isAdverb = (idx) =>
+      idx >= 0 &&
+      idx < tokens.length &&
+      (/ly$/.test(tokens[idx].word.toLowerCase()) || ADVERBS.has(tokens[idx].word.toLowerCase()));
 
     let i = 0;
     while (i < tokens.length) {
@@ -186,19 +246,37 @@ export function detect(text, entityKeys, ignoredKeys) {
         i += 1;
         continue;
       }
+      // A sentence-initial common word must not swallow the next capitalised
+      // word ("Then Kael ..." is not the entity "Then Kael").
+      if (i === 0 && STOPWORDS.has(tokens[i].word.toLowerCase())) {
+        i += 1;
+        continue;
+      }
       const parts = [tokens[i]];
       let j = i + 1;
       while (j < tokens.length) {
-        const w = tokens[j].word;
+        const prev = parts[parts.length - 1];
+        const cur = tokens[j];
+        if (!adjacent(prev, cur)) break; // punctuation ends the name
+        const w = cur.word;
         if (isCapitalized(w)) {
-          parts.push(tokens[j]);
+          parts.push(cur);
           j += 1;
           continue;
         }
         if (isConnector(w)) {
           let k = j;
-          while (k < tokens.length && isConnector(tokens[k].word)) k += 1;
-          if (k < tokens.length && isCapitalized(tokens[k].word)) {
+          let last = prev;
+          let ok = true;
+          while (k < tokens.length && isConnector(tokens[k].word)) {
+            if (!adjacent(last, tokens[k])) {
+              ok = false;
+              break;
+            }
+            last = tokens[k];
+            k += 1;
+          }
+          if (ok && k < tokens.length && isCapitalized(tokens[k].word) && adjacent(last, tokens[k])) {
             for (let x = j; x <= k; x += 1) parts.push(tokens[x]);
             j = k + 1;
             continue;
@@ -229,16 +307,28 @@ export function detect(text, entityKeys, ignoredKeys) {
         i = j;
         continue;
       }
+      // Stammers like "T-There", "H-he", "I-I" are not names.
+      if (single && /-/.test(kept[0].word) && kept[0].word.split('-')[0].length <= 1) {
+        i = j;
+        continue;
+      }
 
       const firstTok = kept[0];
       const lastTok = kept[kept.length - 1];
+      const keptStart = i + first;
+      const keptEnd = keptStart + kept.length - 1;
+      const attributed =
+        dialogueNear(keptEnd + 1) ||
+        dialogueNear(keptStart - 1) ||
+        (isAdverb(keptEnd + 1) && dialogueNear(keptEnd + 2)) ||
+        (isAdverb(keptStart - 1) && dialogueNear(keptStart - 2));
       const occurrence = {
         start: firstTok.offset,
         end: lastTok.offset + lastTok.word.length,
         surface: text.slice(firstTok.offset, lastTok.offset + lastTok.word.length),
         context,
         sentenceInitial: firstTok.offset === sentence.start,
-        dialogue: hasQuote && dialogueVerb,
+        dialogue: attributed,
       };
 
       let g = groups.get(key);
@@ -259,14 +349,13 @@ export function detect(text, entityKeys, ignoredKeys) {
   for (const g of groups.values()) {
     const occurrences = g.occurrences;
     if (entityKeys.has(g.key)) {
-      for (const o of occurrences) {
-        mentions.push({ key: g.key, ...o });
-      }
+      for (const o of occurrences) mentions.push({ key: g.key, ...o });
       continue;
     }
     if (ignoredKeys.has(g.key)) continue;
 
     const words = g.key.split(' ');
+    const isSingle = g.words === 1;
     const midSentence = occurrences.some((o) => !o.sentenceInitial);
     const dialogue = occurrences.some((o) => o.dialogue);
 
@@ -276,12 +365,28 @@ export function detect(text, entityKeys, ignoredKeys) {
     else if (words.some((w) => LOC_KW.has(w))) keywordType = 'Location';
     else if (words.some((w) => ITEM_KW.has(w))) keywordType = 'Item';
 
+    const isDict = isSingle
+      ? commonWord(g.key, dictionary)
+      : words.every((w) => CONNECTORS.has(w) || commonWord(w, dictionary));
+    const anyNonDict = words.some((w) => w.length >= 3 && !CONNECTORS.has(w) && !commonWord(w, dictionary));
+    const sentenceLike = words.some((w) => FUNCTION_WORDS.has(w));
+
+    // Level 1 (dictionary) + Level 2 (signal gating).
+    const strong =
+      dialogue ||
+      !!keywordType ||
+      (isSingle && !isDict && g.key.length >= 3 && (midSentence || occurrences.length >= 2)) ||
+      (isSingle && isDict && occurrences.length >= 4) ||
+      (!isSingle && anyNonDict && !sentenceLike);
+
     const signals = [];
     if (occurrences.length >= 5) signals.push('frequent');
     if (midSentence) signals.push('mid-sentence');
     if (dialogue) signals.push('dialogue');
     if (g.words > 1) signals.push('multi-word');
+    if (isDict) signals.push('common-word');
     if (keywordType) signals.push(`keyword:${keywordType.toLowerCase()}`);
+    if (!strong) signals.push('weak');
 
     let confidence = 0.25;
     if (occurrences.length >= 3) confidence += 0.15;
@@ -290,7 +395,9 @@ export function detect(text, entityKeys, ignoredKeys) {
     if (dialogue) confidence += 0.2;
     if (g.words > 1) confidence += 0.1;
     if (keywordType) confidence += 0.2;
-    confidence = Math.min(0.98, Number(confidence.toFixed(2)));
+    if (isDict) confidence -= 0.15;
+    if (!strong) confidence -= 0.2;
+    confidence = Math.max(0.05, Math.min(0.98, Number(confidence.toFixed(2))));
 
     candidates.push({
       key: g.key,
@@ -301,10 +408,15 @@ export function detect(text, entityKeys, ignoredKeys) {
       signals,
       suggestedType: keywordType || 'Character',
       confidence,
+      tier: strong ? 'primary' : 'demoted',
     });
   }
 
-  candidates.sort((a, b) => b.confidence - a.confidence || b.occurrences - a.occurrences);
+  const rank = { primary: 0, demoted: 1 };
+  candidates.sort(
+    (a, b) =>
+      rank[a.tier] - rank[b.tier] || b.confidence - a.confidence || b.occurrences - a.occurrences
+  );
   return { candidates, mentions };
 }
 

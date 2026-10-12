@@ -2,8 +2,12 @@ import express from 'express';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { db, migrate } from './db.mjs';
 import { detect, normalizeKey, findLookalike } from './detect.mjs';
+
+const require = createRequire(import.meta.url);
+const ENGLISH_WORDS = new Set(require('an-array-of-english-words'));
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 migrate();
@@ -24,7 +28,8 @@ function getTypeIdByName() {
 
 function getEntityKeyMap() {
   const map = new Map();
-  for (const e of db.prepare('SELECT id, name FROM entities').all()) map.set(normalizeKey(e.name), e.id);
+  for (const e of db.prepare('SELECT id, name FROM entities WHERE trashed_at IS NULL').all())
+    map.set(normalizeKey(e.name), e.id);
   for (const a of db.prepare('SELECT entity_id, alias FROM aliases').all()) map.set(normalizeKey(a.alias), a.entity_id);
   return map;
 }
@@ -108,7 +113,7 @@ function generateAlerts(chapterId) {
 function runScan(chapterId, revisionId, text) {
   const known = getEntityKeyMap();
   const ignored = getIgnoredSet();
-  const { candidates, mentions } = detect(text, known, ignored);
+  const { candidates, mentions } = detect(text, known, ignored, ENGLISH_WORDS);
 
   db.prepare('DELETE FROM mentions WHERE chapter_id = ?').run(chapterId);
   db.prepare("DELETE FROM candidates WHERE chapter_id = ? AND status IN ('pending','later')").run(chapterId);
@@ -124,8 +129,8 @@ function runScan(chapterId, revisionId, text) {
   const typeIdByName = getTypeIdByName();
   const insertCand = db.prepare(
     `INSERT INTO candidates (chapter_id, revision_id, surface_text, normalized, occurrences, positions, contexts,
-       suggested_type_id, confidence, signals, possible_entity_id, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
+       suggested_type_id, confidence, signals, possible_entity_id, tier, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
   );
 
   for (const c of candidates) {
@@ -142,7 +147,8 @@ function runScan(chapterId, revisionId, text) {
       typeId,
       c.confidence,
       JSON.stringify(c.signals),
-      possible ?? null
+      possible ?? null,
+      c.tier
     );
   }
 
@@ -155,6 +161,22 @@ function runScan(chapterId, revisionId, text) {
   );
 
   return { found: candidates.length, linked };
+}
+
+// Option C: a card that loses its last mention (e.g. its only chapter was
+// deleted) is moved to Trash rather than destroyed, so notes are recoverable.
+function sweepOrphans() {
+  const ids = db
+    .prepare(
+      `SELECT e.id FROM entities e
+       WHERE e.trashed_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM mentions m WHERE m.entity_id = e.id)`
+    )
+    .all()
+    .map((r) => r.id);
+  const upd = db.prepare("UPDATE entities SET trashed_at = datetime('now') WHERE id = ?");
+  for (const id of ids) upd.run(id);
+  return ids.length;
 }
 
 function chapterRow(id) {
@@ -221,8 +243,9 @@ app.get('/api/chapters/:id', (req, res) => {
   if (!chapter) return res.status(404).json({ error: 'not found' });
   const candidates = db
     .prepare(
-      `SELECT id, surface_text, normalized, positions, confidence, suggested_type_id, possible_entity_id, status
-       FROM candidates WHERE chapter_id = ? AND status IN ('pending','later') ORDER BY confidence DESC`
+      `SELECT id, surface_text, normalized, positions, confidence, suggested_type_id, possible_entity_id, tier, status
+       FROM candidates WHERE chapter_id = ? AND status IN ('pending','later') AND tier = 'primary'
+       ORDER BY confidence DESC`
     )
     .all(id);
   res.json({ chapter, text: chapterText(id), mentions: chapterMentions(id), candidates });
@@ -270,7 +293,8 @@ app.delete('/api/chapters/:id', (req, res) => {
       upd.run(i, num, c.id);
     });
   }
-  res.json({ ok: true });
+  const trashed = sweepOrphans();
+  res.json({ ok: true, trashed });
 });
 
 app.get('/api/review', (_req, res) => {
@@ -376,6 +400,7 @@ app.get('/api/entities', (_req, res) => {
         (SELECT c.number FROM mentions m JOIN chapters c ON c.id = m.chapter_id WHERE m.entity_id = e.id ORDER BY c.sort_order LIMIT 1) AS first_chapter,
         (SELECT c.number FROM mentions m JOIN chapters c ON c.id = m.chapter_id WHERE m.entity_id = e.id ORDER BY c.sort_order DESC LIMIT 1) AS last_chapter
        FROM entities e LEFT JOIN types t ON t.id = e.type_id
+       WHERE e.trashed_at IS NULL
        ORDER BY t.sort_order, e.name COLLATE NOCASE`
     )
     .all();
@@ -451,6 +476,32 @@ app.post('/api/entities/:id/aliases', (req, res) => {
 
 app.delete('/api/entities/:id/aliases/:aliasId', (req, res) => {
   db.prepare('DELETE FROM aliases WHERE id = ? AND entity_id = ?').run(Number(req.params.aliasId), Number(req.params.id));
+  res.json({ ok: true });
+});
+
+app.get('/api/trash', (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT e.*, t.name AS type_name, t.color AS type_color, t.icon AS type_icon,
+        (SELECT COUNT(*) FROM mentions m WHERE m.entity_id = e.id) AS mention_count
+       FROM entities e LEFT JOIN types t ON t.id = e.type_id
+       WHERE e.trashed_at IS NOT NULL ORDER BY e.trashed_at DESC`
+    )
+    .all();
+  res.json(rows);
+});
+
+app.post('/api/entities/:id/restore', (req, res) => {
+  db.prepare('UPDATE entities SET trashed_at = NULL WHERE id = ?').run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+app.get('/api/ignored', (_req, res) => {
+  res.json(db.prepare('SELECT * FROM ignored_tokens ORDER BY normalized').all());
+});
+
+app.delete('/api/ignored/:id', (req, res) => {
+  db.prepare('DELETE FROM ignored_tokens WHERE id = ?').run(Number(req.params.id));
   res.json({ ok: true });
 });
 

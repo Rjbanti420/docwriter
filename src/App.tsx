@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
-import type { Candidate, Chapter, ChapterDetail, Entity, ReviewData, Type, View } from './types';
+import type { Candidate, Chapter, ChapterDetail, Entity, IgnoredToken, ReviewData, Type, View } from './types';
 import AddChapterModal from './components/AddChapterModal';
 import TriageModal from './components/TriageModal';
 import EntityPanel from './components/EntityPanel';
@@ -13,6 +13,8 @@ export default function App() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [review, setReview] = useState<ReviewData>({ pending: [], alerts: [] });
+  const [ignored, setIgnored] = useState<IgnoredToken[]>([]);
+  const [trash, setTrash] = useState<Entity[]>([]);
   const [view, setView] = useState<View>('read');
   const [activeId, setActiveId] = useState<number | null>(null);
   const [detail, setDetail] = useState<ChapterDetail | null>(null);
@@ -25,6 +27,8 @@ export default function App() {
   const loadChapters = useCallback(async () => setChapters(await api.chapters()), []);
   const loadEntities = useCallback(async () => setEntities(await api.entities()), []);
   const loadReview = useCallback(async () => setReview(await api.review()), []);
+  const loadIgnored = useCallback(async () => setIgnored(await api.ignored()), []);
+  const loadTrash = useCallback(async () => setTrash(await api.trash()), []);
 
   const loadChapter = useCallback(async (id: number) => {
     const d: ChapterDetail = await api.chapter(id);
@@ -35,11 +39,20 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const [t, ch, en, rv] = await Promise.all([api.types(), api.chapters(), api.entities(), api.review()]);
+      const [t, ch, en, rv, ig, tr] = await Promise.all([
+        api.types(),
+        api.chapters(),
+        api.entities(),
+        api.review(),
+        api.ignored(),
+        api.trash(),
+      ]);
       setTypes(t);
       setChapters(ch);
       setEntities(en);
       setReview(rv);
+      setIgnored(ig);
+      setTrash(tr);
       if (ch.length) {
         setActiveId(ch[0].id);
         await loadChapter(ch[0].id);
@@ -48,8 +61,8 @@ export default function App() {
   }, [loadChapter]);
 
   const refresh = useCallback(async () => {
-    await Promise.all([loadChapters(), loadEntities(), loadReview()]);
-  }, [loadChapters, loadEntities, loadReview]);
+    await Promise.all([loadChapters(), loadEntities(), loadReview(), loadIgnored(), loadTrash()]);
+  }, [loadChapters, loadEntities, loadReview, loadIgnored, loadTrash]);
 
   const selectChapter = useCallback(
     async (id: number) => {
@@ -95,7 +108,7 @@ export default function App() {
       setView('read');
       const rv: ReviewData = await api.review();
       setReview(rv);
-      openTriage(rv.pending.filter((c) => c.chapter_id === res.chapter.id));
+      openTriage(rv.pending.filter((c) => c.chapter_id === res.chapter.id && c.tier !== 'demoted'));
     },
     [refresh]
   );
@@ -107,7 +120,7 @@ export default function App() {
     await loadChapter(activeId);
     const rv: ReviewData = await api.review();
     setReview(rv);
-    openTriage(rv.pending.filter((c) => c.chapter_id === activeId));
+    openTriage(rv.pending.filter((c) => c.chapter_id === activeId && c.tier !== 'demoted'));
   }, [activeId, draft, refresh, loadChapter]);
 
   const deleteChapter = useCallback(
@@ -142,6 +155,30 @@ export default function App() {
       await loadReview();
     },
     [loadReview]
+  );
+
+  const unignore = useCallback(
+    async (id: number) => {
+      await api.unignore(id);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const restore = useCallback(
+    async (id: number) => {
+      await api.restore(id);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const deleteForever = useCallback(
+    async (id: number) => {
+      await api.deleteEntity(id);
+      await refresh();
+    },
+    [refresh]
   );
 
   const reviewBadge =
@@ -218,10 +255,17 @@ export default function App() {
           <ReviewView
             review={review}
             types={types}
+            ignored={ignored}
+            trash={trash}
             onResolve={resolveCandidate}
             onAlertState={setAlertState}
             onOpenEntity={(id) => setEntityId(id)}
-            onTriageAll={() => setTriage({ items: review.pending, index: 0 })}
+            onTriageAll={() =>
+              setTriage({ items: review.pending.filter((c) => c.tier !== 'demoted'), index: 0 })
+            }
+            onUnignore={unignore}
+            onRestore={restore}
+            onDeleteForever={deleteForever}
           />
         )}
 
