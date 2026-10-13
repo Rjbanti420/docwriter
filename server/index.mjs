@@ -521,6 +521,8 @@ if (existsSync(dist)) {
 
 app.get('/api/projects', (_req,res)=>{ try{ const regPath=join(join(process.env.HOME || '/home/rj', '.config', 'docwriter'),'projects.json'); let list=[]; if(existsSync(regPath)){ list=JSON.parse(readFileSync(regPath,'utf8')); } res.json(list);}catch(e){res.status(500).json({error:String(e)});} });
 app.post('/api/projects/switch', (req,res)=>{ try{ const p=req.body?.path; if(!p) return res.status(400).json({error:'path required'}); writeSettings({dbPath:p}); res.json({ok:true}); }catch(e){res.status(500).json({error:String(e)});} });
+app.get('/api/backup', (_req,res)=>{ try{ const dbPath=process.env.DOCWRITER_DB||join(dataDir,'docwriter.db'); const buf=readFileSync(dbPath); res.set('Content-Disposition','attachment; filename="docwriter-backup.db"'); res.set('Content-Type','application/octet-stream'); res.send(buf); }catch(e){res.status(500).json({error:String(e)});} });
+app.post('/api/backup/import', (req,res)=>{ res.status(501).json({error:'import not implemented in stub'}); });
 const PORT = Number(process.env.PORT ?? 5178);
 const HOST = process.env.HOST || undefined;
 const onListen = () => console.log(`[server] listening on http://${HOST || 'localhost'}:${PORT}`);
