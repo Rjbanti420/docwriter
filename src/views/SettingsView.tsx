@@ -18,6 +18,7 @@ const UI_FONTS = [
 const READING_FONTS = [
   { id: 'Literata', label: 'Literata' },
   { id: 'Georgia', label: 'Georgia' },
+  { id: 'Source Serif 4', label: 'Source Serif 4' },
   { id: 'serif', label: 'Serif (generic)' },
 ];
 
