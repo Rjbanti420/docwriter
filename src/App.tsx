@@ -7,6 +7,7 @@ import EntityPanel from './components/EntityPanel';
 import ReadView from './views/ReadView';
 import ReviewView from './views/ReviewView';
 import BibleView from './views/BibleView';
+import SettingsView from './views/SettingsView';
 
 export default function App() {
   const [types, setTypes] = useState<Type[]>([]);
@@ -23,6 +24,7 @@ export default function App() {
   const [addOpen, setAddOpen] = useState(false);
   const [triage, setTriage] = useState<{ items: Candidate[]; index: number } | null>(null);
   const [entityId, setEntityId] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const loadChapters = useCallback(async () => setChapters(await api.chapters()), []);
   const loadEntities = useCallback(async () => setEntities(await api.entities()), []);
@@ -285,6 +287,10 @@ export default function App() {
           onNavigate={(i) => setTriage((t) => (t ? { ...t, index: i } : t))}
           onClose={() => setTriage(null)}
         />
+      )}
+
+      {settingsOpen && (
+        <SettingsView onClose={() => setSettingsOpen(false)} />
       )}
 
       {entityId != null && (
