@@ -202,6 +202,7 @@ export default function App() {
           <button className={view === 'bible' ? 'active' : ''} onClick={() => setView('bible')}>
             Bible
           </button>
+          <button className="ghost" onClick={() => setSettingsOpen(true)} title="Profile / Settings">⚙</button>
         </div>
         <div className="chapters">
           <div className="section-head">
