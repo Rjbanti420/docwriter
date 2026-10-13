@@ -4,35 +4,5 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('./UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('./UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYMZg.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('./UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZg.ttf') format('truetype');
-}
-
-/* Literata (Reading) */
-@font-face {
-  font-family: 'Literata';
-  font-style: normal;
-  font-weight: 400 700;
-  font-display: swap;
-  src: url('./or3NQ6P12-iJxAIgLYT1PLs1Zd0nfUwAbeGVKoRYzNiCp1OUedn8_7XWSQ.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Literata';
-  font-style: italic;
-  font-weight: 400 700;
-  font-display: swap;
-  src: url('./or3hQ6P12-iJxAIgLYT1PLs1Zd0nfUwAbeGVKoRYzNiCp1OUedn8uYQWSQ.ttf') format('truetype');
+  src: url('/src/assets/fonts/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf') format('truetype');
 }
