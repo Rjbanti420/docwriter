@@ -802,3 +802,40 @@ textarea:focus {
   flex-direction: column;
   gap: 8px;
 }
+
+/* Sepia (reading-oriented) */
+[data-theme="sepia"] {
+  color-scheme: light;
+  --color-base: #f4ecd8;
+  --color-surface: #f7f3e9;
+  --color-surface-2: #f0e6d2;
+  --color-overlay: rgba(64, 48, 32, 0.4);
+  --color-text: #3b2f1e;
+  --color-text-secondary: #5a4630;
+  --color-text-faint: #7a6144;
+  --color-text-subtle: #4a3a25;
+  --color-text-reading: #2f2416;
+  --color-border: #e6d8b8;
+  --color-border-strong: #d6c5a3;
+  --color-accent: #7d6741;
+  --color-accent-hover: #6a5636;
+  --color-accent-ink: #f8f5ec;
+  --color-accent-soft: #ebe0c9;
+  --color-focus-ring: rgba(125, 103, 65, 0.25);
+  --color-hover: rgba(64, 48, 32, 0.06);
+  --color-hover-soft: rgba(64, 48, 32, 0.05);
+  --color-hover-softer: rgba(64, 48, 32, 0.04);
+  --color-chip-bg: #eae0c9;
+  --color-tag-bg: #eee3cc;
+  --color-mark-unknown: #b8a88a;
+  --color-mark-unknown-text: #6a5a3f;
+  --color-mark-unknown-hover: rgba(125, 103, 65, 0.1);
+  --color-danger: #8b4b2b;
+  --color-danger-border: #d7c0b0;
+  --color-danger-bg: rgba(139, 75, 43, 0.1);
+  --color-warn-bg: rgba(181, 120, 48, 0.12);
+  --color-warn-border: rgba(181, 120, 48, 0.35);
+  --color-warn-text: #7d5a2a;
+  --color-positive: #4a6b3a;
+  --color-caution: #7d5a2a;
+}
