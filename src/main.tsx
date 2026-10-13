@@ -1,4 +1,4 @@
-import "/fonts.css";
+const link=document.createElement('link'); link.rel='stylesheet'; link.href='/fonts.css'; document.head.appendChild(link);
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import StyleGuide from './views/StyleGuide';
