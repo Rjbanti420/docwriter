@@ -111,7 +111,7 @@
   --color-accent-hover: #cba6f7;   /* mauve */
   --color-accent-ink: #11111b;     /* crust */
   --color-accent-soft: #45475a;    /* surface1 */
-  --color-focus-ring: rgba(180, 190, 254, 0.25); /* lavender translucent */
+  --color-focus-ring: rgba(180, 190, 254, 0.32); /* lavender translucent */
 
   --color-hover: rgba(255, 255, 255, 0.08);
   --color-hover-soft: rgba(255, 255, 255, 0.06);
@@ -200,7 +200,7 @@ button {
   background: var(--color-surface);
   border-radius: var(--radius-sm);
   padding: 6px 12px;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
 }
 button:hover {
   background: var(--color-surface-2);
@@ -209,6 +209,13 @@ button:hover {
 button:disabled {
   opacity: 0.5;
   cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 button.primary {
   background: var(--color-accent);
@@ -694,7 +701,7 @@ textarea:focus {
   padding: 12px;
 }
 .entity-card:hover {
-  border-color: var(--color-text-faint);
+  border-color: var(--color-border-strong);
   background: var(--color-surface-2);
 }
 .entity-card .nm {
