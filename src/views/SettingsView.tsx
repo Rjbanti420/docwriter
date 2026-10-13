@@ -91,7 +91,10 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
 
       <section style={{marginBottom:16}} className="card">
         <h2 style={{margin:'0 0 10px',fontSize:16}}>Projects</h2>
-        <p className="progress" style={{marginTop:0}}>Library folder support and project switching come in Phase 6.</p>
+        <p className="progress" style={{marginTop:0,marginBottom:8}}>Library folder: <code>{libraryPath || '~/Documents/DocWriter'}</code></p>
+        <div className="actions" style={{marginTop:0}}>
+          <button onClick={async ()=>{ try{ const list=await (await import('../api')).api.projects(); alert('Projects: '+list.length); }catch(e){alert('err');}}}>Load projects</button>
+        </div>
       </section>
 
       <section className="card">

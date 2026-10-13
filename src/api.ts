@@ -11,6 +11,9 @@ async function req<T = any>(path: string, opts: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  projects: () => req('/projects'),
+  switchProject: (path: string) => req('/projects/switch', { method: 'POST', body: JSON.stringify({ path }) }),
+
   types: () => req('/types'),
   chapters: () => req('/chapters'),
   chapter: (id: number) => req(`/chapters/${id}`),
