@@ -519,7 +519,7 @@ if (existsSync(dist)) {
   app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(join(dist, 'index.html')));
 }
 
-app.get('/api/projects', (_req,res)=>{ try{ const regPath=join(app.getPath('userData'),'projects.json'); let list=[]; if(existsSync(regPath)){ list=JSON.parse(readFileSync(regPath,'utf8')); } res.json(list);}catch(e){res.status(500).json({error:String(e)});} });
+app.get('/api/projects', (_req,res)=>{ try{ const regPath=join(join(process.env.HOME || '/home/rj', '.config', 'docwriter'),'projects.json'); let list=[]; if(existsSync(regPath)){ list=JSON.parse(readFileSync(regPath,'utf8')); } res.json(list);}catch(e){res.status(500).json({error:String(e)});} });
 app.post('/api/projects/switch', (req,res)=>{ try{ const p=req.body?.path; if(!p) return res.status(400).json({error:'path required'}); writeSettings({dbPath:p}); res.json({ok:true}); }catch(e){res.status(500).json({error:String(e)});} });
 const PORT = Number(process.env.PORT ?? 5178);
 const HOST = process.env.HOST || undefined;
