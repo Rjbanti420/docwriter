@@ -26,6 +26,30 @@ export const api = {
   review: () => req('/review'),
   resolve: (id: number, body: Record<string, unknown>) =>
     req(`/candidates/${id}/resolve`, { method: 'POST', body: JSON.stringify(body) }),
+
+  guns: () => req('/guns'),
+  gun: (id: number) => req(`/guns/${id}`),
+  addGun: (body: Record<string, unknown>) =>
+    req('/guns', { method: 'POST', body: JSON.stringify(body) }),
+  updateGun: (id: number, body: Record<string, unknown>) =>
+    req(`/guns/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteGun: (id: number) => req(`/guns/${id}`, { method: 'DELETE' }),
+  decideGun: (id: number, body: Record<string, unknown>) =>
+    req(`/guns/${id}/decide`, { method: 'POST', body: JSON.stringify(body) }),
+  fireGun: (id: number) => req(`/guns/${id}/fire`, { method: 'POST' }),
+  reopenGun: (id: number) => req(`/guns/${id}/reopen`, { method: 'POST' }),
+
+  questions: () => req('/questions'),
+  addQuestion: (body: Record<string, unknown>) =>
+    req('/questions', { method: 'POST', body: JSON.stringify(body) }),
+  updateQuestion: (id: number, body: Record<string, unknown>) =>
+    req(`/questions/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteQuestion: (id: number) => req(`/questions/${id}`, { method: 'DELETE' }),
+  scanQuestions: (chapterIds: number[]) =>
+    req('/questions/scan', { method: 'POST', body: JSON.stringify({ chapterIds }) }),
+  questionCandidates: (status = 'pending') => req(`/questions/candidates?status=${status}`),
+  resolveQuestionCandidate: (id: number, body: Record<string, unknown>) =>
+    req(`/questions/candidates/${id}/resolve`, { method: 'POST', body: JSON.stringify(body) }),
   entities: () => req('/entities'),
   createEntity: (body: Record<string, unknown>) =>
     req('/entities', { method: 'POST', body: JSON.stringify(body) }),
@@ -33,9 +57,14 @@ export const api = {
   updateEntity: (id: number, body: Record<string, unknown>) =>
     req(`/entities/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteEntity: (id: number) => req(`/entities/${id}`, { method: 'DELETE' }),
+  trashEntities: (ids: number[]) =>
+    req('/entities/trash', { method: 'POST', body: JSON.stringify({ ids }) }),
   addAlias: (id: number, alias: string) =>
     req(`/entities/${id}/aliases`, { method: 'POST', body: JSON.stringify({ alias }) }),
   removeAlias: (id: number, aliasId: number) => req(`/entities/${id}/aliases/${aliasId}`, { method: 'DELETE' }),
+  // A absorbs B: everything B has moves onto A, B's card goes to Trash.
+  mergeEntity: (id: number, absorbedId: number) =>
+    req(`/entities/${id}/merge`, { method: 'POST', body: JSON.stringify({ absorbedId }) }),
   setAlertState: (id: number, state: string) =>
     req(`/alerts/${id}/state`, { method: 'POST', body: JSON.stringify({ state }) }),
   ignored: () => req('/ignored'),

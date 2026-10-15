@@ -123,6 +123,66 @@ CREATE INDEX IF NOT EXISTS idx_mentions_chapter ON mentions(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_candidates_chapter ON candidates(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidates(status);
 CREATE INDEX IF NOT EXISTS idx_alerts_state ON alerts(state);
+
+-- Chekhov's Guns: a planted detail and its planned payoff chapter.
+-- Chapter links are id references (never the displayed number), so renumbering
+-- a chapter cannot silently break a gun; a deleted chapter only nulls the link.
+CREATE TABLE IF NOT EXISTS guns (
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  explanation TEXT DEFAULT '',
+  impact TEXT DEFAULT '',
+  appearance_chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
+  planned_number TEXT DEFAULT '',
+  planned_chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
+  outcome TEXT DEFAULT '',
+  status TEXT DEFAULT 'active',
+  fired_at TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS gun_history (
+  id INTEGER PRIMARY KEY,
+  gun_id INTEGER NOT NULL REFERENCES guns(id) ON DELETE CASCADE,
+  chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
+  chapter_label TEXT DEFAULT '',
+  decision TEXT NOT NULL,
+  from_number TEXT DEFAULT '',
+  to_number TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Questions the novel raises, so each one gets answered.
+CREATE TABLE IF NOT EXISTS questions (
+  id INTEGER PRIMARY KEY,
+  text TEXT NOT NULL,
+  answer TEXT DEFAULT '',
+  source_chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
+  delivered_chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
+  origin TEXT DEFAULT 'manual',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Scan results for questions, reviewed (accept/edit/reject) like entity candidates.
+CREATE TABLE IF NOT EXISTS question_candidates (
+  id INTEGER PRIMARY KEY,
+  chapter_id INTEGER NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  normalized TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',
+  question_id INTEGER REFERENCES questions(id) ON DELETE SET NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_guns_status ON guns(status);
+CREATE INDEX IF NOT EXISTS idx_guns_planned ON guns(planned_number);
+CREATE INDEX IF NOT EXISTS idx_gun_history_gun ON gun_history(gun_id);
+CREATE INDEX IF NOT EXISTS idx_questions_source ON questions(source_chapter_id);
+CREATE INDEX IF NOT EXISTS idx_questions_delivered ON questions(delivered_chapter_id);
+CREATE INDEX IF NOT EXISTS idx_qc_chapter ON question_candidates(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_qc_status ON question_candidates(status);
 `;
 
 const BUILTIN_TYPES = [
@@ -143,6 +203,8 @@ export function migrate() {
   // forward-compatible migrations for existing databases
   ensureColumn('entities', 'trashed_at', 'trashed_at TEXT');
   ensureColumn('candidates', 'tier', "tier TEXT DEFAULT 'primary'");
+  // alerts stay entity-centric; gun notifications hang off a nullable gun_id.
+  ensureColumn('alerts', 'gun_id', 'gun_id INTEGER');
   const count = db.prepare('SELECT COUNT(*) AS n FROM types').get().n;
   if (count === 0) {
     const insert = db.prepare(

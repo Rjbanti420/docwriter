@@ -1,6 +1,18 @@
 import { useState } from 'react';
 import type { Candidate, Entity, IgnoredToken, ReviewData, Type } from '../types';
 
+// SQLite stores `datetime('now')` as "YYYY-MM-DD HH:MM:SS" in UTC.
+function formatTrashed(ts?: string | null): string {
+  if (!ts) return 'trashed';
+  const d = new Date(ts.includes('T') ? ts : ts.replace(' ', 'T') + 'Z');
+  if (Number.isNaN(d.getTime())) return `trashed ${ts}`;
+  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+  if (days <= 0) return 'trashed today';
+  if (days === 1) return 'trashed yesterday';
+  if (days < 30) return `trashed ${days} days ago`;
+  return `trashed ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+}
+
 function CandidateRow({
   c,
   types,
@@ -93,6 +105,7 @@ export default function ReviewView({
   onResolve,
   onAlertState,
   onOpenEntity,
+  onOpenGun,
   onTriageAll,
   onUnignore,
   onRestore,
@@ -105,6 +118,7 @@ export default function ReviewView({
   onResolve: (c: Candidate, action: string, extra?: Record<string, unknown>) => void;
   onAlertState: (id: number, state: string) => void;
   onOpenEntity: (id: number) => void;
+  onOpenGun: (id: number) => void;
   onTriageAll: () => void;
   onUnignore: (id: number) => void;
   onRestore: (id: number) => void;
@@ -112,10 +126,30 @@ export default function ReviewView({
 }) {
   const [tab, setTab] = useState<'names' | 'alerts' | 'rejected' | 'trash'>('names');
   const [showMore, setShowMore] = useState(false);
+  const [selectedTrash, setSelectedTrash] = useState<number[]>([]);
 
   const primary = review.pending.filter((c) => c.tier !== 'demoted');
   const demoted = review.pending.filter((c) => c.tier === 'demoted');
   const unread = review.alerts.filter((a) => a.state === 'unread').length;
+
+  const allTrashSelected = trash.length > 0 && selectedTrash.length === trash.length;
+  const toggleTrash = (id: number) =>
+    setSelectedTrash((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggleAllTrash = () => setSelectedTrash(allTrashSelected ? [] : trash.map((e) => e.id));
+  const clearTrashSelection = () => setSelectedTrash([]);
+  const restoreSelected = async () => {
+    const ids = selectedTrash;
+    clearTrashSelection();
+    for (const id of ids) await onRestore(id);
+  };
+  const deleteSelected = () => {
+    if (selectedTrash.length === 0) return;
+    if (confirm(`Permanently delete ${selectedTrash.length} card(s)? This cannot be undone.`)) {
+      const ids = selectedTrash;
+      clearTrashSelection();
+      for (const id of ids) onDeleteForever(id);
+    }
+  };
 
   return (
     <div className="main-inner">
@@ -193,13 +227,29 @@ export default function ReviewView({
                 <div className="card" key={a.id}>
                   <div className="alert-row">
                     <div style={{ flex: 1 }}>
-                      <span className={`alert-kind ${a.kind}`}>{a.kind}</span>
-                      <div className="cand-name" style={{ marginTop: 4 }}>
-                        <span className="dot" style={{ background: a.type_color, marginRight: 6 }} />
-                        <button className="ghost" style={{ padding: 0 }} onClick={() => onOpenEntity(a.entity_id)}>
-                          {a.entity_name}
-                        </button>
-                      </div>
+                      <span className={`alert-kind ${a.kind}`}>{a.kind.replace(/_/g, ' ')}</span>
+                      {a.kind === 'gun_ready' ? (
+                        <div className="cand-name" style={{ marginTop: 4 }}>
+                          <button
+                            className="ghost"
+                            style={{ padding: 0 }}
+                            onClick={() => a.gun_id != null && onOpenGun(a.gun_id)}
+                          >
+                            {a.gun_title}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="cand-name" style={{ marginTop: 4 }}>
+                          <span className="dot" style={{ background: a.type_color, marginRight: 6 }} />
+                          <button
+                            className="ghost"
+                            style={{ padding: 0 }}
+                            onClick={() => a.entity_id != null && onOpenEntity(a.entity_id)}
+                          >
+                            {a.entity_name}
+                          </button>
+                        </div>
+                      )}
                       <div className="cand-meta">
                         {a.detail} {a.chapter_number && `· chapter ${a.chapter_number}`}
                       </div>
@@ -248,28 +298,64 @@ export default function ReviewView({
           {trash.length === 0 ? (
             <div className="empty-state">Trash is empty.</div>
           ) : (
-            <div className="list">
-              {trash.map((e) => (
-                <div className="card" key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span className="dot" style={{ background: e.type_color }} />
-                  <div style={{ flex: 1 }}>
-                    <div className="cand-name">{e.name}</div>
-                    <div className="cand-meta">
-                      {e.type_name || 'Uncategorised'} · trashed {e.trashed_at}
-                    </div>
+            <>
+              <div className="toolbar dw-trash-bar">
+                <label className="dw-check">
+                  <input type="checkbox" checked={allTrashSelected} onChange={toggleAllTrash} />
+                  Select all
+                </label>
+                {selectedTrash.length > 0 && (
+                  <div className="dw-trash-bulk">
+                    <span className="progress">{selectedTrash.length} selected</span>
+                    <button className="btn-primary" onClick={restoreSelected}>
+                      Restore
+                    </button>
+                    <button className="btn-danger" onClick={deleteSelected}>
+                      Delete forever
+                    </button>
+                    <button className="btn-secondary" onClick={clearTrashSelection}>
+                      Clear
+                    </button>
                   </div>
-                  <button onClick={() => onRestore(e.id)}>Restore</button>
-                  <button
-                    className="danger"
-                    onClick={() => {
-                      if (confirm(`Permanently delete "${e.name}"? This cannot be undone.`)) onDeleteForever(e.id);
-                    }}
-                  >
-                    Delete forever
-                  </button>
-                </div>
-              ))}
-            </div>
+                )}
+              </div>
+              <ul className="dw-list">
+                {trash.map((e) => (
+                  <li className="dw-card dw-trash" key={e.id}>
+                    <input
+                      type="checkbox"
+                      className="dw-trash__check"
+                      checked={selectedTrash.includes(e.id)}
+                      onChange={() => toggleTrash(e.id)}
+                      aria-label={`Select ${e.name}`}
+                    />
+                    <div className="dw-trash__body">
+                      <div className="dw-trash__name">
+                        <span className="dot" style={{ background: e.type_color }} />
+                        {e.name}
+                      </div>
+                      <div className="dw-card-meta">
+                        <span className="dw-ref">{e.type_name || 'Uncategorised'}</span>
+                        <span>{formatTrashed(e.trashed_at)}</span>
+                      </div>
+                    </div>
+                    <div className="dw-trash__actions">
+                      <button className="btn-secondary" onClick={() => onRestore(e.id)}>
+                        Restore
+                      </button>
+                      <button
+                        className="btn-danger"
+                        onClick={() => {
+                          if (confirm(`Permanently delete "${e.name}"? This cannot be undone.`)) onDeleteForever(e.id);
+                        }}
+                      >
+                        Delete forever
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </>
       )}

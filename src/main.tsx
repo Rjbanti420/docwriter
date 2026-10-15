@@ -18,4 +18,18 @@ if (typeof window !== 'undefined' && (!stored || stored !== theme)) {
   window.localStorage.setItem(THEME_KEY, theme);
 }
 
+// Density bootstrap: comfortable default, toggled from Settings → Interface.
+const DENSITY_KEY = 'docwriter.density';
+const validDensities = new Set(['comfortable', 'compact']);
+const storedDensity = typeof window !== 'undefined' ? window.localStorage.getItem(DENSITY_KEY) : null;
+const density = storedDensity && validDensities.has(storedDensity) ? storedDensity : 'comfortable';
+document.documentElement.setAttribute('data-density', density);
+
+// Reading text size, driven by the reader toolbar (A− / A+), applied on load.
+const READ_KEY = 'docwriter.readingSize';
+const storedRead = typeof window !== 'undefined' ? Number(window.localStorage.getItem(READ_KEY)) : NaN;
+if (storedRead >= 15 && storedRead <= 26) {
+  document.documentElement.style.setProperty('--text-reading', `${storedRead}px`);
+}
+
 createRoot(document.getElementById('root')!).render(showStyleGuide ? <StyleGuide /> : <App />);

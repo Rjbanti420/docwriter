@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import type { CSSProperties } from 'react';
 import type { Candidate, Mention } from '../types';
 
 interface Marker {
@@ -62,7 +63,8 @@ export default function ReaderText({
     chosen.forEach((mk, i) => {
       if (mk.start > pos) out.push(text.slice(pos, mk.start));
       const cls = mk.kind === 'known' ? 'mention' : 'mention unknown';
-      const style = mk.kind === 'known' ? { borderBottomColor: mk.color } : undefined;
+      const style =
+        mk.kind === 'known' ? ({ ['--e']: mk.color } as CSSProperties) : undefined;
       out.push(
         <span
           key={`m${i}`}

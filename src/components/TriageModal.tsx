@@ -18,6 +18,11 @@ export default function TriageModal({
 }) {
   const item = items[index];
   const [typeId, setTypeId] = useState<number | null>(null);
+  const [view, setView] = useState<'list' | 'grid'>('list');
+  const [bulkTypeId, setBulkTypeId] = useState<number | null>(
+    () => types.find((t) => t.name === 'Character')?.id ?? types[0]?.id ?? null
+  );
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   useEffect(() => {
     if (item) {
@@ -26,11 +31,25 @@ export default function TriageModal({
     }
   }, [item?.id, types]);
 
+  const allSelected = items.length > 0 && selectedIds.length === items.length;
+  const toggleSelected = (id: number) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggleAll = () => setSelectedIds(allSelected ? [] : items.map((it) => it.id));
+  const bulkResolve = async (action: string, extra?: Record<string, unknown>) => {
+    const chosen = items.filter((it) => selectedIds.includes(it.id));
+    setSelectedIds([]);
+    for (const it of chosen) await onResolve(it, action, extra);
+  };
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (!item) return;
+      if (view === 'grid') {
+        if (e.key === 'Escape') onClose();
+        return;
+      }
       if (e.key === 'Enter') {
         e.preventDefault();
         onResolve(item, 'accept', { typeId });
@@ -57,7 +76,7 @@ export default function TriageModal({
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [item, typeId, types, onResolve, onClose]);
+  }, [item, typeId, view, types, onResolve, onClose]);
 
   if (!item) {
     return (
@@ -96,14 +115,80 @@ export default function TriageModal({
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className={`modal${view === 'grid' ? ' wide' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>New name found</h2>
+          <h2>{view === 'grid' ? 'Triage all' : 'New name found'}</h2>
           <span className="progress">
             {index + 1} / {items.length}
           </span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button className={view === 'list' ? 'primary' : ''} onClick={() => setView('list')}>
+              List
+            </button>
+            <button
+              className={view === 'grid' ? 'primary' : ''}
+              onClick={() => {
+                setView('grid');
+                setSelectedIds([]);
+              }}
+            >
+              Grid
+            </button>
+          </div>
         </div>
         <div className="modal-body">
+          {view === 'grid' ? (
+            <>
+              <div className="toolbar" style={{ marginTop: 0, marginBottom: 12 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+                  Select all
+                </label>
+                <span className="progress">{selectedIds.length} selected</span>
+              </div>
+
+              <div className="entity-grid">
+                {items.map((it) => (
+                  <label
+                    key={it.id}
+                    className={`entity-card${selectedIds.includes(it.id) ? ' sel' : ''}`}
+                    style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer' }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(it.id)}
+                      onChange={() => toggleSelected(it.id)}
+                    />
+                    <span style={{ flex: 1 }}>
+                      <span className="nm">{it.surface_text}</span>
+                      <span className="sub">
+                        {it.occurrences}× · ch.{it.chapter_number || '?'} ·{' '}
+                        {Math.round(it.confidence * 100)}%
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="field" style={{ marginTop: 16 }}>
+                <label>Accept selected as</label>
+                <div className="type-row">
+                  {types.map((t) => (
+                    <button
+                      key={t.id}
+                      className={`type-btn${bulkTypeId === t.id ? ' sel' : ''}`}
+                      style={{ color: t.color }}
+                      onClick={() => setBulkTypeId(t.id)}
+                    >
+                      <span>{t.icon}</span>
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
           <div className="cand-name" style={{ fontSize: 22 }}>
             {item.surface_text}
           </div>
@@ -167,14 +252,37 @@ export default function TriageModal({
             <span className="kbd">←/→</span> change type · <span className="kbd">L</span> later ·{' '}
             <span className="kbd">X</span> ignore · <span className="kbd">Esc</span> close
           </div>
+            </>
+          )}
         </div>
         <div className="modal-foot">
-          <button onClick={() => onResolve(item, 'ignore')}>Ignore</button>
-          <button onClick={() => onResolve(item, 'later')}>Later</button>
-          {index > 0 && <button className="ghost" onClick={() => onNavigate(index - 1)}>← Back</button>}
-          <button className="primary" onClick={() => onResolve(item, 'accept', { typeId })}>
-            Accept
-          </button>
+          {view === 'grid' ? (
+            <>
+              <button onClick={onClose}>Close</button>
+              <button disabled={selectedIds.length === 0} onClick={() => bulkResolve('ignore')}>
+                Ignore selected
+              </button>
+              <button disabled={selectedIds.length === 0} onClick={() => bulkResolve('later')}>
+                Later selected
+              </button>
+              <button
+                className="primary"
+                disabled={selectedIds.length === 0 || bulkTypeId == null}
+                onClick={() => bulkResolve('accept', { typeId: bulkTypeId })}
+              >
+                Accept selected
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => onResolve(item, 'ignore')}>Ignore</button>
+              <button onClick={() => onResolve(item, 'later')}>Later</button>
+              {index > 0 && <button className="ghost" onClick={() => onNavigate(index - 1)}>← Back</button>}
+              <button className="primary" onClick={() => onResolve(item, 'accept', { typeId })}>
+                Accept
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

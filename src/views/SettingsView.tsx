@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const THEME_KEY = 'docwriter.theme';
+const DENSITY_KEY = 'docwriter.density';
 const FONT_UI_KEY = 'docwriter.fontUi';
 const FONT_READING_KEY = 'docwriter.fontReading';
 
@@ -24,6 +25,7 @@ const READING_FONTS = [
 
 export default function SettingsView({ onClose }: { onClose: () => void }) {
   const [theme, setTheme] = useState('mocha');
+  const [density, setDensity] = useState('comfortable');
   const [fontUi, setFontUi] = useState('Inter');
   const [fontReading, setFontReading] = useState('Literata');
   const [name, setName] = useState('');
@@ -32,6 +34,7 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     try { setTheme(localStorage.getItem(THEME_KEY) || 'mocha'); } catch {}
+    try { setDensity(localStorage.getItem(DENSITY_KEY) || 'comfortable'); } catch {}
     try { setFontUi(localStorage.getItem(FONT_UI_KEY) || 'Inter'); } catch {}
     try { setFontReading(localStorage.getItem(FONT_READING_KEY) || 'Literata'); } catch {}
     try { setName(localStorage.getItem('docwriter.profile.name') || ''); } catch {}
@@ -42,6 +45,11 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
   function applyTheme(t: string) {
     setTheme(t);
     try { localStorage.setItem(THEME_KEY, t); document.documentElement.setAttribute('data-theme', t); } catch {}
+  }
+
+  function applyDensity(d: string) {
+    setDensity(d);
+    try { localStorage.setItem(DENSITY_KEY, d); document.documentElement.setAttribute('data-density', d); } catch {}
   }
 
   function applyFontUi(f: string) {
@@ -104,6 +112,13 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
           <label>Theme</label>
           <div className="type-row">
             {THEMES.map(t => <button key={t.id} className={theme===t.id?'type-btn sel':'type-btn'} onClick={()=>applyTheme(t.id)}>{t.label}</button>)}
+          </div>
+        </div>
+        <div className="field">
+          <label>Density</label>
+          <div className="segmented">
+            <button aria-pressed={density==='comfortable'} className={density==='comfortable'?'active':''} onClick={()=>applyDensity('comfortable')}>Comfortable</button>
+            <button aria-pressed={density==='compact'} className={density==='compact'?'active':''} onClick={()=>applyDensity('compact')}>Compact</button>
           </div>
         </div>
         <div className="row">

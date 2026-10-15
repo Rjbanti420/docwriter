@@ -66,15 +66,17 @@ export interface Candidate {
 
 export interface Alert {
   id: number;
-  entity_id: number;
+  entity_id: number | null;
   kind: string;
   chapter_id: number | null;
   detail: string;
   state: string;
   created_at: string;
-  entity_name: string;
+  entity_name: string | null;
   type_color?: string;
   chapter_number?: string;
+  gun_id?: number | null;
+  gun_title?: string | null;
 }
 
 export interface Entity {
@@ -134,4 +136,60 @@ export interface IgnoredToken {
   created_at: string;
 }
 
-export type View = 'read' | 'review' | 'bible';
+/** A planted detail ("Chekhov's gun") and the chapter where it should pay off. */
+export interface Gun {
+  id: number;
+  title: string;
+  explanation: string;
+  impact: string;
+  appearance_chapter_id: number | null;
+  planned_number: string;
+  planned_chapter_id: number | null;
+  outcome: string;
+  status: string;
+  fired_at: string | null;
+  created_at: string;
+  updated_at: string;
+  /** Resolved server-side: the planned payoff chapter exists right now. */
+  ready?: boolean;
+}
+
+export interface GunHistory {
+  id: number;
+  gun_id: number;
+  chapter_id: number | null;
+  chapter_label: string;
+  decision: string;
+  from_number: string;
+  to_number: string;
+  created_at: string;
+}
+
+export interface Question {
+  id: number;
+  text: string;
+  answer: string;
+  source_chapter_id: number | null;
+  delivered_chapter_id: number | null;
+  origin: string;
+  created_at: string;
+  updated_at: string;
+  status: 'open' | 'answered' | 'delivered';
+  source_chapter_number?: string | null;
+  delivered_chapter_number?: string | null;
+}
+
+/** A question the scan found in a chapter, waiting to be accepted or rejected. */
+export interface QuestionCandidate {
+  id: number;
+  chapter_id: number;
+  text: string;
+  normalized: string;
+  status: string;
+  question_id: number | null;
+  created_at: string;
+  chapter_number: string;
+  chapter_title: string;
+}
+
+export type View = 'read' | 'review' | 'bible' | 'planning';

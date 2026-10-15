@@ -1,6 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ReaderText from '../components/ReaderText';
 import type { Chapter, ChapterDetail } from '../types';
+
+const READ_SIZE_KEY = 'docwriter.readingSize';
+const MIN_READ = 15;
+const MAX_READ = 26;
+const DEFAULT_READ = 19;
 
 export default function ReadView({
   chapters,
@@ -36,6 +41,20 @@ export default function ReadView({
   const [showDelete, setShowDelete] = useState(false);
   const [renumber, setRenumber] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [fontSize, setFontSize] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem('docwriter.readingSize'));
+      if (v >= MIN_READ && v <= MAX_READ) return v;
+    } catch {}
+    return DEFAULT_READ;
+  });
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--text-reading', `${fontSize}px`);
+    try {
+      localStorage.setItem('docwriter.readingSize', String(fontSize));
+    } catch {}
+  }, [fontSize]);
 
   if (chapters.length === 0) {
     return (
@@ -59,14 +78,6 @@ export default function ReadView({
     <div className="main-inner">
       {chapter && (
         <>
-          <div className="reader-head">
-            <h1>
-              {chapter.number ? `Chapter ${chapter.number}` : 'Chapter'}
-              {chapter.title ? <small>{chapter.title}</small> : null}
-            </h1>
-            <span className="progress">{chapter.word_count} words</span>
-          </div>
-
           <div className="toolbar">
             <button disabled={idx <= 0} onClick={() => onSelect(chapters[idx - 1].id)}>
               ← Prev
@@ -75,6 +86,24 @@ export default function ReadView({
               Next →
             </button>
             <div style={{ flex: 1 }} />
+            <button
+              className="icon-btn"
+              title="Smaller text"
+              aria-label="Decrease text size"
+              disabled={fontSize <= MIN_READ}
+              onClick={() => setFontSize((s) => Math.max(MIN_READ, s - 1))}
+            >
+              A−
+            </button>
+            <button
+              className="icon-btn"
+              title="Larger text"
+              aria-label="Increase text size"
+              disabled={fontSize >= MAX_READ}
+              onClick={() => setFontSize((s) => Math.min(MAX_READ, s + 1))}
+            >
+              A+
+            </button>
             {!editing ? (
               <>
                 <button onClick={onEdit}>Edit</button>
@@ -111,13 +140,26 @@ export default function ReadView({
               spellCheck
             />
           ) : (
-            <ReaderText
-              text={detail!.text}
-              mentions={detail!.mentions}
-              candidates={detail!.candidates}
-              onMention={onOpenEntity}
-              onUnknown={onOpenCandidate}
-            />
+            <div className="paper">
+              <div className="paper-inner">
+                <div className="paper-head">
+                  <div className="paper-meta">
+                    <span className="label-mono">
+                      {chapter.number ? `Chapter ${chapter.number}` : 'Chapter'}
+                    </span>
+                    <span className="progress">{chapter.word_count} words</span>
+                  </div>
+                  {chapter.title ? <h1 className="paper-title">{chapter.title}</h1> : null}
+                </div>
+                <ReaderText
+                  text={detail!.text}
+                  mentions={detail!.mentions}
+                  candidates={detail!.candidates}
+                  onMention={onOpenEntity}
+                  onUnknown={onOpenCandidate}
+                />
+              </div>
+            </div>
           )}
         </>
       )}

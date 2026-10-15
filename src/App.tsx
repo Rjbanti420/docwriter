@@ -4,9 +4,11 @@ import type { Candidate, Chapter, ChapterDetail, Entity, IgnoredToken, ReviewDat
 import AddChapterModal from './components/AddChapterModal';
 import TriageModal from './components/TriageModal';
 import EntityPanel from './components/EntityPanel';
+import SearchBox from './components/SearchBox';
 import ReadView from './views/ReadView';
 import ReviewView from './views/ReviewView';
 import BibleView from './views/BibleView';
+import PlanningView from './views/PlanningView';
 import SettingsView from './views/SettingsView';
 
 export default function App() {
@@ -25,6 +27,29 @@ export default function App() {
   const [triage, setTriage] = useState<{ items: Candidate[]; index: number } | null>(null);
   const [entityId, setEntityId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [planningFocus, setPlanningFocus] = useState<number | null>(null);
+
+  const go = (v: View) => {
+    setView(v);
+    setSettingsOpen(false);
+    setMenuOpen(false);
+    setEntityId(null);
+  };
+
+  const topTitle = settingsOpen
+    ? 'Profile / Settings'
+    : view === 'read'
+      ? detail?.chapter
+        ? [detail.chapter.number && `Chapter ${detail.chapter.number}`, detail.chapter.title]
+            .filter(Boolean)
+            .join(' · ') || 'Read'
+        : 'Read'
+      : view === 'review'
+        ? 'Review'
+        : view === 'planning'
+          ? 'Planning'
+          : 'The Bible';
 
   const loadChapters = useCallback(async () => setChapters(await api.chapters()), []);
   const loadEntities = useCallback(async () => setEntities(await api.entities()), []);
@@ -74,6 +99,20 @@ export default function App() {
     },
     [loadChapter]
   );
+
+  const openSearchChapter = useCallback(
+    (id: number) => {
+      setSettingsOpen(false);
+      setMenuOpen(false);
+      setEntityId(null);
+      selectChapter(id);
+    },
+    [selectChapter]
+  );
+
+  const openSearchEntity = useCallback((id: number) => {
+    setEntityId(id);
+  }, []);
 
   const openTriage = (items: Candidate[]) => {
     if (items.length) setTriage({ items, index: 0 });
@@ -187,46 +226,170 @@ export default function App() {
     review.pending.length + review.alerts.filter((a) => a.state === 'unread').length;
 
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          DocWriter <span>· worldbible</span>
+    <div className={`app${menuOpen ? ' menu-open' : ''}`}>
+      <button
+        className="menu-btn"
+        aria-label="Toggle menu"
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen((v) => !v)}
+      >
+        <span className="menu-icon" />
+      </button>
+      <div
+        className={`dw-scrim${menuOpen ? ' is-open' : ''}`}
+        onClick={() => setMenuOpen(false)}
+      />
+      <aside className={`dw-sidebar${menuOpen ? ' is-open' : ''}`} aria-label="Sidebar">
+        <div className="dw-sidebar__top">
+          <button
+            className="dw-icon-btn"
+            aria-label="Close sidebar"
+            onClick={() => setMenuOpen(false)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
         </div>
-        <div className="nav">
-          <button className={view === 'read' ? 'active' : ''} onClick={() => setView('read')}>
-            Read
+
+        <nav className="dw-nav" aria-label="Main">
+          <button
+            className={`dw-nav__item${!settingsOpen && view === 'read' ? ' is-active' : ''}`}
+            aria-current={!settingsOpen && view === 'read' ? 'page' : undefined}
+            onClick={() => go('read')}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+            </svg>
+            <span>Read</span>
           </button>
-          <button className={view === 'review' ? 'active' : ''} onClick={() => setView('review')}>
-            Review {reviewBadge > 0 && <span className="badge">{reviewBadge}</span>}
+          <button
+            className={`dw-nav__item${!settingsOpen && view === 'review' ? ' is-active' : ''}`}
+            aria-current={!settingsOpen && view === 'review' ? 'page' : undefined}
+            onClick={() => go('review')}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="8" y="2" width="8" height="4" rx="1" />
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              <path d="M12 11h4" />
+              <path d="M12 16h4" />
+              <path d="M8 11h.01" />
+              <path d="M8 16h.01" />
+            </svg>
+            <span>Review</span>
+            {reviewBadge > 0 && <span className="badge">{reviewBadge}</span>}
           </button>
-          <button className={view === 'bible' ? 'active' : ''} onClick={() => setView('bible')}>
-            Bible
+          <button
+            className={`dw-nav__item${!settingsOpen && view === 'planning' ? ' is-active' : ''}`}
+            aria-current={!settingsOpen && view === 'planning' ? 'page' : undefined}
+            onClick={() => go('planning')}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 2v4" />
+              <path d="M12 18v4" />
+              <path d="M2 12h4" />
+              <path d="M18 12h4" />
+            </svg>
+            <span>Planning</span>
           </button>
-          <button className="ghost" onClick={() => setSettingsOpen(true)} title="Profile / Settings">⚙</button>
+          <button
+            className={`dw-nav__item${!settingsOpen && view === 'bible' ? ' is-active' : ''}`}
+            aria-current={!settingsOpen && view === 'bible' ? 'page' : undefined}
+            onClick={() => go('bible')}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+            <span>Bible</span>
+          </button>
+        </nav>
+
+        <hr className="dw-sidebar__rule" />
+
+        <div className="dw-section">
+          <span className="dw-section__label">Chapters</span>
+          <button
+            className="dw-icon-btn dw-icon-btn--ghost"
+            aria-label="New chapter"
+            title="Paste a chapter"
+            onClick={() => setAddOpen(true)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 12h14" />
+              <path d="M12 5v14" />
+            </svg>
+          </button>
         </div>
-        <div className="chapters">
-          <div className="section-head">
-            <span>Chapters</span>
-            <button className="ghost" title="Paste a chapter" onClick={() => setAddOpen(true)}>
-              ＋
-            </button>
-          </div>
+
+        <div className="dw-chapters">
           {chapters.length === 0 && <div className="empty">No chapters yet.</div>}
           {chapters.map((c) => (
             <button
               key={c.id}
-              className={`chapter-item${c.id === activeId ? ' active' : ''}`}
-              onClick={() => selectChapter(c.id)}
+              className={`dw-chapter${c.id === activeId ? ' is-active' : ''}`}
+              aria-current={c.id === activeId ? 'page' : undefined}
+              onClick={() => {
+                selectChapter(c.id);
+                setMenuOpen(false);
+                setSettingsOpen(false);
+              }}
             >
-              <span className="num">{c.number || '·'}</span>
-              <span className="ct">{c.title || `Chapter ${c.number || ''}`.trim()}</span>
+              <span className="dw-chapter__num">{c.number || '·'}</span>
+              <span className="dw-chapter__title">{c.title || `Chapter ${c.number || ''}`.trim()}</span>
               {c.candidate_count ? <span className="cnt">{c.candidate_count} new</span> : null}
             </button>
           ))}
         </div>
+
+        <div className="dw-sidebar__foot">
+          <button
+            className={`dw-nav__item${settingsOpen ? ' is-active' : ''}`}
+            aria-current={settingsOpen ? 'page' : undefined}
+            onClick={() => {
+              setSettingsOpen(true);
+              setMenuOpen(false);
+              setEntityId(null);
+            }}
+            title="Profile / Settings"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <line x1="21" y1="4" x2="14" y2="4" />
+              <line x1="10" y1="4" x2="3" y2="4" />
+              <line x1="21" y1="12" x2="12" y2="12" />
+              <line x1="8" y1="12" x2="3" y2="12" />
+              <line x1="21" y1="20" x2="16" y2="20" />
+              <line x1="12" y1="20" x2="3" y2="20" />
+              <line x1="14" y1="2" x2="14" y2="6" />
+              <line x1="8" y1="10" x2="8" y2="14" />
+              <line x1="16" y1="18" x2="16" y2="22" />
+            </svg>
+            <span>Settings</span>
+          </button>
+        </div>
       </aside>
 
       <main className="main">
+        <header className="topbar">
+          <div className="crumbs">
+            <strong>{topTitle}</strong>
+          </div>
+          <SearchBox
+            chapters={chapters}
+            entities={entities}
+            onOpenChapter={openSearchChapter}
+            onOpenEntity={openSearchEntity}
+          />
+        </header>
+        <div className="body">
+          <div className="content">
+        {settingsOpen ? (
+          <SettingsView onClose={() => setSettingsOpen(false)} />
+        ) : (
+          <>
         {view === 'read' &&
           (activeId && !detail ? (
             <div className="main-inner">
@@ -263,6 +426,10 @@ export default function App() {
             onResolve={resolveCandidate}
             onAlertState={setAlertState}
             onOpenEntity={(id) => setEntityId(id)}
+            onOpenGun={(id) => {
+              setPlanningFocus(id);
+              go('planning');
+            }}
             onTriageAll={() =>
               setTriage({ items: review.pending.filter((c) => c.tier !== 'demoted'), index: 0 })
             }
@@ -272,10 +439,46 @@ export default function App() {
           />
         )}
 
-        {view === 'bible' && (
-          <BibleView entities={entities} types={types} onOpenEntity={(id) => setEntityId(id)} onChanged={refresh} />
+        {view === 'planning' && (
+          <PlanningView
+            chapters={chapters}
+            onChanged={refresh}
+            focusGunId={planningFocus}
+            onClearFocus={() => setPlanningFocus(null)}
+          />
         )}
+
+        {view === 'bible' && (
+          <BibleView
+            entities={entities}
+            chapters={chapters}
+            types={types}
+            onOpenEntity={(id) => setEntityId(id)}
+            onChanged={refresh}
+          />
+        )}
+          </>
+        )}
+          </div>
+
+        </div>
       </main>
+
+      {entityId != null && (
+        <EntityPanel
+          entityId={entityId}
+          entities={entities}
+          chapters={chapters}
+          types={types}
+          onClose={() => setEntityId(null)}
+          onChanged={refresh}
+          onOpenChapter={(cid) => {
+            setEntityId(null);
+            selectChapter(cid);
+          }}
+          onOpenEntity={(id) => setEntityId(id)}
+        />
+      )}
 
       <AddChapterModal open={addOpen} onClose={() => setAddOpen(false)} onSubmit={addChapter} />
 
@@ -287,23 +490,6 @@ export default function App() {
           onResolve={resolveCandidate}
           onNavigate={(i) => setTriage((t) => (t ? { ...t, index: i } : t))}
           onClose={() => setTriage(null)}
-        />
-      )}
-
-      {settingsOpen && (
-        <SettingsView onClose={() => setSettingsOpen(false)} />
-      )}
-
-      {entityId != null && (
-        <EntityPanel
-          entityId={entityId}
-          types={types}
-          onClose={() => setEntityId(null)}
-          onChanged={refresh}
-          onOpenChapter={(cid) => {
-            setEntityId(null);
-            selectChapter(cid);
-          }}
         />
       )}
     </div>

@@ -155,7 +155,7 @@ function commonWord(w, dict) {
 
 const ABBREVIATIONS = /^(mr|mrs|ms|dr|st|jr|sr|vs|etc|prof|gen|col|sgt|capt|ltd|inc)\.$/i;
 
-function splitSentences(text) {
+export function splitSentences(text) {
   const out = [];
   let start = 0;
   let i = 0;
