@@ -2,12 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, CSSProperties, ReactNode } from 'react';
 import { api } from '../api';
 import { fileToDataUrl, getEntityImage, parseFields } from '../entityMedia';
-import { getDeath, getOwnerId } from '../entityRelations';
+import { getDeath, getLeaderId, getMemberIds, getOperatesInId, getOwnerId } from '../entityRelations';
 import { chapterLabel, chapterNumber } from '../chapters';
 import type { Chapter, Entity, EntityDetail, PowerLevel, Type } from '../types';
 
 /** Types that may own an Item. Characters, nations and guilds hold things; places and items do not. */
 const OWNER_TYPES = ['Character', 'Country', 'Organisation'];
+
+/** Types an Organisation can be led by and staffed with. */
+const PERSON_TYPES = ['Character'];
+
+/** Types an Organisation can be said to operate in. */
+const PLACE_TYPES = ['Location', 'Country'];
 
 /** Item rank ladder, from the mundane to the singular. */
 const ITEM_RANKS = ['Mundane', 'Elusive', 'Hazardous', 'Desolating', 'Cataclysmic', 'Singular'];
@@ -107,6 +113,25 @@ function filledCount(s: Section): number {
   return Object.values(s.values).filter((v) => v.trim() !== '').length + buildEntries(s.custom).length;
 }
 
+/** Canonical, blank-pruned snapshot that decides whether Save lights for an Organisation. */
+function organisationSnapshot(s: {
+  description: string;
+  leader: number | null;
+  members: number[];
+  operatesIn: number | null;
+  purpose: string;
+  accomplishments: Entry[];
+}): string {
+  return JSON.stringify({
+    description: s.description,
+    leader: s.leader,
+    members: s.members,
+    operatesIn: s.operatesIn,
+    purpose: s.purpose,
+    accomplishments: buildEntries(s.accomplishments),
+  });
+}
+
 export default function EntityPanel({
   entityId,
   entities,
@@ -146,6 +171,13 @@ export default function EntityPanel({
   const [history, setHistory] = useState<Section>(() => parseSection(null, HISTORY_KEYS));
   const charBaseline = useRef('');
   const [aliasDraft, setAliasDraft] = useState('');
+  // Organisation-only state (all kept in the `fields` bag; Origin reuses `summary`).
+  const [leader, setLeader] = useState<number | null>(null);
+  const [members, setMembers] = useState<number[]>([]);
+  const [operatesIn, setOperatesIn] = useState<number | null>(null);
+  const [purpose, setPurpose] = useState('');
+  const [accomplishments, setAccomplishments] = useState<Entry[]>([]);
+  const orgBaseline = useRef('');
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeQuery, setMergeQuery] = useState('');
   const [mergeTarget, setMergeTarget] = useState<Entity | null>(null);
@@ -188,6 +220,27 @@ export default function EntityPanel({
         history: nextHistory,
       });
       await loadLevels();
+    } else if (d.entity.type_name === 'Organisation') {
+      const nextLeader = getLeaderId(d.entity.fields);
+      const nextMembers = getMemberIds(d.entity.fields);
+      const nextOperates = getOperatesInId(d.entity.fields);
+      const nextPurpose = asString(fields.purpose);
+      const nextAccomp = parseEntries(fields.accomplishments);
+      const nextDesc = asString(fields.description);
+      setLeader(nextLeader);
+      setMembers(nextMembers);
+      setOperatesIn(nextOperates);
+      setPurpose(nextPurpose);
+      setAccomplishments(nextAccomp);
+      setDescription(nextDesc);
+      orgBaseline.current = organisationSnapshot({
+        description: nextDesc,
+        leader: nextLeader,
+        members: nextMembers,
+        operatesIn: nextOperates,
+        purpose: nextPurpose,
+        accomplishments: nextAccomp,
+      });
     }
   }
 
@@ -218,10 +271,11 @@ export default function EntityPanel({
 
   const isItemType = detail?.entity.type_name === 'Item';
   const isCharacterType = detail?.entity.type_name === 'Character';
+  const isOrgType = detail?.entity.type_name === 'Organisation';
   const storedFields = detail ? parseFields(detail.entity.fields) : {};
   // Characters no longer expose the trail controls either, but the stored
   // values ride along untouched on save so the dormant-alert engine keeps working.
-  const hidesTracking = isItemType || isCharacterType;
+  const hidesTracking = isItemType || isCharacterType || isOrgType;
   const thresholdValid =
     hidesTracking || tracking === 'off' || (threshold.trim() !== '' && Number(threshold) > 0);
   const dirty =
@@ -237,8 +291,11 @@ export default function EntityPanel({
           evolvable !== (storedFields.evolvable === true)
         : isCharacterType
           ? characterSnapshot({ powerLevel, abilities, system, history }) !== charBaseline.current
-          : tracking !== (detail.entity.tracking || 'off') ||
-            threshold !== (detail.entity.gap_threshold != null ? String(detail.entity.gap_threshold) : '')));
+          : isOrgType
+            ? organisationSnapshot({ description, leader, members, operatesIn, purpose, accomplishments }) !==
+              orgBaseline.current
+            : tracking !== (detail.entity.tracking || 'off') ||
+              threshold !== (detail.entity.gap_threshold != null ? String(detail.entity.gap_threshold) : '')));
 
   async function save() {
     if (!thresholdValid) return;
@@ -278,6 +335,22 @@ export default function EntityPanel({
       const historyOut = buildSection(history);
       if (Object.keys(historyOut).length > 0) fields.history = historyOut;
       else delete fields.history;
+      payload.fields = fields;
+    } else if (isOrgType && detail) {
+      const fields = parseFields(detail.entity.fields);
+      if (description === '') delete fields.description;
+      else fields.description = description;
+      if (purpose === '') delete fields.purpose;
+      else fields.purpose = purpose;
+      if (leader == null) delete fields.leader;
+      else fields.leader = leader;
+      if (operatesIn == null) delete fields.operates_in;
+      else fields.operates_in = operatesIn;
+      if (members.length === 0) delete fields.members;
+      else fields.members = members;
+      const acc = buildEntries(accomplishments);
+      if (acc.length === 0) delete fields.accomplishments;
+      else fields.accomplishments = acc;
       payload.fields = fields;
     }
     await api.updateEntity(entityId, payload);
@@ -663,6 +736,96 @@ export default function EntityPanel({
                       onChange={setHistory}
                       addLabel="Add subsection"
                       bodyPlaceholder="Details"
+                    />
+                  </SectionCard>
+                </>
+              ) : isOrgType ? (
+                <>
+                  <div className="dw-ie__field">
+                    <label className="dw-ie__label" htmlFor="ie-origin">
+                      Origin
+                    </label>
+                    <textarea
+                      id="ie-origin"
+                      className="dw-ie__textarea"
+                      value={summary}
+                      onChange={(ev) => setSummary(ev.target.value)}
+                      placeholder="Where the organisation came from"
+                    />
+                  </div>
+
+                  <div className="dw-ie__field">
+                    <label className="dw-ie__label" htmlFor="ie-description">
+                      Description
+                    </label>
+                    <textarea
+                      id="ie-description"
+                      className="dw-ie__textarea dw-ie__textarea--tall"
+                      value={description}
+                      onChange={(ev) => setDescription(ev.target.value)}
+                    />
+                  </div>
+
+                  <div className="dw-ie__field">
+                    <span className="dw-ie__label">Leader</span>
+                    <EntitySelect
+                      label="Leader"
+                      value={entities.find((x) => x.id === leader) || null}
+                      missingId={leader}
+                      candidates={entities.filter((x) => PERSON_TYPES.includes(x.type_name ?? ''))}
+                      onPick={(id) => setLeader(id)}
+                      onOpenEntity={onOpenEntity}
+                      placeholder="No leader"
+                      clearLabel="No leader"
+                    />
+                  </div>
+
+                  <div className="dw-ie__field">
+                    <span className="dw-ie__label">Members</span>
+                    <EntityMultiSelect
+                      entities={entities}
+                      value={members}
+                      candidates={entities.filter((x) => PERSON_TYPES.includes(x.type_name ?? ''))}
+                      onChange={setMembers}
+                      onOpenEntity={onOpenEntity}
+                      addLabel="add a member…"
+                    />
+                  </div>
+
+                  <div className="dw-ie__field">
+                    <span className="dw-ie__label">Operates in</span>
+                    <EntitySelect
+                      label="Operates in"
+                      value={entities.find((x) => x.id === operatesIn) || null}
+                      missingId={operatesIn}
+                      candidates={entities.filter((x) => PLACE_TYPES.includes(x.type_name ?? '') && x.id !== entityId)}
+                      onPick={(id) => setOperatesIn(id)}
+                      onOpenEntity={onOpenEntity}
+                      placeholder="Nowhere"
+                      clearLabel="Nowhere"
+                    />
+                  </div>
+
+                  <div className="dw-ie__field">
+                    <label className="dw-ie__label" htmlFor="ie-purpose">
+                      Purpose
+                    </label>
+                    <textarea
+                      id="ie-purpose"
+                      className="dw-ie__textarea dw-ie__textarea--tall"
+                      value={purpose}
+                      onChange={(ev) => setPurpose(ev.target.value)}
+                    />
+                  </div>
+
+                  <SectionCard title="Accomplishments" count={buildEntries(accomplishments).length || undefined}>
+                    <EntryList
+                      entries={accomplishments}
+                      onChange={setAccomplishments}
+                      namePlaceholder="Title"
+                      bodyPlaceholder="Description"
+                      addLabel="Add accomplishment"
+                      pill
                     />
                   </SectionCard>
                 </>
@@ -1062,7 +1225,6 @@ function RankSelect({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-/** Owner picker: "Nobody" plus every candidate, grouped by their type. */
 function OwnerSelect({
   owner,
   candidates,
@@ -1073,6 +1235,40 @@ function OwnerSelect({
   candidates: Entity[];
   onPick: (id: number | null) => void;
   onOpenEntity: (id: number) => void;
+}) {
+  return (
+    <EntitySelect
+      label="Possessed by"
+      value={owner}
+      candidates={candidates}
+      onPick={onPick}
+      onOpenEntity={onOpenEntity}
+      clearLabel="Nobody"
+      placeholder="Assign to…"
+    />
+  );
+}
+
+/** Generic single-entity selector: candidates are grouped by their type. */
+function EntitySelect({
+  value,
+  missingId,
+  candidates,
+  onPick,
+  onOpenEntity,
+  label,
+  placeholder = 'Assign to…',
+  clearLabel = 'Nobody',
+}: {
+  value: Entity | null;
+  /** Stored id that no longer resolves (its entity was trashed) — shown as missing. */
+  missingId?: number | null;
+  candidates: Entity[];
+  onPick: (id: number | null) => void;
+  onOpenEntity?: (id: number) => void;
+  label: string;
+  placeholder?: string;
+  clearLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -1093,14 +1289,14 @@ function OwnerSelect({
         className="dw-ie__trigger dw-ie__trigger--owner"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="Possessed by"
+        aria-label={label}
         onClick={() => setOpen((v) => !v)}
       >
         <span className="dw-ie__avatar" aria-hidden="true">
-          {owner ? owner.type_icon : <PersonIcon />}
+          {value ? value.type_icon : <PersonIcon />}
         </span>
-        <span className={`dw-ie__trigger-text${owner ? '' : ' is-placeholder'}`}>
-          {owner ? owner.name : 'Assign to…'}
+        <span className={`dw-ie__trigger-text${value ? '' : ' is-placeholder'}`}>
+          {value ? value.name : missingId != null ? 'Missing entity' : placeholder}
         </span>
         <Chevron />
       </button>
@@ -1108,19 +1304,19 @@ function OwnerSelect({
         className="dw-ie__popover dw-ie__popover--owners"
         role="listbox"
         hidden={!open}
-        aria-label="Possessed by"
+        aria-label={label}
       >
         <button
           type="button"
           className="dw-ie__option dw-ie__option--plain"
           role="option"
-          aria-selected={!owner}
+          aria-selected={!value}
           onClick={() => {
             onPick(null);
             setOpen(false);
           }}
         >
-          <span className="dw-ie__name">Nobody</span>
+          <span className="dw-ie__name">{clearLabel}</span>
           <Check />
         </button>
         {groups.map((g) => (
@@ -1132,8 +1328,8 @@ function OwnerSelect({
                 type="button"
                 className="dw-ie__option"
                 role="option"
-                aria-selected={owner?.id === c.id}
-                onDoubleClick={() => onOpenEntity(c.id)}
+                aria-selected={value?.id === c.id}
+                onDoubleClick={() => onOpenEntity?.(c.id)}
                 onClick={() => {
                   onPick(c.id);
                   setOpen(false);
@@ -1440,8 +1636,9 @@ function SubsectionList({
 }
 
 /**
- * A list of user-created rows (abilities, custom System/History subsections).
+ * A list of user-created rows (abilities, custom subsections, accomplishments).
  * A row is compact until opened, then it reveals its name field and body.
+ * With `pill`, the collapsed row is a small pill showing only its title.
  */
 function EntryList({
   entries,
@@ -1450,6 +1647,7 @@ function EntryList({
   namePlaceholder = 'Name',
   bodyPlaceholder = 'Details',
   addLabel = 'Add',
+  pill = false,
 }: {
   entries: Entry[];
   onChange: (next: Entry[]) => void;
@@ -1457,6 +1655,7 @@ function EntryList({
   namePlaceholder?: string;
   bodyPlaceholder?: string;
   addLabel?: string;
+  pill?: boolean;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const nameRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -1484,31 +1683,37 @@ function EntryList({
         const open = openId === entry.id;
         const name = entry.name.trim();
         return (
-          <div className={`dw-ie__entry${open ? ' is-open' : ''}`} key={entry.id}>
+          <div className={pill ? 'dw-ie__sub' : `dw-ie__entry${open ? ' is-open' : ''}`} key={entry.id}>
             <div className="dw-ie__entry-head">
               <button
                 type="button"
-                className="dw-ie__entry-toggle"
+                className={pill ? `dw-ie__pill${open ? ' is-open' : ''}` : 'dw-ie__entry-toggle'}
                 aria-expanded={open}
                 onClick={() => setOpenId(open ? null : entry.id)}
               >
-                <RowChevron />
-                <span className={`dw-ie__entry-name${name ? '' : ' is-empty'}`}>
-                  {name || 'Untitled'}
-                </span>
+                {pill ? (
+                  <span className={`dw-ie__pill-label${name ? '' : ' is-empty'}`}>{name || 'Untitled'}</span>
+                ) : (
+                  <>
+                    <RowChevron />
+                    <span className={`dw-ie__entry-name${name ? '' : ' is-empty'}`}>
+                      {name || 'Untitled'}
+                    </span>
+                  </>
+                )}
               </button>
               <button
                 type="button"
                 className="dw-ie__del"
                 title="Delete"
-                aria-label={`Delete ${name || 'entry'}`}
+                aria-label={`Delete ${name || (pill ? 'accomplishment' : 'entry')}`}
                 onClick={() => remove(entry.id)}
               >
                 <XIcon />
               </button>
             </div>
             {open && (
-              <div className="dw-ie__entry-body">
+              <div className={pill ? 'dw-ie__panel' : 'dw-ie__entry-body'}>
                 <input
                   ref={(el) => {
                     nameRefs.current[entry.id] = el;
@@ -1534,6 +1739,95 @@ function EntryList({
         <span>{addLabel}</span>
       </button>
     </div>
+  );
+}
+
+/**
+ * Multi-select over a shared candidate list, used by an Organisation's
+ * Members. Mirrors the Possessions control: chosen entries are alias chips,
+ * and a native select adds the next one. The caller supplies the `.dw-ie__field`
+ * wrapper and its label.
+ */
+function EntityMultiSelect({
+  entities,
+  value,
+  candidates,
+  onChange,
+  onOpenEntity,
+  addLabel = 'add one…',
+}: {
+  entities: Entity[];
+  value: number[];
+  candidates: Entity[];
+  onChange: (ids: number[]) => void;
+  onOpenEntity?: (id: number) => void;
+  addLabel?: string;
+}) {
+  const selected = value
+    .map((id) => entities.find((x) => x.id === id))
+    .filter((e): e is Entity => !!e);
+  const missing = value.filter((id) => !entities.some((x) => x.id === id));
+  const unused = candidates.filter((c) => !value.includes(c.id));
+
+  return (
+    <>
+      {selected.length === 0 && missing.length === 0 && <span className="dw-ie__empty">None yet</span>}
+      <div className="dw-ie__alias-list">
+        {selected.map((c) => (
+          <span className="dw-ie__alias" key={c.id}>
+            <button
+              type="button"
+              className="dw-ie__alias-link"
+              onClick={() => onOpenEntity?.(c.id)}
+              title={`Open ${c.name}`}
+            >
+              {c.type_icon} {c.name}
+            </button>
+            <button
+              type="button"
+              className="dw-ie__x"
+              title="Remove"
+              aria-label={`Remove ${c.name}`}
+              onClick={() => onChange(value.filter((x) => x !== c.id))}
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+        {missing.map((id) => (
+          <span className="dw-ie__alias" key={`missing-${id}`} title="This entity is in the trash">
+            <span className="dw-ie__empty">Missing entity</span>
+            <button
+              type="button"
+              className="dw-ie__x"
+              title="Remove"
+              aria-label="Remove missing entity"
+              onClick={() => onChange(value.filter((x) => x !== id))}
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="dw-ie__select-wrap">
+        <select
+          className="dw-ie__select"
+          value=""
+          disabled={unused.length === 0}
+          onChange={(ev) => {
+            if (ev.target.value) onChange([...value, Number(ev.target.value)]);
+          }}
+        >
+          <option value="">{unused.length === 0 ? 'nobody to add' : addLabel}</option>
+          {unused.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <Chevron />
+      </div>
+    </>
   );
 }
 

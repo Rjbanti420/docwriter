@@ -3656,6 +3656,11 @@ textarea:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.dw-ie__pill-label.is-empty {
+  color: var(--color-text-faint);
+  font-style: italic;
+  font-weight: 400;
+}
 .dw-ie__pill--add {
   padding: 0 14px 0 10px;
   border-style: dashed;
