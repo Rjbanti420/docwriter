@@ -299,6 +299,57 @@ app.get('/api/types', (_req, res) => {
   res.json(db.prepare('SELECT * FROM types ORDER BY sort_order, name').all());
 });
 
+// ---------- power levels (Character) ----------
+// A book-wide, user-defined rank ladder. Levels are managed immediately (like
+// types); only a character's *assignment* rides the entity Save button.
+
+app.get('/api/power-levels', (_req, res) => {
+  res.json(db.prepare('SELECT * FROM power_levels ORDER BY sort_order, name').all());
+});
+
+app.post('/api/power-levels', (req, res) => {
+  const name = String(req.body?.name ?? '').trim();
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const color = String(req.body?.color ?? '').trim();
+  const max = db.prepare('SELECT MAX(sort_order) AS m FROM power_levels').get().m;
+  const order = (max ?? -1) + 1;
+  const info = db
+    .prepare('INSERT INTO power_levels (name, color, sort_order) VALUES (?, ?, ?)')
+    .run(name, color, order);
+  res.json({ id: Number(info.lastInsertRowid), name, color, sort_order: order });
+});
+
+// A level can be renamed and/or recoloured. Both are immediate (book-wide).
+app.put('/api/power-levels/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const row = db.prepare('SELECT * FROM power_levels WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ error: 'not found' });
+  const name = req.body?.name == null ? row.name : String(req.body.name).trim();
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const color = req.body?.color == null ? row.color : String(req.body.color).trim();
+  db.prepare('UPDATE power_levels SET name = ?, color = ? WHERE id = ?').run(name, color, id);
+  res.json({ ok: true, id, name, color });
+});
+
+// Deleting a level cannot leave dangling references: every character still
+// pointing at it is set back to Unranked (fields.power_level removed).
+app.delete('/api/power-levels/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const setFields = db.prepare("UPDATE entities SET fields = ?, updated_at = datetime('now') WHERE id = ?");
+  let cleared = 0;
+  for (const row of db.prepare('SELECT id, fields FROM entities').all()) {
+    const fields = parseEntityFields(row.fields);
+    if (fields.power_level === id) {
+      delete fields.power_level;
+      setFields.run(JSON.stringify(fields), row.id);
+      cleared += 1;
+    }
+  }
+  db.prepare('DELETE FROM power_levels WHERE id = ?').run(id);
+  res.json({ ok: true, cleared });
+});
+
+
 app.get('/api/chapters', (_req, res) => {
   const rows = db
     .prepare(

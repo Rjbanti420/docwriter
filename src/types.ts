@@ -8,6 +8,15 @@ export interface Type {
   sort_order: number;
 }
 
+/** A user-defined Character power level (book-wide rank ladder). */
+export interface PowerLevel {
+  id: number;
+  name: string;
+  color: string;
+  sort_order: number;
+  created_at: string;
+}
+
 export interface Chapter {
   id: number;
   number: string;

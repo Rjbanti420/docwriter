@@ -15,6 +15,12 @@ export const api = {
   switchProject: (path: string) => req('/projects/switch', { method: 'POST', body: JSON.stringify({ path }) }),
 
   types: () => req('/types'),
+  powerLevels: () => req('/power-levels'),
+  addPowerLevel: (name: string, color: string) =>
+    req('/power-levels', { method: 'POST', body: JSON.stringify({ name, color }) }),
+  updatePowerLevel: (id: number, patch: { name?: string; color?: string }) =>
+    req(`/power-levels/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
+  deletePowerLevel: (id: number) => req(`/power-levels/${id}`, { method: 'DELETE' }),
   chapters: () => req('/chapters'),
   chapter: (id: number) => req(`/chapters/${id}`),
   addChapter: (body: { number?: string; title?: string; text: string }) =>

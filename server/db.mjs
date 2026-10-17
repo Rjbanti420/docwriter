@@ -99,6 +99,18 @@ CREATE TABLE IF NOT EXISTS ignored_tokens (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Character power levels: a book-wide, user-defined rank ladder. Unlike the
+-- fixed Item ranks, the writer invents these (Primor, Seeker, …). Assignments
+-- live on the entity as fields.power_level (the level id), so renaming a level
+-- updates every character that uses it.
+CREATE TABLE IF NOT EXISTS power_levels (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  color TEXT DEFAULT '',
+  sort_order INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS alerts (
   id INTEGER PRIMARY KEY,
   entity_id INTEGER REFERENCES entities(id) ON DELETE CASCADE,
@@ -203,6 +215,8 @@ export function migrate() {
   // forward-compatible migrations for existing databases
   ensureColumn('entities', 'trashed_at', 'trashed_at TEXT');
   ensureColumn('candidates', 'tier', "tier TEXT DEFAULT 'primary'");
+  // power levels gained a per-level colour after the ladder shipped.
+  ensureColumn('power_levels', 'color', "color TEXT DEFAULT ''");
   // alerts stay entity-centric; gun notifications hang off a nullable gun_id.
   ensureColumn('alerts', 'gun_id', 'gun_id INTEGER');
   const count = db.prepare('SELECT COUNT(*) AS n FROM types').get().n;

@@ -93,30 +93,30 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --color-base: #f1f2f5;
-  --color-side: #e9ebf0;
+  --color-base: #f6f7fa;
+  --color-side: #eceef4;
   --color-surface: #ffffff;
-  --color-surface-2: #f6f7f9;
+  --color-surface-2: #f6f7fa;
   --color-paper: #ffffff;
-  --color-overlay: rgba(20, 24, 34, 0.38);
+  --color-overlay: rgba(20, 22, 30, 0.38);
 
-  --color-text: #1b1e26;
-  --color-text-secondary: #5b6372;
+  --color-text: #1f2430;
+  --color-text-secondary: #5f6675;
   --color-text-faint: #8a91a0;
   --color-text-subtle: #3d4351;
-  --color-text-reading: #1b1e26;
+  --color-text-reading: #1f2430;
 
-  --color-border: #d8dce4;
+  --color-border: #d9dce6;
   --color-border-strong: #c3c9d4;
 
-  --color-accent: #6b57d8;
+  --color-accent: #5b57c9;
   --color-accent-ink: #ffffff;
 
-  --color-hover: rgba(20, 30, 60, 0.06);
+  --color-hover: #e0e3ec;
   --color-hover-soft: rgba(20, 30, 60, 0.045);
   --color-hover-softer: rgba(20, 30, 60, 0.03);
-  --color-chip-bg: #e9ebf0;
-  --color-tag-bg: #e9ebf0;
+  --color-chip-bg: #eceef4;
+  --color-tag-bg: #eceef4;
 
   --color-mark-unknown: #8a91a0;
   --color-mark-unknown-text: #5b6372;
@@ -136,39 +136,39 @@
 :root[data-theme="mocha"] {
   color-scheme: dark;
 
-  --color-base: #15120f;
-  --color-side: #1a1612;
-  --color-surface: #221d17;
+  --color-base: #1f1917;
+  --color-side: #2a2320;
+  --color-surface: #352c28;
   --color-surface-2: #2b251e;
   --color-paper: #1e1914;
-  --color-overlay: rgba(8, 6, 4, 0.62);
+  --color-overlay: rgba(10, 8, 6, 0.62);
 
-  --color-text: #eee6d8;
-  --color-text-secondary: #a89c88;
-  --color-text-faint: #7f7463;
+  --color-text: #f1e7dd;
+  --color-text-secondary: #b3a496;
+  --color-text-faint: #8a7c6f;
   --color-text-subtle: #cfc5b3;
-  --color-text-reading: #eee6d8;
+  --color-text-reading: #f1e7dd;
 
-  --color-border: #352e26;
-  --color-border-strong: #4a4136;
+  --color-border: #463a33;
+  --color-border-strong: #5a4c42;
 
-  --color-accent: #9a86f2;
-  --color-accent-ink: #15120f;
+  --color-accent: #e0a27a;
+  --color-accent-ink: #1d1714;
   --color-accent-hover: color-mix(in srgb, var(--color-accent) 82%, #fff);
 
-  --color-hover: rgba(255, 240, 220, 0.07);
+  --color-hover: #3d332e;
   --color-hover-soft: rgba(255, 240, 220, 0.055);
   --color-hover-softer: rgba(255, 240, 220, 0.04);
   --color-chip-bg: #2b251e;
   --color-tag-bg: #2b251e;
 
-  --color-mark-unknown: #7f7463;
-  --color-mark-unknown-text: #a89c88;
+  --color-mark-unknown: #8a7c6f;
+  --color-mark-unknown-text: #b3a496;
   --color-mark-unknown-hover: rgba(255, 240, 220, 0.07);
 
   --color-danger: #e8806f;
   --color-danger-border: #6b3b34;
-  --color-danger-bg: rgba(232, 128, 111, 0.12);
+  --color-danger-bg: #4a2b1f;
   --color-warn-bg: rgba(224, 160, 70, 0.12);
   --color-warn-border: rgba(224, 160, 70, 0.38);
   --color-warn-text: #e6b265;
@@ -180,38 +180,38 @@
 :root[data-theme="sepia"] {
   color-scheme: light;
 
-  --color-base: #efe6d2;
-  --color-side: #e6dbc2;
-  --color-surface: #f6efdf;
+  --color-base: #f6eddb;
+  --color-side: #efe4cf;
+  --color-surface: #f9f2e2;
   --color-surface-2: #efe5cf;
   --color-paper: #f7f0e0;
-  --color-overlay: rgba(58, 47, 31, 0.42);
+  --color-overlay: rgba(60, 40, 10, 0.4);
 
-  --color-text: #3a2f1f;
-  --color-text-secondary: #6b5b40;
-  --color-text-faint: #8f8060;
+  --color-text: #3b2f20;
+  --color-text-secondary: #7d6d55;
+  --color-text-faint: #a39373;
   --color-text-subtle: #54452d;
-  --color-text-reading: #3a2f1f;
+  --color-text-reading: #3b2f20;
 
-  --color-border: #d4c6a4;
+  --color-border: #dccdb0;
   --color-border-strong: #bfae86;
 
-  --color-accent: #6b57d8;
+  --color-accent: #9a5b2e;
   --color-accent-ink: #ffffff;
 
-  --color-hover: rgba(80, 55, 20, 0.08);
+  --color-hover: #e6d9bd;
   --color-hover-soft: rgba(80, 55, 20, 0.06);
   --color-hover-softer: rgba(80, 55, 20, 0.04);
-  --color-chip-bg: #e6dbc2;
-  --color-tag-bg: #e6dbc2;
+  --color-chip-bg: #efe4cf;
+  --color-tag-bg: #efe4cf;
 
-  --color-mark-unknown: #9a8b69;
-  --color-mark-unknown-text: #6b5b40;
+  --color-mark-unknown: #a39373;
+  --color-mark-unknown-text: #7d6d55;
   --color-mark-unknown-hover: rgba(80, 55, 20, 0.08);
 
-  --color-danger: #a8392b;
+  --color-danger: #a63a2a;
   --color-danger-border: #d9b0a6;
-  --color-danger-bg: rgba(168, 57, 43, 0.08);
+  --color-danger-bg: #f3dcd3;
   --color-warn-bg: rgba(181, 120, 48, 0.12);
   --color-warn-border: rgba(181, 120, 48, 0.35);
   --color-warn-text: #7d5a2a;
@@ -2436,5 +2436,1441 @@ textarea:focus {
   }
   .dw-trash__actions {
     width: 100%;
+  }
+}
+
+/* 22. Entity editor — token-bound port of the supplied "dw-ie" design -------- */
+/* The supplied stylesheet carried its own --ie-* palette (light/mocha/sepia).
+   The app already implements those exact three themes via --color-*, so every
+   --ie-* here is bound to the matching token instead of a second palette; the
+   seven rank hues are data colours (theme-independent, like --color-character).
+   Fonts are remapped to the bundled pair — UI → Inter, italic title & reading
+   → Literata, mono → --font-mono — because Instrument Sans / Newsreader /
+   IBM Plex Mono are not bundled and the app must stay offline. */
+
+:root {
+  --rank-unranked: #8a91a0;
+  --rank-mundane: #6fa04f;
+  --rank-elusive: #3f95e0;
+  --rank-hazardous: #d9a21b;
+  --rank-desolating: #e8742c;
+  --rank-cataclysmic: #d9384f;
+  --rank-singular: #8b5cf6;
+}
+
+.dw-ie-backdrop,
+.dw-ie {
+  --ie-radius: var(--radius);
+  --ie-font-read: var(--font-reading);
+  --ie-font-title: var(--font-reading);
+  --ie-font-mono: var(--font-mono);
+  --ie-tone: var(--color-item); /* overridden inline with the entity's type colour */
+}
+
+/* 22.1 Backdrop + dialog */
+.dw-ie-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  box-sizing: border-box;
+  padding: 36px 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  background: var(--color-overlay);
+}
+.dw-ie,
+.dw-ie *,
+.dw-ie *::before,
+.dw-ie *::after {
+  box-sizing: border-box;
+}
+.dw-ie {
+  width: min(520px, 100%);
+  max-height: min(848px, calc(100vh - 72px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-paper);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--ie-radius) * 1.5);
+  box-shadow: var(--shadow-modal);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  transition: width 280ms cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+.dw-ie.is-expanded {
+  width: min(888px, 100%);
+}
+/* :where() keeps this reset at the same specificity as the component classes
+   below, so `.dw-ie__btn` / `.dw-ie__trigger` / … can still set their own box.
+   (The supplied rule `.dw-ie button {…}` out-specified every classed button.) */
+.dw-ie :where(button, input, select, textarea) {
+  font: inherit;
+  color: inherit;
+}
+.dw-ie :where(button) {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.dw-ie button:focus-visible,
+.dw-ie a:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.dw-ie ::placeholder {
+  color: var(--color-text-faint);
+}
+.dw-ie ::selection {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+.dw-ie [hidden] {
+  display: none !important;
+}
+
+/* 22.2 Header */
+.dw-ie__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 22px 24px 20px 28px;
+  border-bottom: 1px solid var(--color-border);
+}
+.dw-ie__tile {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--ie-tone) 16%, transparent);
+  color: var(--ie-tone);
+  font-size: 24px;
+  line-height: 1;
+}
+.dw-ie__tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.dw-ie__titles {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dw-ie__title {
+  margin: 0;
+  font-family: var(--ie-font-title);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.dw-ie__meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.dw-ie__tag {
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--ie-tone) 16%, transparent);
+  color: color-mix(in srgb, var(--ie-tone) 55%, var(--color-text));
+  font-family: var(--ie-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.dw-ie__died {
+  font-size: 12.5px;
+  color: var(--color-danger);
+}
+.dw-ie__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: -4px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  transition: background 120ms ease, color 120ms ease;
+}
+.dw-ie__link:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.dw-ie__link svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dw-ie__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dw-ie__icon-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--color-text-secondary);
+  transition: background 120ms ease, color 120ms ease;
+}
+.dw-ie__icon-btn:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.dw-ie__icon-btn svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 22.3 Body — one column, or main + aside when expanded */
+.dw-ie__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.dw-ie.is-expanded .dw-ie__body {
+  flex-direction: row;
+}
+.dw-ie__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+}
+.dw-ie__aside {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px 24px 26px;
+  background: var(--color-side);
+  border-top: 1px solid var(--color-border);
+}
+.dw-ie.is-expanded .dw-ie__aside {
+  width: 300px;
+  padding: 24px 20px;
+  border-top: 0;
+  border-left: 1px solid var(--color-border);
+}
+
+/* 22.4 Fields */
+.dw-ie__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.dw-ie__row {
+  display: flex;
+  gap: 14px;
+}
+.dw-ie__grow {
+  flex: 1;
+  min-width: 0;
+}
+.dw-ie__type {
+  flex: none;
+  width: 150px;
+}
+.dw-ie__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.dw-ie__label,
+.dw-ie__group-label {
+  font-family: var(--ie-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.dw-ie__label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dw-ie__label--boon,
+.dw-ie__label--curse {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dw-ie__label--boon::before,
+.dw-ie__label--curse::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.dw-ie__label--boon::before {
+  background: var(--color-accent);
+}
+.dw-ie__label--curse::before {
+  background: var(--color-danger);
+}
+
+.dw-ie__input,
+.dw-ie__select,
+.dw-ie__textarea {
+  width: 100%;
+  color: var(--color-text);
+  background: var(--color-base);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--ie-radius) * 0.8);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.dw-ie__input,
+.dw-ie__select {
+  height: 42px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+.dw-ie__input--surface {
+  height: 38px;
+  font-size: 13.5px;
+  background: var(--color-surface);
+}
+.dw-ie__textarea {
+  min-height: 72px;
+  padding: 11px 14px;
+  font-family: var(--ie-font-read);
+  font-size: 15px;
+  line-height: 1.55;
+  resize: vertical;
+}
+.dw-ie__textarea--tall {
+  min-height: 84px;
+}
+.dw-ie__textarea::placeholder {
+  font-style: italic;
+}
+.dw-ie__input:focus,
+.dw-ie__select:focus,
+.dw-ie__textarea:focus,
+.dw-ie__trigger:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+.dw-ie__select-wrap {
+  position: relative;
+}
+.dw-ie__select {
+  appearance: none;
+  padding-right: 34px;
+}
+.dw-ie__select-wrap > svg {
+  position: absolute;
+  top: 14px;
+  right: 12px;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--color-text-secondary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dw-ie__hint {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+.dw-ie__empty {
+  font-size: 13px;
+  color: var(--color-text-faint);
+}
+.dw-ie__count {
+  font-family: var(--ie-font-mono);
+  font-size: 11px;
+  color: var(--color-text-faint);
+}
+
+/* 22.5 Dropdowns (rank + possessed by) */
+.dw-ie__dropdown {
+  position: relative;
+}
+.dw-ie__trigger {
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  background: var(--color-base);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--ie-radius) * 0.8);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.dw-ie__trigger:hover {
+  border-color: var(--color-border-strong);
+}
+.dw-ie__trigger[aria-expanded='true'] {
+  border-color: var(--color-accent);
+}
+.dw-ie__trigger > svg:last-child {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  fill: none;
+  stroke: var(--color-text-secondary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dw-ie__trigger .dw-ie__chip {
+  margin-right: auto;
+}
+.dw-ie__trigger--owner {
+  background: var(--color-surface);
+}
+.dw-ie__avatar {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--color-hover);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1;
+}
+.dw-ie__avatar svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dw-ie__trigger-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+.dw-ie__trigger-text.is-placeholder {
+  color: var(--color-text-secondary);
+}
+.dw-ie__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dw-ie__popover {
+  position: absolute;
+  z-index: 6;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--ie-radius);
+  box-shadow: var(--shadow-modal);
+}
+.dw-ie__popover--owners {
+  max-height: 330px;
+  overflow-y: auto;
+}
+.dw-ie__option {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px 6px 8px;
+  border-radius: 8px;
+  transition: background 100ms ease;
+}
+.dw-ie__option:hover,
+.dw-ie__option[aria-selected='true'] {
+  background: var(--color-hover);
+}
+.dw-ie__option[aria-selected='true'] {
+  font-weight: 600;
+}
+.dw-ie__option--plain {
+  min-height: 36px;
+  padding: 8px 10px;
+}
+.dw-ie__option .dw-ie__meter {
+  margin-left: auto;
+}
+.dw-ie__check {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  visibility: hidden;
+}
+.dw-ie__option[aria-selected='true'] .dw-ie__check {
+  visibility: visible;
+}
+.dw-ie__group {
+  display: flex;
+  flex-direction: column;
+}
+.dw-ie__group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 10px 4px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--color-text-faint);
+}
+.dw-ie__group-label svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 22.6 Rank — chip + 6-step meter, coloured per rank */
+.dw-ie [data-rank] {
+  --rank: var(--rank-unranked);
+}
+.dw-ie [data-rank='mundane'] {
+  --rank: var(--rank-mundane);
+}
+.dw-ie [data-rank='elusive'] {
+  --rank: var(--rank-elusive);
+}
+.dw-ie [data-rank='hazardous'] {
+  --rank: var(--rank-hazardous);
+}
+.dw-ie [data-rank='desolating'] {
+  --rank: var(--rank-desolating);
+}
+.dw-ie [data-rank='cataclysmic'] {
+  --rank: var(--rank-cataclysmic);
+}
+.dw-ie [data-rank='singular'] {
+  --rank: var(--rank-singular);
+}
+.dw-ie__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 11px 3px 9px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--rank) 16%, transparent);
+  color: color-mix(in srgb, var(--rank) 55%, var(--color-text));
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dw-ie__chip::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--rank);
+}
+.dw-ie__meter {
+  display: flex;
+  gap: 3px;
+}
+.dw-ie__meter i {
+  width: 10px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+}
+.dw-ie [data-rank='mundane'] .dw-ie__meter i:nth-child(-n + 1),
+.dw-ie [data-rank='elusive'] .dw-ie__meter i:nth-child(-n + 2),
+.dw-ie [data-rank='hazardous'] .dw-ie__meter i:nth-child(-n + 3),
+.dw-ie [data-rank='desolating'] .dw-ie__meter i:nth-child(-n + 4),
+.dw-ie [data-rank='cataclysmic'] .dw-ie__meter i:nth-child(-n + 5),
+.dw-ie [data-rank='singular'] .dw-ie__meter i:nth-child(-n + 6) {
+  background: var(--rank);
+}
+
+/* 22.7 Switch row */
+.dw-ie__switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--ie-radius) * 0.9);
+}
+.dw-ie__switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dw-ie__switch-title {
+  font-weight: 600;
+}
+.dw-ie__switch {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  flex: none;
+  border-radius: 99px;
+  background: var(--color-text-faint);
+  transition: background 150ms ease;
+}
+.dw-ie__switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff; /* the knob stays white in every theme, by design */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: left 150ms ease;
+}
+.dw-ie__switch[aria-checked='true'] {
+  background: var(--color-accent);
+}
+.dw-ie__switch[aria-checked='true']::after {
+  left: 19px;
+}
+
+/* 22.8 Aside — aliases, appearances trail, merge */
+.dw-ie__alias-row {
+  display: flex;
+  gap: 8px;
+}
+.dw-ie__alias-row .dw-ie__input {
+  flex: 1;
+  min-width: 0;
+}
+.dw-ie__alias-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dw-ie__alias {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 99px;
+  background: var(--color-chip-bg);
+  font-size: 12.5px;
+}
+.dw-ie__alias-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dw-ie__alias .dw-ie__x {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: var(--color-text-faint);
+}
+.dw-ie__alias .dw-ie__x:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.dw-ie__trail {
+  display: flex;
+  gap: 3px;
+}
+.dw-ie__trail > .dw-ie__tick {
+  flex: 1;
+  min-width: 2px;
+  height: 6px;
+  padding: 0;
+  border-radius: 99px;
+  background: var(--color-border);
+}
+.dw-ie__trail > .dw-ie__tick.is-on {
+  background: var(--ie-tone);
+}
+.dw-ie__trail > button.dw-ie__tick {
+  cursor: pointer;
+}
+.dw-ie__trail-nums {
+  display: flex;
+  gap: 4px;
+  font-family: var(--ie-font-mono);
+  font-size: 11px;
+  color: var(--color-text-faint);
+}
+.dw-ie__trail-nums > span {
+  flex: 1;
+  text-align: center;
+}
+.dw-ie__merge {
+  width: 100%;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  color: var(--color-text-secondary);
+  border: 1px dashed var(--color-border);
+  border-radius: calc(var(--ie-radius) * 0.8);
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.dw-ie__merge:hover {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text);
+}
+.dw-ie__merge svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 22.9 Footer */
+.dw-ie__foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 28px;
+  background: var(--color-paper);
+  border-top: 1px solid var(--color-border);
+}
+.dw-ie__saved {
+  font-size: 12.5px;
+  color: var(--color-positive);
+}
+.dw-ie__btn {
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  font-weight: 500;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--ie-radius) * 0.8);
+  transition: border-color 120ms ease, background 120ms ease, filter 120ms ease;
+}
+.dw-ie__btn:hover {
+  border-color: var(--color-text-secondary);
+}
+.dw-ie__btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dw-ie__btn--danger {
+  background: transparent;
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 45%, transparent);
+}
+.dw-ie__btn--danger:hover {
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  border-color: var(--color-danger);
+}
+.dw-ie__btn--save {
+  padding: 0 26px;
+  font-weight: 600;
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  border-color: var(--color-accent);
+}
+.dw-ie__btn--save:hover {
+  filter: brightness(1.08);
+}
+.dw-ie__btn--save[aria-disabled='true'],
+.dw-ie__btn--save[disabled] {
+  background: var(--color-hover);
+  color: var(--color-text-faint);
+  border-color: transparent;
+  cursor: default;
+  filter: none;
+}
+
+/* 22.10 Narrow screens — always the compact, single-column dialog */
+@media (max-width: 760px) {
+  .dw-ie-backdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+  .dw-ie,
+  .dw-ie.is-expanded {
+    width: 100%;
+    max-height: none;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  .dw-ie.is-expanded .dw-ie__body {
+    flex-direction: column;
+  }
+  .dw-ie.is-expanded .dw-ie__aside {
+    width: auto;
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+    padding: 22px 20px 26px;
+  }
+  .dw-ie__head {
+    padding: 20px 20px 18px;
+  }
+  .dw-ie__title {
+    font-size: 26px;
+  }
+  .dw-ie__main {
+    padding: 20px;
+  }
+  .dw-ie__aside {
+    padding: 22px 20px 26px;
+  }
+  .dw-ie__foot {
+    padding: 14px 20px 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dw-ie,
+  .dw-ie *,
+  .dw-ie *::before,
+  .dw-ie *::after {
+    transition: none !important;
+  }
+}
+
+/* 23. Character system — Power Level, System, Abilities, History ------------- */
+/* The sections reuse the §22 field/dropdown language; these rules add only the
+   collapsible section card, the entry list and the managed level rows. */
+
+/* A power-level chip is not one of the seven Item ranks, so the shared chip
+   needs a default hue when no [data-rank] is present (Unranked grey). */
+.dw-ie {
+  --rank: var(--rank-unranked);
+}
+
+.dw-ie__section {
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--ie-radius) * 0.9);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+.dw-ie__section-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px;
+  color: var(--color-text);
+  transition: background 120ms ease;
+}
+.dw-ie__section-head:hover {
+  background: var(--color-hover);
+}
+.dw-ie__section-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 14px;
+}
+.dw-ie__section-head > svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  fill: none;
+  stroke: var(--color-text-secondary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 150ms ease;
+}
+.dw-ie__section.is-open .dw-ie__section-head > svg {
+  transform: rotate(180deg);
+}
+.dw-ie__section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 14px 16px;
+}
+
+/* Fixed subsection: a label above its text area. */
+.dw-ie__sub {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.dw-ie__textarea--sub {
+  min-height: 54px;
+  font-size: 14px;
+}
+.dw-ie__sub-label {
+  font-family: var(--ie-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+/* Entry list — abilities and custom subsections */
+.dw-ie__entries {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dw-ie__entry {
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--ie-radius) * 0.7);
+  background: var(--color-base);
+  overflow: hidden;
+}
+.dw-ie__entry.is-open {
+  border-color: var(--color-border-strong);
+}
+.dw-ie__entry-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 6px;
+}
+.dw-ie__entry-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 10px 10px 12px;
+}
+.dw-ie__entry-toggle > svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  fill: none;
+  stroke: var(--color-text-secondary);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 150ms ease;
+}
+.dw-ie__entry.is-open .dw-ie__entry-toggle > svg {
+  transform: rotate(180deg);
+}
+.dw-ie__entry-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: 13.5px;
+}
+.dw-ie__entry-name.is-empty {
+  color: var(--color-text-faint);
+  font-style: italic;
+  font-weight: 400;
+}
+.dw-ie__entry-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+.dw-ie__entry-body .dw-ie__textarea--sub {
+  min-height: 64px;
+}
+
+.dw-ie__del {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--color-text-faint);
+  transition: background 120ms ease, color 120ms ease;
+}
+.dw-ie__del:hover {
+  background: var(--color-hover);
+  color: var(--color-danger);
+}
+.dw-ie__del svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dw-ie__add {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px 5px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-accent);
+  transition: background 120ms ease;
+}
+.dw-ie__add:hover {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+.dw-ie__add svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* Managed level rows inside the power-level popover */
+.dw-ie__popover--levels {
+  max-height: 380px;
+  overflow-y: auto;
+}
+.dw-ie__level {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: calc(var(--ie-radius) * 0.6);
+}
+.dw-ie__level:hover {
+  background: var(--color-hover);
+}
+.dw-ie__level-pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: inherit;
+}
+.dw-ie__level-rename {
+  flex: 1;
+  min-width: 0;
+  margin: 4px 6px;
+}
+.dw-ie__popover--levels .dw-ie__del {
+  width: 26px;
+  height: 26px;
+}
+.dw-ie__popover--levels .dw-ie__del svg {
+  width: 13px;
+  height: 13px;
+}
+.dw-ie__popover--levels .dw-ie__alias-row {
+  margin-top: 4px;
+  padding: 2px 4px 4px;
+}
+
+/* 24. Bible page — design pass --------------------------------------------- */
+/* The page geometry was ported in section 10; this closes the last gaps with
+   the supplied design: a 1000px column, the type dot in the filter chips and
+   the 40px card tile. Scoped with .bible so no other view shifts. */
+
+.main-inner.bible {
+  max-width: 1000px;
+  padding-top: 40px;
+  padding-bottom: 88px;
+}
+
+.chip > .d {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--e, var(--color-text-faint));
+}
+
+.bible .card-icon {
+  width: 40px;
+  height: 40px;
+}
+.bible .entity-card {
+  gap: 16px;
+}
+.bible .entity-card:hover {
+  box-shadow: 0 8px 22px var(--color-focus-ring);
+}
+
+/* 25. Editor — design pass ------------------------------------------------- */
+/* Folds the newer design into the existing .dw-ie markup: dialog geometry,
+   the accordion/ability rows, the System/History pills and the coloured
+   power-level ladder. Nothing here changes behaviour. */
+
+/* 25.1 Dialog geometry */
+.dw-ie {
+  width: min(460px, 100%);
+  max-height: min(700px, calc(100vh - 48px));
+  border-radius: 20px;
+  background: var(--color-surface);
+}
+.dw-ie.is-expanded {
+  width: min(920px, 100%);
+}
+.dw-ie.is-expanded .dw-ie__aside {
+  width: 316px;
+}
+.dw-ie-backdrop {
+  padding: 24px;
+}
+.dw-ie__head {
+  gap: 14px;
+}
+.dw-ie__tile {
+  width: 54px;
+  height: 54px;
+}
+.dw-ie__titles {
+  gap: 7px;
+}
+.dw-ie__meta {
+  gap: 8px 12px;
+}
+.dw-ie__foot {
+  min-height: 68px;
+  padding: 14px 20px;
+  background: var(--color-surface);
+}
+
+/* 25.2 Sections — the accordion card */
+.dw-ie__section-title {
+  flex: 1;
+}
+.dw-ie__section-head {
+  min-height: 44px;
+  padding: 13px 14px;
+}
+.dw-ie__section-body {
+  padding: 16px 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* 25.3 Ability rows — a right chevron that turns down when open */
+.dw-ie__entry.is-open .dw-ie__entry-toggle > svg {
+  transform: rotate(90deg);
+}
+
+/* 25.4 System / History — subsection pills and their panel */
+.dw-ie__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dw-ie__pill {
+  height: 32px;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 15px;
+  border-radius: 99px;
+  border: 1px solid var(--color-border);
+  background: var(--color-base);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.dw-ie__pill:hover {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text);
+}
+.dw-ie__pill.is-open {
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+.dw-ie__pill-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dw-ie__pill--add {
+  padding: 0 14px 0 10px;
+  border-style: dashed;
+  background: transparent;
+  color: var(--color-accent);
+}
+.dw-ie__pill--add svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dw-ie__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--color-base);
+  border: 1px solid var(--color-border);
+}
+.dw-ie__panel .dw-ie__textarea--sub {
+  min-height: 74px;
+}
+.dw-ie__panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 25.5 Power-level ladder — a colour per level and its meter */
+.dw-ie__meter--ladder {
+  flex: none;
+  width: 64px;
+}
+.dw-ie__meter--ladder i {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 3px;
+}
+.dw-ie__meter i.is-on {
+  background: var(--rank);
+}
+.dw-ie__swatch {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  align-self: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+.dw-ie__swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.dw-ie__swatch::-webkit-color-swatch {
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+.dw-ie__swatch::-moz-color-swatch {
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+.dw-ie__level .dw-ie__swatch {
+  width: 24px;
+  height: 24px;
+  margin: 0 2px 0 6px;
+}
+
+/* 26. Editor — stability pass ------------------------------------------------ */
+/* §22/§25 gave the dialog two geometries, toggled by the Full screen button:
+   a 460px single column that became 920px + a right-hand column when expanded
+   (`flex-direction: column` -> `row`, the aside from a full-width band to a
+   316px side panel), with a content-driven height that only stopped growing at
+   max-height, and with the body itself as the scroll container so both columns
+   moved together. That is the reflow: the modal changes width, the right column
+   suddenly appears and restructures it, and opening a section scrolls the aside
+   along with the main column.
+
+   This pass makes the dialog a fixed workspace instead:
+     - one width, one height, always centred, for every state;
+     - always two columns, each its own scroll container (no cross-coupling);
+     - Full screen becomes a true maximize that scales the same layout rather
+       than reflowing into a different one.
+   Content adapts to the editor; the editor does not resize around content. */
+
+/* 26.1 Dialog — fixed geometry, centred */
+.dw-ie,
+.dw-ie.is-expanded {
+  max-height: none; /* height below is the constraint, not max-height */
+  border-radius: 18px;
+}
+.dw-ie {
+  width: min(980px, 100%);
+  height: min(768px, calc(100vh - 48px));
+  transition: width 220ms ease, height 220ms ease;
+}
+.dw-ie.is-expanded {
+  width: min(1280px, 100%);
+  height: min(868px, calc(100vh - 48px));
+}
+.dw-ie-backdrop {
+  padding: 24px;
+  align-items: center; /* the dialog stays centred as content changes */
+}
+.dw-ie__head {
+  padding: 18px 20px 16px 22px;
+}
+
+/* 26.2 Body — always main + aside, each scrolling on its own */
+/* Both states share one rule so nothing reflows between them. min-width:0 on
+   the main column keeps long names/inputs from stretching the flex row. */
+.dw-ie__body,
+.dw-ie.is-expanded .dw-ie__body {
+  flex-direction: row;
+  overflow: hidden; /* the columns scroll, not the body */
+}
+.dw-ie__main,
+.dw-ie.is-expanded .dw-ie__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  gap: 16px;
+  padding: 22px 24px 26px;
+}
+.dw-ie__aside,
+.dw-ie.is-expanded .dw-ie__aside {
+  flex: 0 0 300px;
+  width: 300px;
+  min-width: 0;
+  overflow-y: auto;
+  gap: 16px;
+  padding: 22px 20px 26px;
+  border-top: 0;
+  border-left: 1px solid var(--color-border);
+}
+/* The columns are column flex containers with a definite height, so their
+   children default to flex-shrink:1 and compress to fit instead of
+   overflowing — and since .dw-ie__section is overflow:hidden, the excess was
+   silently clipped with no scrollbar. Pinning flex:none makes the column
+   scroll instead of squeezing, which is what made System cramped. */
+.dw-ie__main > *,
+.dw-ie.is-expanded .dw-ie__main > *,
+.dw-ie__aside > *,
+.dw-ie.is-expanded .dw-ie__aside > * {
+  flex: none;
+}
+
+/* 26.3 Spacing hierarchy + section/subsection/entry layering
+   Levels, strongest to weakest: section (14.5/600) -> subsection pill (13/500)
+   -> entry name (13.5/500) -> entry actions (faint) -> add link (13, accent). */
+.dw-ie__section-title {
+  font-size: 14.5px;
+}
+.dw-ie__section-body {
+  padding: 14px 14px 16px;
+}
+.dw-ie__entries {
+  gap: 8px;
+}
+.dw-ie__entry-head .dw-ie__del {
+  opacity: 0.7;
+  transition: opacity 120ms ease;
+}
+.dw-ie__entry-head .dw-ie__del:hover,
+.dw-ie__entry:hover .dw-ie__del {
+  opacity: 1;
+}
+
+/* 26.4 Narrow screens — the same layout, stacked and full-bleed */
+@media (max-width: 760px) {
+  .dw-ie,
+  .dw-ie.is-expanded {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  .dw-ie-backdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+  .dw-ie__body,
+  .dw-ie.is-expanded .dw-ie__body {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .dw-ie__main,
+  .dw-ie.is-expanded .dw-ie__main {
+    flex: none;
+    overflow: visible;
+    padding: 20px;
+  }
+  .dw-ie__aside,
+  .dw-ie.is-expanded .dw-ie__aside {
+    flex: none;
+    width: auto;
+    overflow: visible;
+    padding: 22px 20px 26px;
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+  }
+  .dw-ie__head {
+    padding: 20px 20px 18px;
   }
 }

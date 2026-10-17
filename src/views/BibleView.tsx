@@ -66,7 +66,7 @@ export default function BibleView({
   const shownGroups = filter === 'all' ? groupEntries : groupEntries.filter(([k]) => k === filter);
 
   return (
-    <div className="main-inner">
+    <div className="main-inner bible">
       <div className="reader-head">
         <div className="reader-head__titles">
           <h1>The Bible</h1>
@@ -163,6 +163,7 @@ export default function BibleView({
                 aria-pressed={filter === typeName}
                 onClick={() => setFilter((f) => (f === typeName ? 'all' : typeName))}
               >
+                <span className="d" style={{ ['--e']: list[0].type_color } as CSSProperties} />
                 {typeName} · {list.length}
               </button>
             ))}
