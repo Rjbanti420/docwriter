@@ -1,19 +1,30 @@
 // Entity ↔ Item relations, and an entity's fate (alive / dead).
 //
-// Possession is stored as a *single owner* on the item's own `fields` JSON blob
-// (`fields.owner` = the owning entity's id) — the same schema-free, backup-safe
-// approach used for entity images. A character's possessions are therefore
-// derived by scanning the already-loaded entity list for items that point back
-// at it, which also keeps "who holds this" unambiguous (one owner per item).
+// Possession is stored on the item's own `fields` JSON blob as `fields.owners`
+// (an array of holding entity ids) — the same schema-free, backup-safe approach
+// used for entity images. An item may be held by several people or entities at
+// once (never by another Item). Older books stored a single `fields.owner`, so
+// that is still read as a one-element list. A holder's possessions are derived
+// by scanning the already-loaded entity list for items that point back at it.
 //
 // Death is likewise a `fields.death = { chapter, at }` marker, so it needs no
 // schema change and is reversible (Kill ⇄ Resurrect).
 
 import { parseFields } from './entityMedia';
 
-export function getOwnerId(raw: string | null | undefined): number | null {
-  const owner = parseFields(raw).owner;
-  return typeof owner === 'number' && Number.isFinite(owner) ? owner : null;
+function asId(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+/** The ids that hold this item, deduped and in stored order (empty when unheld). */
+export function getOwnerIds(raw: string | null | undefined): number[] {
+  const fields = parseFields(raw);
+  const list = Array.isArray(fields.owners) ? fields.owners : [];
+  const ids = list.map(asId).filter((x): x is number => x != null);
+  // Older books kept a single holder on `owner`; fold it in for back-compat.
+  const legacy = asId(fields.owner);
+  if (legacy != null) ids.push(legacy);
+  return [...new Set(ids)];
 }
 
 export interface EntityDeath {
@@ -39,10 +50,6 @@ export function getDeath(raw: string | null | undefined): EntityDeath | null {
 // `leader` id, an `operates_in` id and a `members` array of ids. They are plain
 // forward references (the organisation points at the people and the place), so
 // they need no schema and survive export/backup unchanged.
-
-function asId(v: unknown): number | null {
-  return typeof v === 'number' && Number.isFinite(v) ? v : null;
-}
 
 /** The organisation's leader (a Character id), or null. */
 export function getLeaderId(raw: string | null | undefined): number | null {

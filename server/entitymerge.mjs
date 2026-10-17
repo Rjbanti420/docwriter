@@ -26,13 +26,73 @@ function parse(raw) {
  */
 export function mergeFields(survivorRaw, absorbedRaw) {
   // B first, then A on top: A wins any key both sides set, B still fills the
-  // keys A never touched (image, owner, death, custom notes, …).
+  // keys A never touched (image, owners, death, custom notes, …).
   return { ...parse(absorbedRaw), ...parse(survivorRaw) };
 }
 
 /** True when the blob parses to a non-empty object (i.e. the card "has" a field). */
 export function hasFields(raw) {
   return Object.keys(parse(raw)).length > 0;
+}
+
+/**
+ * Repoint every reference that names the absorbed entity at the survivor.
+ *
+ * Handles the item→holder `owners` array (an item may be held by several
+ * entities at once) plus the legacy single `owner`, and the organisation's
+ * `leader` / `operates_in` scalars and `members` array. References never point
+ * at an entity itself, so a self-reference is dropped rather than created.
+ *
+ * @param {object} rawFields   the entity's parsed `fields` blob
+ * @param {object} ids
+ * @param {number} ids.survivorId  the entity that absorbs (A)
+ * @param {number} ids.absorbedId  the entity being absorbed (B)
+ * @param {number} ids.selfId      the id of the entity these fields belong to
+ * @returns {{ fields: object, touched: boolean, ownersRepointed: number }}
+ */
+export function repointReferences(rawFields, { survivorId, absorbedId, selfId }) {
+  const fields = { ...(rawFields ?? {}) };
+  let touched = false;
+  let ownersRepointed = 0;
+
+  if (Array.isArray(fields.owners) && fields.owners.includes(absorbedId)) {
+    const next = [...new Set(fields.owners.map((o) => (o === absorbedId ? survivorId : o)))].filter(
+      (o) => o !== selfId
+    );
+    if (next.length > 0) fields.owners = next;
+    else delete fields.owners;
+    touched = true;
+    ownersRepointed += 1;
+  }
+  // Older books kept a single holder on `owner`; repoint it too (and drop it when
+  // the survivor would otherwise hold itself).
+  if (fields.owner === absorbedId) {
+    if (selfId === survivorId) delete fields.owner;
+    else fields.owner = survivorId;
+    touched = true;
+    ownersRepointed += 1;
+  }
+
+  if (fields.leader === absorbedId) {
+    if (selfId === survivorId) delete fields.leader;
+    else fields.leader = survivorId;
+    touched = true;
+  }
+  if (fields.operates_in === absorbedId) {
+    if (selfId === survivorId) delete fields.operates_in;
+    else fields.operates_in = survivorId;
+    touched = true;
+  }
+  if (Array.isArray(fields.members) && fields.members.includes(absorbedId)) {
+    const next = [...new Set(fields.members.map((m) => (m === absorbedId ? survivorId : m)))].filter(
+      (m) => m !== selfId
+    );
+    if (next.length > 0) fields.members = next;
+    else delete fields.members;
+    touched = true;
+  }
+
+  return { fields, touched, ownersRepointed };
 }
 
 /**

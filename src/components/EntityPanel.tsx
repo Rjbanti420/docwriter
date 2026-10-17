@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, CSSProperties, ReactNode } from 'react';
 import { api } from '../api';
 import { fileToDataUrl, getEntityImage, parseFields } from '../entityMedia';
-import { getDeath, getLeaderId, getMemberIds, getOperatesInId, getOwnerId } from '../entityRelations';
+import { getDeath, getLeaderId, getMemberIds, getOperatesInId, getOwnerIds } from '../entityRelations';
 import { chapterLabel, chapterNumber } from '../chapters';
 import type { Chapter, Entity, EntityDetail, PowerLevel, Type } from '../types';
 
-/** Types that may own an Item. Characters, nations and guilds hold things; places and items do not. */
-const OWNER_TYPES = ['Character', 'Country', 'Organisation'];
+// Every entity type may hold an Item, except an Item itself: a possession is
+// something a person, place, nation or guild has, never another item.
 
 /** Types an Organisation can be led by and staffed with. */
 const PERSON_TYPES = ['Character'];
@@ -407,42 +407,40 @@ export default function EntityPanel({
 
   const itemTypeId = types.find((t) => t.name === 'Item')?.id ?? null;
 
-  /** Item side: set (or clear) this item's single owner. */
-  async function setOwner(nextOwner: number | null) {
-    if (!detail) return;
-    const fields = parseFields(detail.entity.fields);
-    if (nextOwner == null) delete fields.owner;
-    else fields.owner = nextOwner;
-    await api.updateEntity(entityId, { fields });
+  /** Persist an item's holder list, folding away any legacy single `owner`. */
+  async function setItemHolders(itemId: number, rawFields: string | null, holders: number[]) {
+    const fields = parseFields(rawFields);
+    if (holders.length > 0) fields.owners = holders;
+    else delete fields.owners;
+    delete fields.owner; // write the array form only
+    await api.updateEntity(itemId, { fields });
     await load();
     onChanged();
+  }
+
+  /** Item side: set (or clear) the entities that hold this item. */
+  async function setOwners(next: number[]) {
+    if (!detail) return;
+    await setItemHolders(entityId, detail.entity.fields, next);
   }
 
   async function assignItem(itemId: number) {
     const item = entities.find((x) => x.id === itemId);
     if (!item) return;
-    const fields = parseFields(item.fields);
-    fields.owner = entityId;
-    await api.updateEntity(itemId, { fields });
-    await load();
-    onChanged();
+    await setItemHolders(itemId, item.fields, [...new Set([...getOwnerIds(item.fields), entityId])]);
   }
 
   async function unassignItem(itemId: number) {
     const item = entities.find((x) => x.id === itemId);
     if (!item) return;
-    const fields = parseFields(item.fields);
-    delete fields.owner;
-    await api.updateEntity(itemId, { fields });
-    await load();
-    onChanged();
+    await setItemHolders(itemId, item.fields, getOwnerIds(item.fields).filter((h) => h !== entityId));
   }
 
   async function createItem() {
     const n = newItemName.trim();
     if (!n || itemTypeId == null) return;
     const created = await api.createEntity({ name: n, typeId: itemTypeId });
-    await api.updateEntity(created.id, { fields: { owner: entityId } });
+    await api.updateEntity(created.id, { fields: { owners: [entityId] } });
     setNewItemName('');
     await load();
     onChanged();
@@ -486,16 +484,15 @@ export default function EntityPanel({
 
   const isItem = e.type_name === 'Item';
   const isCharacter = e.type_name === 'Character';
-  const canOwnItems = OWNER_TYPES.includes(e.type_name ?? '');
   // Only a person can die; an item, place or nation has no fate of its own.
   const death = isCharacter ? getDeath(e.fields) : null;
   const deathChapter = death?.chapter != null ? chapters.find((c) => c.id === death.chapter) : undefined;
 
-  const ownerId = getOwnerId(e.fields);
-  const owner = ownerId != null ? entities.find((x) => x.id === ownerId) : undefined;
-  const possessions = entities.filter((x) => x.type_name === 'Item' && getOwnerId(x.fields) === e.id);
-  const addableItems = entities.filter((x) => x.type_name === 'Item' && getOwnerId(x.fields) !== e.id);
-  const ownerCandidates = entities.filter((x) => OWNER_TYPES.includes(x.type_name ?? '') && x.id !== e.id);
+  // An item may be held by several entities at once; every type but Item can hold.
+  const holderIds = getOwnerIds(e.fields);
+  const possessions = entities.filter((x) => x.type_name === 'Item' && getOwnerIds(x.fields).includes(e.id));
+  const addableItems = entities.filter((x) => x.type_name === 'Item' && !getOwnerIds(x.fields).includes(e.id));
+  const holderCandidates = entities.filter((x) => x.type_name !== 'Item' && x.id !== e.id);
 
   // One row per chapter, however many times the name was mentioned there.
   const appearances = (() => {
@@ -930,14 +927,16 @@ export default function EntityPanel({
             {isItem ? (
               <div className="dw-ie__field">
                 <span className="dw-ie__label">Possessed by</span>
-                <OwnerSelect
-                  owner={owner ?? null}
-                  candidates={ownerCandidates}
-                  onPick={setOwner}
+                <EntityMultiSelect
+                  entities={entities}
+                  value={holderIds}
+                  candidates={holderCandidates}
+                  onChange={setOwners}
                   onOpenEntity={onOpenEntity}
+                  addLabel="add a holder…"
                 />
               </div>
-            ) : canOwnItems ? (
+            ) : (
               <div className="dw-ie__field">
                 <span className="dw-ie__label">Possessions</span>
                 {possessions.length === 0 && <span className="dw-ie__empty">None yet</span>}
@@ -964,12 +963,13 @@ export default function EntityPanel({
                   >
                     <option value="">{addableItems.length === 0 ? 'no items to add' : 'add an item…'}</option>
                     {addableItems.map((it) => {
-                      const heldBy = getOwnerId(it.fields);
-                      const holder = heldBy != null ? entities.find((x) => x.id === heldBy) : undefined;
+                      const holders = getOwnerIds(it.fields)
+                        .map((hid) => entities.find((x) => x.id === hid))
+                        .filter((x): x is Entity => !!x);
                       return (
                         <option key={it.id} value={it.id}>
                           {it.name}
-                          {holder ? ` · held by ${holder.name}` : ''}
+                          {holders.length > 0 ? ` · held by ${holders.map((h) => h.name).join(', ')}` : ''}
                         </option>
                       );
                     })}
@@ -993,7 +993,7 @@ export default function EntityPanel({
                   </button>
                 </div>
               </div>
-            ) : null}
+            )}
 
               <div className="dw-ie__field">
                 <span className="dw-ie__label">Aliases</span>
@@ -1222,30 +1222,6 @@ function RankSelect({ value, onChange }: { value: string; onChange: (v: string) 
         ))}
       </div>
     </div>
-  );
-}
-
-function OwnerSelect({
-  owner,
-  candidates,
-  onPick,
-  onOpenEntity,
-}: {
-  owner: Entity | null;
-  candidates: Entity[];
-  onPick: (id: number | null) => void;
-  onOpenEntity: (id: number) => void;
-}) {
-  return (
-    <EntitySelect
-      label="Possessed by"
-      value={owner}
-      candidates={candidates}
-      onPick={onPick}
-      onOpenEntity={onOpenEntity}
-      clearLabel="Nobody"
-      placeholder="Assign to…"
-    />
   );
 }
 
@@ -1743,10 +1719,10 @@ function EntryList({
 }
 
 /**
- * Multi-select over a shared candidate list, used by an Organisation's
- * Members. Mirrors the Possessions control: chosen entries are alias chips,
- * and a native select adds the next one. The caller supplies the `.dw-ie__field`
- * wrapper and its label.
+ * Multi-select over a shared candidate list, used by an Organisation's Members
+ * and by an Item's holders. Mirrors the Possessions control: chosen entries are
+ * alias chips, and a native select adds the next one. The caller supplies the
+ * `.dw-ie__field` wrapper and its label.
  */
 function EntityMultiSelect({
   entities,

@@ -12,11 +12,13 @@ const THEMES = [
 ];
 
 const UI_FONTS = [
+  { id: 'Hanken Grotesk', label: 'Hanken Grotesk' },
   { id: 'Inter', label: 'Inter' },
   { id: 'system-ui', label: 'System UI' },
 ];
 
 const READING_FONTS = [
+  { id: 'Spectral', label: 'Spectral' },
   { id: 'Literata', label: 'Literata' },
   { id: 'Georgia', label: 'Georgia' },
   { id: 'Source Serif 4', label: 'Source Serif 4' },
@@ -26,8 +28,8 @@ const READING_FONTS = [
 export default function SettingsView({ onClose }: { onClose: () => void }) {
   const [theme, setTheme] = useState('mocha');
   const [density, setDensity] = useState('comfortable');
-  const [fontUi, setFontUi] = useState('Inter');
-  const [fontReading, setFontReading] = useState('Literata');
+  const [fontUi, setFontUi] = useState('Hanken Grotesk');
+  const [fontReading, setFontReading] = useState('Spectral');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [libraryPath, setLibraryPath] = useState('');
@@ -35,8 +37,8 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     try { setTheme(localStorage.getItem(THEME_KEY) || 'mocha'); } catch {}
     try { setDensity(localStorage.getItem(DENSITY_KEY) || 'comfortable'); } catch {}
-    try { setFontUi(localStorage.getItem(FONT_UI_KEY) || 'Inter'); } catch {}
-    try { setFontReading(localStorage.getItem(FONT_READING_KEY) || 'Literata'); } catch {}
+    try { setFontUi(localStorage.getItem(FONT_UI_KEY) || 'Hanken Grotesk'); } catch {}
+    try { setFontReading(localStorage.getItem(FONT_READING_KEY) || 'Spectral'); } catch {}
     try { setName(localStorage.getItem('docwriter.profile.name') || ''); } catch {}
     try { setEmail(localStorage.getItem('docwriter.profile.email') || ''); } catch {}
     try { setLibraryPath(localStorage.getItem('docwriter.libraryPath') || (process.env.HOME||'') + '/Documents/DocWriter'); } catch {}
@@ -56,8 +58,12 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
     setFontUi(f);
     try {
       localStorage.setItem(FONT_UI_KEY, f);
-      const val = f === 'system-ui' ? 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif' : "'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-      document.documentElement.style.setProperty('--font-ui', val);
+      const stacks: Record<string, string> = {
+        'Hanken Grotesk': "'Hanken Grotesk', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+        'Inter': "'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+        'system-ui': 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
+      };
+      document.documentElement.style.setProperty('--font-ui', stacks[f] || stacks['Hanken Grotesk']);
     } catch {}
   }
 
@@ -65,8 +71,14 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
     setFontReading(f);
     try {
       localStorage.setItem(FONT_READING_KEY, f);
-      const val = f === 'Georgia' ? "'Georgia', serif" : f === 'serif' ? 'serif' : "'Literata', Georgia, serif";
-      document.documentElement.style.setProperty('--font-reading', val);
+      const stacks: Record<string, string> = {
+        'Spectral': "'Spectral', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif",
+        'Literata': "'Literata', Georgia, 'Source Serif 4', serif",
+        'Georgia': "'Georgia', serif",
+        'Source Serif 4': "'Source Serif 4', Georgia, serif",
+        'serif': 'serif',
+      };
+      document.documentElement.style.setProperty('--font-reading', stacks[f] || stacks['Spectral']);
     } catch {}
   }
 

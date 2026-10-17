@@ -3,7 +3,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeFields, newAliasList } from './entitymerge.mjs';
+import { mergeFields, newAliasList, repointReferences } from './entitymerge.mjs';
 
 // ---------- fields ----------
 
@@ -22,6 +22,13 @@ test('mergeFields is a straight union when the survivor has nothing', () => {
   assert.deepEqual(mergeFields('{}', b), { death: { chapter: 3, at: 'x' }, image: 'y' });
 });
 
+test('mergeFields treats the holders array like any other key', () => {
+  const a = JSON.stringify({ owners: [1, 2] });
+  const b = JSON.stringify({ owners: [3], boon: 'bright' });
+  assert.deepEqual(mergeFields(a, b), { owners: [1, 2], boon: 'bright' });
+  assert.deepEqual(mergeFields('{}', b), { owners: [3], boon: 'bright' });
+});
+
 test('mergeFields survives junk on either side', () => {
   assert.deepEqual(mergeFields('not json', JSON.stringify({ a: 1 })), { a: 1 });
   assert.deepEqual(mergeFields(JSON.stringify({ a: 1 }), 'also not json'), { a: 1 });
@@ -30,6 +37,76 @@ test('mergeFields survives junk on either side', () => {
 
 test('mergeFields never merges an array or scalar blob into the object', () => {
   assert.deepEqual(mergeFields(JSON.stringify({ a: 1 }), '"a string"'), { a: 1 });
+});
+
+// ---------- cross-reference repointing (merge step 5) ----------
+
+test('repointReferences moves every absorbed holder onto the survivor and dedupes', () => {
+  const { fields, touched, ownersRepointed } = repointReferences(
+    { owners: [7, 9, 9] },
+    { survivorId: 3, absorbedId: 9, selfId: 5 }
+  );
+  assert.deepEqual(fields, { owners: [7, 3] });
+  assert.equal(touched, true);
+  assert.equal(ownersRepointed, 1);
+});
+
+test('repointReferences keeps the survivor as the holder of anything else', () => {
+  // selfId 5 is not the survivor, so the survivor stays in the list.
+  const { fields } = repointReferences(
+    { owners: [3, 9] },
+    { survivorId: 3, absorbedId: 9, selfId: 5 }
+  );
+  assert.deepEqual(fields, { owners: [3] });
+});
+
+test('repointReferences drops a holder that would become the entity itself', () => {
+  const { fields, touched } = repointReferences(
+    { owners: [9] },
+    { survivorId: 3, absorbedId: 9, selfId: 3 }
+  );
+  assert.deepEqual(fields, {});
+  assert.equal(touched, true);
+});
+
+test('repointReferences also repoints the legacy single owner', () => {
+  assert.deepEqual(repointReferences({ owner: 9 }, { survivorId: 3, absorbedId: 9, selfId: 1 }).fields, {
+    owner: 3,
+  });
+  assert.deepEqual(repointReferences({ owner: 9 }, { survivorId: 3, absorbedId: 9, selfId: 3 }).fields, {});
+});
+
+test('repointReferences leaves unrelated fields and entities alone', () => {
+  const { fields, touched, ownersRepointed } = repointReferences(
+    { owners: [1], custom: 'note' },
+    { survivorId: 3, absorbedId: 9, selfId: 5 }
+  );
+  assert.deepEqual(fields, { owners: [1], custom: 'note' });
+  assert.equal(touched, false);
+  assert.equal(ownersRepointed, 0);
+});
+
+test('repointReferences still repoints leader / operates_in / members', () => {
+  const lead = repointReferences({ leader: 9 }, { survivorId: 3, absorbedId: 9, selfId: 5 });
+  assert.deepEqual(lead.fields, { leader: 3 });
+  assert.equal(lead.ownersRepointed, 0);
+
+  const drop = repointReferences({ operates_in: 9 }, { survivorId: 3, absorbedId: 9, selfId: 3 });
+  assert.deepEqual(drop.fields, {});
+
+  const members = repointReferences(
+    { members: [9, 4, 9] },
+    { survivorId: 3, absorbedId: 9, selfId: 5 }
+  );
+  assert.deepEqual(members.fields, { members: [3, 4] });
+});
+
+test('repointReferences tolerates a junk or empty blob', () => {
+  assert.deepEqual(repointReferences(null, { survivorId: 3, absorbedId: 9, selfId: 5 }), {
+    fields: {},
+    touched: false,
+    ownersRepointed: 0,
+  });
 });
 
 // ---------- aliases ----------

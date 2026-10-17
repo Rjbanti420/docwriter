@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { db, migrate } from './db.mjs';
 import { detect, normalizeKey, findLookalike } from './detect.mjs';
-import { mergeFields, newAliasList } from './entitymerge.mjs';
+import { mergeFields, newAliasList, repointReferences } from './entitymerge.mjs';
 import {
   effectiveNumber,
   chapterLabel,
@@ -716,38 +716,19 @@ app.post('/api/entities/:id/merge', (req, res) => {
   }
   refreshPosthumous(id);
 
-  // 5. Cross-references: anything B owned now belongs to A; Organisation
-  //    relations pointing at B (leader / members / operates_in) now point at A.
+  // 5. Cross-references: anything B owned (an item may have several holders) now
+  //    belongs to A; Organisation relations pointing at B (leader / members /
+  //    operates_in) now point at A.
   const setFields = db.prepare("UPDATE entities SET fields = ?, updated_at = datetime('now') WHERE id = ?");
   let ownersRepointed = 0;
   for (const row of db.prepare('SELECT id, fields FROM entities').all()) {
-    const fields = parseEntityFields(row.fields);
-    const self = row.id === id;
-    let touched = false;
-    if (!self && fields.owner === absorbedId) {
-      fields.owner = id;
-      touched = true;
-      ownersRepointed += 1;
-    }
-    // Relations never point at the entity itself, so a reference the survivor
-    // held to the absorbed entity is dropped rather than made self-referential.
-    if (fields.leader === absorbedId) {
-      if (self) delete fields.leader;
-      else fields.leader = id;
-      touched = true;
-    }
-    if (fields.operates_in === absorbedId) {
-      if (self) delete fields.operates_in;
-      else fields.operates_in = id;
-      touched = true;
-    }
-    if (Array.isArray(fields.members) && fields.members.includes(absorbedId)) {
-      const next = [...new Set(fields.members.map((m) => (m === absorbedId ? id : m)))].filter((m) => m !== row.id);
-      if (next.length > 0) fields.members = next;
-      else delete fields.members;
-      touched = true;
-    }
-    if (touched) setFields.run(JSON.stringify(fields), row.id);
+    const repointed = repointReferences(parseEntityFields(row.fields), {
+      survivorId: id,
+      absorbedId,
+      selfId: row.id,
+    });
+    ownersRepointed += repointed.ownersRepointed;
+    if (repointed.touched) setFields.run(JSON.stringify(repointed.fields), row.id);
   }
 
   // 6. Review candidates keep pointing at the survivor.
