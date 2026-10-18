@@ -9,11 +9,14 @@ import type { Chapter, Entity, EntityDetail, PowerLevel, Type } from '../types';
 // Every entity type may hold an Item, except an Item itself: a possession is
 // something a person, place, nation or guild has, never another item.
 
-/** Types an Organisation can be led by and staffed with. */
+/** Types an entity can be led by and staffed with (always people). */
 const PERSON_TYPES = ['Character'];
 
 /** Types an Organisation can be said to operate in. */
 const PLACE_TYPES = ['Location', 'Country'];
+
+/** Types sharing the Organisation editor: leader · members · operates in · purpose · accomplishments. */
+const ORG_TYPES = ['Organisation', 'Location', 'Country'];
 
 /** Item rank ladder, from the mundane to the singular. */
 const ITEM_RANKS = ['Mundane', 'Elusive', 'Hazardous', 'Desolating', 'Cataclysmic', 'Singular'];
@@ -171,7 +174,8 @@ export default function EntityPanel({
   const [history, setHistory] = useState<Section>(() => parseSection(null, HISTORY_KEYS));
   const charBaseline = useRef('');
   const [aliasDraft, setAliasDraft] = useState('');
-  // Organisation-only state (all kept in the `fields` bag; Origin reuses `summary`).
+  // Organisation-editor state (shared with Location and Country; all kept in the
+  // `fields` bag, with Origin reusing `summary`).
   const [leader, setLeader] = useState<number | null>(null);
   const [members, setMembers] = useState<number[]>([]);
   const [operatesIn, setOperatesIn] = useState<number | null>(null);
@@ -220,7 +224,7 @@ export default function EntityPanel({
         history: nextHistory,
       });
       await loadLevels();
-    } else if (d.entity.type_name === 'Organisation') {
+    } else if (ORG_TYPES.includes(d.entity.type_name ?? '')) {
       const nextLeader = getLeaderId(d.entity.fields);
       const nextMembers = getMemberIds(d.entity.fields);
       const nextOperates = getOperatesInId(d.entity.fields);
@@ -271,11 +275,11 @@ export default function EntityPanel({
 
   const isItemType = detail?.entity.type_name === 'Item';
   const isCharacterType = detail?.entity.type_name === 'Character';
-  const isOrgType = detail?.entity.type_name === 'Organisation';
+  const isOrgLike = ORG_TYPES.includes(detail?.entity.type_name ?? '');
   const storedFields = detail ? parseFields(detail.entity.fields) : {};
   // Characters no longer expose the trail controls either, but the stored
   // values ride along untouched on save so the dormant-alert engine keeps working.
-  const hidesTracking = isItemType || isCharacterType || isOrgType;
+  const hidesTracking = isItemType || isCharacterType || isOrgLike;
   const thresholdValid =
     hidesTracking || tracking === 'off' || (threshold.trim() !== '' && Number(threshold) > 0);
   const dirty =
@@ -291,7 +295,7 @@ export default function EntityPanel({
           evolvable !== (storedFields.evolvable === true)
         : isCharacterType
           ? characterSnapshot({ powerLevel, abilities, system, history }) !== charBaseline.current
-          : isOrgType
+          : isOrgLike
             ? organisationSnapshot({ description, leader, members, operatesIn, purpose, accomplishments }) !==
               orgBaseline.current
             : tracking !== (detail.entity.tracking || 'off') ||
@@ -336,7 +340,7 @@ export default function EntityPanel({
       if (Object.keys(historyOut).length > 0) fields.history = historyOut;
       else delete fields.history;
       payload.fields = fields;
-    } else if (isOrgType && detail) {
+    } else if (isOrgLike && detail) {
       const fields = parseFields(detail.entity.fields);
       if (description === '') delete fields.description;
       else fields.description = description;
@@ -736,7 +740,7 @@ export default function EntityPanel({
                     />
                   </SectionCard>
                 </>
-              ) : isOrgType ? (
+              ) : isOrgLike ? (
                 <>
                   <div className="dw-ie__field">
                     <label className="dw-ie__label" htmlFor="ie-origin">
@@ -747,7 +751,7 @@ export default function EntityPanel({
                       className="dw-ie__textarea"
                       value={summary}
                       onChange={(ev) => setSummary(ev.target.value)}
-                      placeholder="Where the organisation came from"
+                      placeholder="Where it came from"
                     />
                   </div>
 

@@ -1,6 +1,7 @@
 import express from 'express';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { db, migrate } from './db.mjs';
@@ -20,6 +21,8 @@ import {
   detectQuestions,
   dedupeQuestions,
 } from './planning.mjs';
+import { isNudgeDue, NUDGE_FREQUENCIES } from './nudge.mjs';
+import { renderBookMarkdown } from './exportmd.mjs';
 
 const require = createRequire(import.meta.url);
 const ENGLISH_WORDS = new Set(require('an-array-of-english-words'));
@@ -29,6 +32,35 @@ migrate();
 
 const app = express();
 app.use(express.json({ limit: '20mb' }));
+
+// Every write request runs inside one SQLite transaction, so a multi-step write
+// (a merge across five tables, a chapter re-scan) either lands whole or not at
+// all. Without this a crash half-way leaves a half-merged card, and merges have
+// no undo. Handlers here are synchronous, so the transaction opens and settles
+// inside the request; GETs are left alone.
+app.use('/api', (req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD') return next();
+  db.exec('BEGIN');
+  let settled = false;
+  const settle = (commit) => {
+    if (settled) return;
+    settled = true;
+    try {
+      db.exec(commit ? 'COMMIT' : 'ROLLBACK');
+    } catch {
+      /* nothing left to settle */
+    }
+  };
+  // Settle before the body goes out, so only a write that actually committed is
+  // reported as done. A 5xx means a handler threw part-way through.
+  const send = res.send.bind(res);
+  res.send = (body) => {
+    settle(res.statusCode < 500);
+    return send(body);
+  };
+  res.on('close', () => settle(false)); // client hung up / handler never replied
+  next();
+});
 
 const now = "datetime('now')";
 const wordCount = (text) => text.trim().split(/\s+/).filter(Boolean).length;
@@ -471,6 +503,36 @@ app.get('/api/review', (_req, res) => {
   res.json({ pending, alerts });
 });
 
+// The two triage actions Review batches, defined once so both routes share them.
+// Ignoring a name ignores every pending spelling of it, as the single-row
+// action does.
+const deferCandidate = (candidate) =>
+  db.prepare("UPDATE candidates SET status = 'later' WHERE id = ?").run(candidate.id);
+const ignoreCandidate = (candidate) => {
+  db.prepare('INSERT OR IGNORE INTO ignored_tokens (normalized) VALUES (?)').run(candidate.normalized);
+  db.prepare("UPDATE candidates SET status = 'ignored' WHERE normalized = ? AND status IN ('pending','later')").run(candidate.normalized);
+};
+
+// Bulk triage from Review's selection bar: one request — and so one transaction
+// and one refresh — instead of a full round trip per selected name.
+app.post('/api/candidates/resolve', (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Number.isFinite) : [];
+  const { action } = req.body ?? {};
+  if (ids.length === 0) return res.status(400).json({ error: 'ids required' });
+  if (action !== 'later' && action !== 'ignore') {
+    return res.status(400).json({ error: 'bulk triage supports ignore and later only' });
+  }
+  let count = 0;
+  for (const id of ids) {
+    const candidate = db.prepare('SELECT * FROM candidates WHERE id = ?').get(id);
+    if (!candidate) continue;
+    if (action === 'later') deferCandidate(candidate);
+    else ignoreCandidate(candidate);
+    count += 1;
+  }
+  res.json({ ok: true, count });
+});
+
 app.post('/api/candidates/:id/resolve', (req, res) => {
   const id = Number(req.params.id);
   const candidate = db.prepare('SELECT * FROM candidates WHERE id = ?').get(id);
@@ -478,13 +540,12 @@ app.post('/api/candidates/:id/resolve', (req, res) => {
   const { action, typeId, name, tracking = 'off', gapThreshold = null } = req.body ?? {};
 
   if (action === 'later') {
-    db.prepare("UPDATE candidates SET status = 'later' WHERE id = ?").run(id);
+    deferCandidate(candidate);
     return res.json({ ok: true });
   }
 
   if (action === 'ignore') {
-    db.prepare('INSERT OR IGNORE INTO ignored_tokens (normalized) VALUES (?)').run(candidate.normalized);
-    db.prepare("UPDATE candidates SET status = 'ignored' WHERE normalized = ? AND status IN ('pending','later')").run(candidate.normalized);
+    ignoreCandidate(candidate);
     return res.json({ ok: true });
   }
 
@@ -1103,12 +1164,307 @@ if (existsSync(dist)) {
   app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(join(dist, 'index.html')));
 }
 
-app.get('/api/projects', (_req,res)=>{ try{ const regPath=join(join(process.env.HOME || '/home/rj', '.config', 'docwriter'),'projects.json'); let list=[]; if(existsSync(regPath)){ list=JSON.parse(readFileSync(regPath,'utf8')); } res.json(list);}catch(e){res.status(500).json({error:String(e)});} });
-app.post('/api/projects/switch', (req,res)=>{ try{ const p=req.body?.path; if(!p) return res.status(400).json({error:'path required'}); writeSettings({dbPath:p}); res.json({ok:true}); }catch(e){res.status(500).json({error:String(e)});} });
-app.get('/api/backup', (_req,res)=>{ try{ const dbPath=process.env.DOCWRITER_DB||join(dataDir,'docwriter.db'); const buf=readFileSync(dbPath); res.set('Content-Disposition','attachment; filename="docwriter-backup.db"'); res.set('Content-Type','application/octet-stream'); res.send(buf); }catch(e){res.status(500).json({error:String(e)});} });
-app.post('/api/backup/import', (req,res)=>{ res.status(501).json({error:'import not implemented in stub'}); });
+// The book's folder, as tracked by the desktop app's menu. Empty unless the app
+// has written one — this is a read-only view of it.
+app.get('/api/projects', (_req, res) => {
+  try {
+    const regPath = join(homedir(), '.config', 'docwriter', 'projects.json');
+    res.json(existsSync(regPath) ? JSON.parse(readFileSync(regPath, 'utf8')) : []);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// A consistent, WAL-collapsed copy of the book. Copying the .db on its own would
+// silently drop everything still sitting in the -wal file — which is where recent
+// writes live, so that copy would be missing the writer's latest work. VACUUM
+// INTO produces one self-contained, checkpointed file.
+app.get('/api/backup', (_req, res) => {
+  const target = join(tmpdir(), `docwriter-backup-${process.pid}-${Date.now()}.db`);
+  try {
+    db.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
+    res.set('Content-Disposition', 'attachment; filename="docwriter-backup.db"');
+    res.set('Content-Type', 'application/octet-stream');
+    res.send(readFileSync(target));
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  } finally {
+    rmSync(target, { force: true });
+  }
+});
+
+// ---------- Markdown export ----------
+//
+// The whole book as one text file: every chapter's current revision, every live
+// entity, every gun and every question. Images stay out (a .md is text), and so
+// does anything the writer threw away — Trash and the Review queue are working
+// state, not the book. Entity ids are resolved to names here, so the file stands
+// on its own with no database to look anything up in.
+
+// Mirrors the Organisation editor in EntityPanel: these three types share the
+// leader · members · operates in · purpose · accomplishments fields.
+const ORG_TYPES = ['Organisation', 'Location', 'Country'];
+
+const META_KEYS = ['export_nudge', 'last_export_at', 'last_nudged_on'];
+
+function metaRows() {
+  const out = {};
+  for (const row of db.prepare('SELECT key, value FROM meta').all()) out[row.key] = row.value;
+  return out;
+}
+
+function todayLocal() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// What the reminder needs: the saved frequency, both dates, and whether the
+// period has run out. "Today" is the server's local day — the same machine.
+function metaState() {
+  const rows = metaRows();
+  const nudge = rows.export_nudge || 'daily';
+  const lastExportAt = rows.last_export_at || null;
+  const lastNudgedOn = rows.last_nudged_on || null;
+  const today = todayLocal();
+  // Nothing written yet is nothing to export, so a brand-new book does not open
+  // with a nag. The period itself starts with the writer's first chapter.
+  const hasWork = db.prepare('SELECT COUNT(*) AS n FROM chapters').get().n > 0;
+  return {
+    nudge,
+    lastExportAt,
+    lastNudgedOn,
+    today,
+    due: hasWork && isNudgeDue({ nudge, lastExportAt, lastNudgedOn, today }),
+  };
+}
+
+// `distinct_feature` -> `Distinct feature`: exactly the labels the editor shows,
+// derived from the key so the two lists cannot drift apart.
+function humanize(key) {
+  const words = String(key).replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** The fixed plus custom rows of a Character System / History bag, as bullets. */
+function bagItems(bag) {
+  const src = bag && typeof bag === 'object' && !Array.isArray(bag) ? bag : {};
+  const items = [];
+  for (const [key, value] of Object.entries(src)) {
+    if (key === 'custom') continue;
+    if (String(value ?? '').trim() === '') continue;
+    items.push({ name: humanize(key), body: value });
+  }
+  for (const entry of Array.isArray(src.custom) ? src.custom : []) {
+    items.push({ name: entry?.name, body: entry?.body });
+  }
+  return items;
+}
+
+/** `{ id, name, body }` rows (abilities, accomplishments) as bullets. */
+function entryItems(rows) {
+  return (Array.isArray(rows) ? rows : []).map((row) => ({ name: row?.name, body: row?.body }));
+}
+
+function exportEntities(nameById, chapterNumberById, levelById) {
+  const rows = db
+    .prepare(
+      `SELECT e.*, t.name AS type_name,
+        (SELECT COUNT(*) FROM mentions m WHERE m.entity_id = e.id) AS mention_count,
+        (SELECT c.number FROM mentions m JOIN chapters c ON c.id = m.chapter_id WHERE m.entity_id = e.id ORDER BY c.sort_order LIMIT 1) AS first_chapter,
+        (SELECT c.number FROM mentions m JOIN chapters c ON c.id = m.chapter_id WHERE m.entity_id = e.id ORDER BY c.sort_order DESC LIMIT 1) AS last_chapter
+       FROM entities e LEFT JOIN types t ON t.id = e.type_id
+       WHERE e.trashed_at IS NULL
+       ORDER BY t.sort_order, e.name COLLATE NOCASE`
+    )
+    .all();
+
+  const aliases = new Map();
+  for (const row of db.prepare('SELECT entity_id, alias FROM aliases ORDER BY id').all()) {
+    if (!aliases.has(row.entity_id)) aliases.set(row.entity_id, []);
+    aliases.get(row.entity_id).push(row.alias);
+  }
+
+  const nameOf = (id) => nameById.get(Number(id)) ?? 'Missing entity';
+  const memberIds = (v) =>
+    (Array.isArray(v) ? v : []).map(Number).filter((n) => Number.isFinite(n) && nameById.has(n));
+
+  const groups = [];
+  for (const e of rows) {
+    const fields = parseEntityFields(e.fields);
+    const type = e.type_name ?? 'Unsorted';
+    let group = groups[groups.length - 1];
+    if (!group || group.typeName !== type) {
+      group = { typeName: type, cards: [] };
+      groups.push(group);
+    }
+
+    const lines = [];
+    const aliasList = aliases.get(e.id) ?? [];
+    if (aliasList.length) lines.push(`Aliases: ${aliasList.join(', ')}`);
+    if (e.mention_count) {
+      const span =
+        e.first_chapter === e.last_chapter
+          ? `Ch ${e.first_chapter}`
+          : `Ch ${e.first_chapter}–Ch ${e.last_chapter}`;
+      lines.push(`Mentions: ${e.mention_count} · ${span}`);
+    }
+
+    const sections = [];
+    const summary = String(e.summary ?? '').trim();
+    if (type === 'Character') {
+      const level = levelById.get(Number(fields.power_level));
+      if (level) lines.push(`Power level: ${level}`);
+      const death = fields.death && typeof fields.death === 'object' ? fields.death : null;
+      const diedIn = death ? chapterNumberById.get(Number(death.chapter)) : null;
+      if (diedIn) lines.push(`Died in Ch ${diedIn}`);
+      if (summary) sections.push({ heading: 'Summary', body: summary });
+      sections.push({ heading: 'System', items: bagItems(fields.system) });
+      sections.push({ heading: 'Abilities', items: entryItems(fields.abilities) });
+      sections.push({ heading: 'History', items: bagItems(fields.history) });
+    } else if (type === 'Item') {
+      if (String(fields.rank ?? '').trim()) lines.push(`Rank: ${fields.rank}`);
+      if (fields.evolvable === true) lines.push('Evolvable: yes');
+      const owners = memberIds(fields.owners);
+      if (owners.length) lines.push(`Held by: ${owners.map(nameOf).join(', ')}`);
+      if (summary) sections.push({ heading: 'Origin', body: summary });
+      sections.push({ heading: 'Description', body: fields.description });
+      sections.push({ heading: 'Boon', body: fields.boon });
+      sections.push({ heading: 'Curse', body: fields.curse });
+    } else if (ORG_TYPES.includes(type)) {
+      if (nameById.has(Number(fields.leader))) lines.push(`Leader: ${nameOf(fields.leader)}`);
+      const members = memberIds(fields.members);
+      if (members.length) lines.push(`Members: ${members.map(nameOf).join(', ')}`);
+      if (nameById.has(Number(fields.operates_in))) lines.push(`Operates in: ${nameOf(fields.operates_in)}`);
+      if (summary) sections.push({ heading: 'Origin', body: summary });
+      sections.push({ heading: 'Description', body: fields.description });
+      sections.push({ heading: 'Purpose', body: fields.purpose });
+      sections.push({ heading: 'Accomplishments', items: entryItems(fields.accomplishments) });
+    } else if (summary) {
+      sections.push({ heading: 'Summary', body: summary });
+    }
+
+    group.cards.push({ name: e.name, lines, sections });
+  }
+  return groups;
+}
+
+function exportGuns(chapterById) {
+  return allGunsWithState().map((gun) => {
+    const lines = [`Status: ${gun.status === 'fired' ? 'fired' : 'active'}`];
+    const appears = chapterById.get(Number(gun.appearance_chapter_id));
+    if (appears) lines.push(`Appears: ${chapterLabel(appears)}`);
+    const planned = chapterById.get(Number(gun.planned_chapter_id));
+    if (planned) lines.push(`Planned payoff: ${chapterLabel(planned)}`);
+    else if (String(gun.planned_number ?? '').trim()) lines.push(`Planned payoff: Ch ${gun.planned_number}`);
+    if (String(gun.impact ?? '').trim()) lines.push(`Impact: ${gun.impact}`);
+
+    const history = db
+      .prepare('SELECT * FROM gun_history WHERE gun_id = ? ORDER BY id')
+      .all(gun.id)
+      .map((h) => ({
+        name: humanize(h.decision),
+        body: [h.chapter_label, h.from_number && h.to_number ? `moved to Ch ${h.to_number}` : '']
+          .filter(Boolean)
+          .join(' · '),
+      }));
+
+    return {
+      name: gun.title,
+      lines,
+      sections: [
+        { heading: 'Explanation', body: gun.explanation },
+        { heading: 'Outcome', body: gun.outcome },
+        { heading: 'History', items: history },
+      ],
+    };
+  });
+}
+
+function exportQuestions(chapterById) {
+  const label = (id) => {
+    const chapter = chapterById.get(Number(id));
+    return chapter ? chapterLabel(chapter) : '';
+  };
+  return allQuestions().map((q) => ({
+    status: questionStatus(q),
+    text: q.text,
+    source: label(q.source_chapter_id),
+    delivered: label(q.delivered_chapter_id),
+    answer: q.answer,
+  }));
+}
+
+app.get('/api/export', (_req, res) => {
+  try {
+    const chapterById = new Map(chapterList().map((c) => [c.id, c]));
+    const chapterNumberById = new Map(chapterList().map((c) => [c.id, effectiveNumber(c)]));
+    // Trashed cards are excluded from the export but still named here, so a
+    // surviving reference to one reads as a name rather than a bare number.
+    const nameById = new Map(db.prepare('SELECT id, name FROM entities').all().map((e) => [e.id, e.name]));
+    const levelById = new Map(db.prepare('SELECT id, name FROM power_levels').all().map((l) => [l.id, l.name]));
+
+    const markdown = renderBookMarkdown({
+      exportedAt: todayLocal(),
+      chapters: db
+        .prepare(
+          `SELECT c.number, c.title, c.word_count AS wordCount, r.text
+           FROM chapters c LEFT JOIN revisions r ON r.id = c.current_revision_id
+           ORDER BY c.sort_order`
+        )
+        .all(),
+      groups: exportEntities(nameById, chapterNumberById, levelById),
+      guns: exportGuns(chapterById),
+      questions: exportQuestions(chapterById),
+      powerLevels: db.prepare('SELECT name FROM power_levels ORDER BY sort_order, name').all().map((l) => l.name),
+      types: db.prepare('SELECT name FROM types ORDER BY sort_order, name').all().map((t) => t.name),
+    });
+
+    res.set('Content-Disposition', `attachment; filename="docwriter-export-${todayLocal()}.md"`);
+    res.set('Content-Type', 'text/markdown; charset=utf-8');
+    res.send(markdown);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ---------- export reminder state ----------
+// Frequency plus the dates of the last export and the last dismissal. Stored in
+// the book, not localStorage: the packaged app serves each run from a fresh port,
+// so its origin — and its storage — resets on every launch.
+
+app.get('/api/meta', (_req, res) => {
+  res.json(metaState());
+});
+
+app.put('/api/meta', (req, res) => {
+  const body = req.body ?? {};
+  // Validate the whole patch before writing: this request runs in a transaction,
+  // and a 4xx still commits, so a half-applied patch would otherwise stick.
+  const patch = [];
+  for (const [key, raw] of Object.entries(body)) {
+    if (!META_KEYS.includes(key)) return res.status(400).json({ error: `unknown key: ${key}` });
+    const value = raw == null ? '' : String(raw);
+    if (key === 'export_nudge' && !NUDGE_FREQUENCIES.includes(value)) {
+      return res.status(400).json({ error: `bad reminder frequency: ${value}` });
+    }
+    if (key !== 'export_nudge' && value !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return res.status(400).json({ error: `bad date for ${key}: ${value}` });
+    }
+    patch.push([key, value]);
+  }
+  const upsert = db.prepare(
+    'INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  );
+  for (const [key, value] of patch) upsert.run(key, value);
+  res.json(metaState());
+});
+
 const PORT = Number(process.env.PORT ?? 5178);
-const HOST = process.env.HOST || undefined;
-const onListen = () => console.log(`[server] listening on http://${HOST || 'localhost'}:${PORT}`);
-if (HOST) app.listen(PORT, HOST, onListen);
-else app.listen(PORT, onListen);
+// Loopback by default: this API has no authentication, so it must not be
+// reachable from the network. The desktop app passes 127.0.0.1 as well.
+const HOST = process.env.HOST || '127.0.0.1';
+const onListen = function () {
+  console.log(`[server] listening on http://${HOST}:${this.address().port}`);
+};
+app.listen(PORT, HOST, onListen);

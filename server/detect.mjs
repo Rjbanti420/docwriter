@@ -438,12 +438,31 @@ export function levenshtein(a, b) {
 }
 
 // Candidate names that look like something we already know (typo / variant).
+//
+// Only a *unique* best match is offered. Two names within the same distance of
+// the candidate (Kael / Kaela, Aria / Aryan) mean we cannot tell which one the
+// writer meant, and "same thing" merges two cards with no undo — so an ambiguous
+// match is dropped rather than guessed at.
 export function findLookalike(key, entityKeys) {
   if (key.length < 4) return null;
+  if (entityKeys.has(key)) return entityKeys.get(key);
+
+  let best = Infinity;
+  let bestId = null;
+  const tied = new Set();
   for (const known of entityKeys.keys()) {
-    if (known === key) return entityKeys.get(known);
-    if (Math.abs(known.length - key.length) > 2) continue;
-    if (levenshtein(known, key) <= 2 && known.length >= 4) return entityKeys.get(known);
+    if (known.length < 4 || Math.abs(known.length - key.length) > 2) continue;
+    const d = levenshtein(known, key);
+    if (d > 2) continue;
+    const id = entityKeys.get(known);
+    if (d < best) {
+      best = d;
+      bestId = id;
+      tied.clear();
+      tied.add(id);
+    } else if (d === best) {
+      tied.add(id); // same entity reached twice is fine; a different one is not
+    }
   }
-  return null;
+  return tied.size === 1 ? bestId : null;
 }

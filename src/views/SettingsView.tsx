@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { api } from '../api';
+import type { ExportMeta } from '../types';
 
 const THEME_KEY = 'docwriter.theme';
 const DENSITY_KEY = 'docwriter.density';
@@ -25,6 +27,14 @@ const READING_FONTS = [
   { id: 'serif', label: 'Serif (generic)' },
 ];
 
+/** How often to be reminded to export. `off` is a first-class choice, not a hidden one. */
+const NUDGE_CHOICES = [
+  { id: 'off', label: 'No reminder' },
+  { id: 'daily', label: 'Every day' },
+  { id: 'weekly', label: 'Every week' },
+  { id: 'monthly', label: 'Every month' },
+];
+
 export default function SettingsView({ onClose }: { onClose: () => void }) {
   const [theme, setTheme] = useState('mocha');
   const [density, setDensity] = useState('comfortable');
@@ -33,6 +43,14 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [libraryPath, setLibraryPath] = useState('');
+  const [meta, setMeta] = useState<ExportMeta | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  // The reminder state lives in the book, so Settings reads it from the API
+  // rather than from localStorage — which the packaged app loses every launch.
+  useEffect(() => {
+    api.meta().then(setMeta).catch(() => {});
+  }, []);
 
   useEffect(() => {
     try { setTheme(localStorage.getItem(THEME_KEY) || 'mocha'); } catch {}
@@ -41,7 +59,7 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
     try { setFontReading(localStorage.getItem(FONT_READING_KEY) || 'Spectral'); } catch {}
     try { setName(localStorage.getItem('docwriter.profile.name') || ''); } catch {}
     try { setEmail(localStorage.getItem('docwriter.profile.email') || ''); } catch {}
-    try { setLibraryPath(localStorage.getItem('docwriter.libraryPath') || (process.env.HOME||'') + '/Documents/DocWriter'); } catch {}
+    try { setLibraryPath(localStorage.getItem('docwriter.libraryPath') || '~/Documents/DocWriter'); } catch {}
   }, []);
 
   function applyTheme(t: string) {
@@ -86,6 +104,26 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
     try { localStorage.setItem('docwriter.profile.name', name); localStorage.setItem('docwriter.profile.email', email); localStorage.setItem('docwriter.libraryPath', libraryPath); } catch {}
   }
 
+  async function exportBook() {
+    setExporting(true);
+    try {
+      // exportMarkdown stamps the date itself, once the file is really on disk.
+      if (await api.exportMarkdown()) setMeta(await api.meta());
+    } catch {
+      alert('Could not write the export.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function changeNudge(nudge: string) {
+    try {
+      setMeta(await api.setMeta({ export_nudge: nudge }));
+    } catch {
+      alert('Could not save that reminder setting.');
+    }
+  }
+
   return (
     <div className="main-inner">
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
@@ -115,6 +153,39 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
         <p className="progress" style={{marginTop:0,marginBottom:8}}>Library folder: <code>{libraryPath || '~/Documents/DocWriter'}</code></p>
         <div className="actions" style={{marginTop:0}}>
           <button onClick={async ()=>{ try{ const list=await (await import('../api')).api.projects(); alert('Projects: '+list.length); }catch(e){alert('err');}}}>Load projects</button>
+        </div>
+      </section>
+
+      <section style={{marginBottom:16}} className="card">
+        <h2 style={{margin:'0 0 10px',fontSize:16}}>Export</h2>
+        <p className="progress" style={{marginTop:0,marginBottom:8}}>
+          Writes the whole book to one Markdown file — every chapter’s current draft, the Bible and
+          Planning. Images, Trash and the Review queue stay behind.
+          {meta?.lastExportAt && <> Last exported {meta.lastExportAt}.</>}
+        </p>
+        <div className="actions" style={{marginTop:0}}>
+          <button className="primary" disabled={exporting} onClick={exportBook}>
+            {exporting ? 'Exporting…' : 'Export as Markdown'}
+          </button>
+        </div>
+        <div className="field" style={{marginTop:12,marginBottom:0}}>
+          <label>Remind me to export</label>
+          <select value={meta?.nudge ?? 'daily'} disabled={!meta} onChange={(e)=>changeNudge(e.target.value)}>
+            {NUDGE_CHOICES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+        </div>
+      </section>
+
+      <section style={{marginBottom:16}} className="card">
+        <h2 style={{margin:'0 0 10px',fontSize:16}}>Backup</h2>
+        <p className="progress" style={{marginTop:0,marginBottom:8}}>
+          Saves a complete, self-contained copy of this book — the whole database, including
+          everything written since the last checkpoint.
+        </p>
+        <div className="actions" style={{marginTop:0}}>
+          <button className="primary" onClick={() => api.backup().catch(() => alert('Could not create the backup.'))}>
+            Download a backup
+          </button>
         </div>
       </section>
 

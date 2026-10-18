@@ -212,8 +212,8 @@ export default function BibleView({
                         ) : null}
                       </div>
                       {death && (
-                        <div className="sub" style={{ color: 'var(--color-danger)' }}>
-                          ☠ died{deathChapter ? ` in ch.${chapterNumber(deathChapter)}` : ''}
+                        <div className="badge badge-dead">
+                          died{deathChapter ? ` in ch.${chapterNumber(deathChapter)}` : ''}
                         </div>
                       )}
                       {e.tracking !== 'off' && (

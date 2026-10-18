@@ -7,7 +7,7 @@
 // same Vite build as the web app and talks to the server over /api, so no
 // Node/Electron APIs are exposed to the page (contextIsolation stays on).
 
-const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron');
 const path = require('node:path');
 const net = require('node:net');
 const fs = require('node:fs');
@@ -87,6 +87,20 @@ async function startServer() {
 
 let win = null;
 
+// Export as Markdown, seen from the renderer: a native Save dialog in front of
+// the window, then the bytes on disk. The suggested name is reduced to its
+// basename, so a renderer cannot steer the dialog at a directory of its choosing.
+ipcMain.handle('docwriter:save-text', async (_event, name, text) => {
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    title: 'Export as Markdown',
+    defaultPath: path.join(app.getPath('documents'), path.basename(String(name || 'docwriter-export.md'))),
+    filters: [{ name: 'Markdown', extensions: ['md'] }],
+  });
+  if (canceled || !filePath) return { saved: false };
+  await fs.promises.writeFile(filePath, String(text ?? ''), 'utf8');
+  return { saved: true, filePath };
+});
+
 async function createWindow() {
   const url = DEV
     ? process.env.DOCWRITER_DEV_URL || 'http://localhost:5173'
@@ -104,6 +118,8 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Gives the page window.docwriter.saveTextFile — nothing else. See preload.cjs.
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   });
 

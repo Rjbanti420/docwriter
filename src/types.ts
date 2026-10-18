@@ -202,3 +202,15 @@ export interface QuestionCandidate {
 }
 
 export type View = 'read' | 'review' | 'bible' | 'planning';
+
+/** Export-reminder state. Kept in the book, so a relaunch still knows the answer. */
+export interface ExportMeta {
+  nudge: 'off' | 'daily' | 'weekly' | 'monthly';
+  /** YYYY-MM-DD of the last successful export, or null. */
+  lastExportAt: string | null;
+  /** YYYY-MM-DD the writer last dismissed the reminder, or null. */
+  lastNudgedOn: string | null;
+  /** The server's local day, so the client never stamps a date of its own. */
+  today: string;
+  due: boolean;
+}

@@ -17,10 +17,15 @@ function CandidateRow({
   c,
   types,
   onResolve,
+  selected,
+  onToggle,
 }: {
   c: Candidate;
   types: Type[];
   onResolve: (c: Candidate, action: string, extra?: Record<string, unknown>) => void;
+  /** Omitted only where the list has no selection bar. */
+  selected?: boolean;
+  onToggle?: (id: number) => void;
 }) {
   const [typeId, setTypeId] = useState<number | null>(
     c.suggested_type_id ?? types.find((t) => t.name === 'Character')?.id ?? null
@@ -42,7 +47,26 @@ function CandidateRow({
 
   return (
     <div className="card">
-      <div className="cand-row">
+      <div
+        className={onToggle ? 'cand-row with-select' : 'cand-row'}
+        // Clicking the row's text toggles selection; its own controls (checkbox,
+        // type picker, "same thing") keep their behaviour.
+        onClick={
+          onToggle &&
+          ((e) => {
+            if ((e.target as HTMLElement).closest('input, select, button, label, a')) return;
+            onToggle(c.id);
+          })
+        }
+      >
+        {onToggle && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggle(c.id)}
+            aria-label={`Select ${c.surface_text}`}
+          />
+        )}
         <div>
           <div className="cand-name">
             {c.surface_text}{' '}
@@ -103,6 +127,7 @@ export default function ReviewView({
   ignored,
   trash,
   onResolve,
+  onResolveMany,
   onAlertState,
   onOpenEntity,
   onOpenGun,
@@ -116,6 +141,7 @@ export default function ReviewView({
   ignored: IgnoredToken[];
   trash: Entity[];
   onResolve: (c: Candidate, action: string, extra?: Record<string, unknown>) => void;
+  onResolveMany: (ids: number[], action: string) => Promise<void>;
   onAlertState: (id: number, state: string) => void;
   onOpenEntity: (id: number) => void;
   onOpenGun: (id: number) => void;
@@ -127,6 +153,7 @@ export default function ReviewView({
   const [tab, setTab] = useState<'names' | 'alerts' | 'rejected' | 'trash'>('names');
   const [showMore, setShowMore] = useState(false);
   const [selectedTrash, setSelectedTrash] = useState<number[]>([]);
+  const [selectedNames, setSelectedNames] = useState<number[]>([]);
 
   const primary = review.pending.filter((c) => c.tier !== 'demoted');
   const demoted = review.pending.filter((c) => c.tier === 'demoted');
@@ -151,6 +178,44 @@ export default function ReviewView({
     }
   };
 
+  // Rows actually on screen right now, so a name resolved from elsewhere — or a
+  // low-confidence row that is still collapsed — cannot sit in the count or be
+  // re-sent as a dead id by a bulk action.
+  const selectableIds = (showMore ? [...primary, ...demoted] : primary).map((c) => c.id);
+  const selectedIds = selectedNames.filter((id) => selectableIds.includes(id));
+  const allPrimarySelected = primary.length > 0 && primary.every((c) => selectedIds.includes(c.id));
+  const allDemotedSelected = demoted.length > 0 && demoted.every((c) => selectedIds.includes(c.id));
+  const toggleName = (id: number) =>
+    setSelectedNames((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  // Each list has its own Select all, so toggling one only touches its own rows.
+  const toggleAll = (list: Candidate[]) => {
+    const ids = list.map((c) => c.id);
+    const allOn = ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+    setSelectedNames((prev) => (allOn ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])]));
+  };
+  const clearNamesSelection = () => setSelectedNames([]);
+  const bulkResolve = async (action: 'ignore' | 'later') => {
+    const ids = selectedIds;
+    if (ids.length === 0) return;
+    if (action === 'ignore' && !confirm(`Ignore ${ids.length} selected name(s)? They will never be suggested again.`)) return;
+    clearNamesSelection();
+    await onResolveMany(ids, action);
+  };
+  const bulkActions = selectedIds.length > 0 && (
+    <div className="dw-trash-bulk">
+      <span className="progress">{selectedIds.length} selected</span>
+      <button className="btn-primary" onClick={() => bulkResolve('ignore')}>
+        Ignore
+      </button>
+      <button className="btn-secondary" onClick={() => bulkResolve('later')}>
+        Later
+      </button>
+      <button className="btn-secondary" onClick={clearNamesSelection}>
+        Clear
+      </button>
+    </div>
+  );
+
   return (
     <div className="main-inner">
       <h1 style={{ fontSize: 20, margin: '0 0 4px' }}>Review</h1>
@@ -174,11 +239,23 @@ export default function ReviewView({
 
       {tab === 'names' && (
         <>
-          {primary.length > 1 && (
-            <div className="toolbar">
-              <button className="primary" onClick={onTriageAll}>
-                Triage one by one ({primary.length})
-              </button>
+          {primary.length > 0 && (
+            <div className="toolbar" style={{ marginBottom: 14 }}>
+              <label className="dw-check">
+                <input
+                  type="checkbox"
+                  checked={allPrimarySelected}
+                  onChange={() => toggleAll(primary)}
+                />
+                Select all
+              </label>
+              {bulkActions || (
+                primary.length > 1 && (
+                  <button className="primary" onClick={onTriageAll}>
+                    Triage one by one ({primary.length})
+                  </button>
+                )
+              )}
             </div>
           )}
           {primary.length === 0 && demoted.length === 0 ? (
@@ -186,7 +263,14 @@ export default function ReviewView({
           ) : (
             <div className="list">
               {primary.map((c) => (
-                <CandidateRow key={c.id} c={c} types={types} onResolve={onResolve} />
+                <CandidateRow
+                  key={c.id}
+                  c={c}
+                  types={types}
+                  onResolve={onResolve}
+                  selected={selectedNames.includes(c.id)}
+                  onToggle={toggleName}
+                />
               ))}
             </div>
           )}
@@ -203,9 +287,27 @@ export default function ReviewView({
                     Low confidence — mostly capitalised common words. Accept any that are real names;
                     ignore the rest and they never come back.
                   </p>
+                  <div className="toolbar" style={{ marginBottom: 14 }}>
+                    <label className="dw-check">
+                      <input
+                        type="checkbox"
+                        checked={allDemotedSelected}
+                        onChange={() => toggleAll(demoted)}
+                      />
+                      Select all
+                    </label>
+                    {bulkActions}
+                  </div>
                   <div className="list">
                     {demoted.map((c) => (
-                      <CandidateRow key={c.id} c={c} types={types} onResolve={onResolve} />
+                      <CandidateRow
+                        key={c.id}
+                        c={c}
+                        types={types}
+                        onResolve={onResolve}
+                        selected={selectedIds.includes(c.id)}
+                        onToggle={toggleName}
+                      />
                     ))}
                   </div>
                 </>

@@ -99,6 +99,15 @@ CREATE TABLE IF NOT EXISTS ignored_tokens (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Small per-book key/value bag. Used for the export reminder (frequency and the
+-- dates of the last export and the last dismissal). It lives here rather than in
+-- the renderer because Chrome resets localStorage every launch: the packaged app
+-- serves each run from a fresh free port, so the origin — and its storage — changes.
+CREATE TABLE IF NOT EXISTS meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT ''
+);
+
 -- Character power levels: a book-wide, user-defined rank ladder. Unlike the
 -- fixed Item ranks, the writer invents these (Primor, Seeker, …). Assignments
 -- live on the entity as fields.power_level (the level id), so renaming a level

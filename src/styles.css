@@ -1397,11 +1397,83 @@ textarea:focus {
   box-shadow: 0 6px 18px color-mix(in srgb, var(--color-accent) 16%, transparent);
   transform: translateY(-1px);
 }
+/* A deceased character's card: faded, desaturated and washed in the danger
+   colour, with a faint dagger watermark from ::after (so the markup needs
+   nothing). --dead keeps the tint to the danger token in every theme. */
 .entity-card.dead {
-  opacity: 0.78;
+  --dead: var(--color-danger);
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(155deg, color-mix(in srgb, var(--dead) 13%, transparent) 0%, color-mix(in srgb, var(--dead) 4%, transparent) 55%, transparent 100%),
+    var(--color-surface);
+  border-color: color-mix(in srgb, var(--dead) 32%, var(--color-border));
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--dead) 10%, transparent), 0 16px 30px -22px color-mix(in srgb, var(--dead) 55%, transparent);
 }
-.entity-card.dead:hover {
-  opacity: 1;
+.entity-card.dead::after {
+  content: "\2020";
+  position: absolute;
+  right: 14px;
+  bottom: -26px;
+  font-family: var(--font-reading);
+  font-size: 128px;
+  line-height: 1;
+  color: var(--dead);
+  opacity: 0.1;
+  pointer-events: none;
+}
+.entity-card.dead .card-icon,
+.entity-card.dead .card-photo {
+  filter: grayscale(1) contrast(0.9);
+  opacity: 0.55;
+  background: color-mix(in srgb, var(--dead) 10%, var(--color-hover));
+  color: var(--color-text-faint);
+}
+.entity-card.dead .nm,
+.entity-card.dead .card-name {
+  color: color-mix(in srgb, var(--color-text-faint) 70%, var(--dead));
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--dead) 55%, transparent);
+}
+/* Opacity on a parent multiplies with a child's, so .pill is left out of this
+   pair — it lives inside .sub in the cards and would fade to 0.36. */
+.entity-card.dead .sub,
+.entity-card.dead .card-foot {
+  opacity: 0.6;
+}
+/* The "died" tag: a red pill with a cross. align-self keeps it a tag rather
+   than a full-width bar (the card is a stretch-aligned flex column). */
+.entity-card.dead .badge-dead {
+  align-self: flex-start;
+  padding: 3px 10px 3px 8px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--dead);
+  background: color-mix(in srgb, var(--dead) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dead) 38%, transparent);
+}
+.entity-card.dead .badge-dead::before {
+  content: "\2020";
+  margin-right: 6px;
+  font-family: var(--font-reading);
+}
+/* Hover eases it back toward full strength. The .bible scope mirrors the Harbor
+   skin's own `.bible .entity-card:hover`, which is later in the file and would
+   otherwise win the border and shadow on ties. */
+.entity-card.dead:hover,
+.bible .entity-card.dead:hover {
+  border-color: color-mix(in srgb, var(--dead) 55%, var(--color-border));
+  box-shadow: 0 22px 36px -22px color-mix(in srgb, var(--dead) 70%, transparent);
+}
+.entity-card.dead:hover .card-icon {
+  opacity: 0.8;
+}
+.entity-card.dead:hover .nm {
+  color: var(--color-text-secondary);
 }
 .entity-card.sel,
 .entity-card[aria-pressed="true"] {
@@ -1651,6 +1723,12 @@ textarea:focus {
   grid-template-columns: 1fr auto;
   gap: 12px;
   align-items: start;
+}
+/* With a selection checkbox the row gets a leading cell for it; without one the
+   layout is exactly as above. */
+.cand-row.with-select {
+  grid-template-columns: auto 1fr auto;
+  cursor: pointer;
 }
 .cand-name {
   font-family: var(--font-reading);
@@ -2406,9 +2484,14 @@ textarea:focus {
 }
 /* The global `input { width: 100% }` must not stretch the row checkboxes. */
 .dw-check input[type='checkbox'],
-.dw-trash__check {
+.dw-trash__check,
+.cand-row > input[type='checkbox'] {
   width: auto;
   height: auto;
+}
+/* Sit the row checkbox on the candidate's name line, not the card's top edge. */
+.cand-row.with-select > input[type='checkbox'] {
+  margin-top: 6px;
 }
 .dw-trash__body {
   flex: 1;

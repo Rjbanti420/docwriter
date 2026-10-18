@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
-import type { Candidate, Chapter, ChapterDetail, Entity, IgnoredToken, ReviewData, Type, View } from './types';
+import type { Candidate, Chapter, ChapterDetail, Entity, ExportMeta, IgnoredToken, ReviewData, Type, View } from './types';
 import AddChapterModal from './components/AddChapterModal';
 import TriageModal from './components/TriageModal';
+import ExportReminderModal from './components/ExportReminderModal';
 import EntityPanel from './components/EntityPanel';
 import SearchBox from './components/SearchBox';
 import ReadView from './views/ReadView';
@@ -29,6 +30,45 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [planningFocus, setPlanningFocus] = useState<number | null>(null);
+  const [meta, setMeta] = useState<ExportMeta | null>(null);
+  const [nudgeOpen, setNudgeOpen] = useState(false);
+  // One reminder per launch, not one per re-render or per refresh.
+  const nudged = useRef(false);
+
+  // The export reminder: the book knows when it was last exported or dismissed,
+  // so the check is the same on every machine and survives a relaunch.
+  useEffect(() => {
+    if (meta?.due && !nudged.current) {
+      nudged.current = true;
+      setNudgeOpen(true);
+    }
+  }, [meta]);
+
+  const exportBook = useCallback(async (): Promise<boolean> => {
+    try {
+      // api.exportMarkdown stamps the export date itself, but only once the file
+      // is really on disk — a cancelled save dialog is not an export.
+      const saved = await api.exportMarkdown();
+      if (saved) {
+        setMeta(await api.meta());
+        setNudgeOpen(false);
+      }
+      return saved;
+    } catch {
+      alert('Could not write the export.');
+      return false;
+    }
+  }, []);
+
+  const laterNudge = useCallback(async () => {
+    setNudgeOpen(false);
+    try {
+      // Dismissing satisfies this period as well, or the next launch asks again.
+      if (meta) setMeta(await api.setMeta({ last_nudged_on: meta.today }));
+    } catch {
+      /* already closed; the reminder simply comes back next launch */
+    }
+  }, [meta]);
 
   const go = (v: View) => {
     setView(v);
@@ -66,13 +106,14 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const [t, ch, en, rv, ig, tr] = await Promise.all([
+      const [t, ch, en, rv, ig, tr, md] = await Promise.all([
         api.types(),
         api.chapters(),
         api.entities(),
         api.review(),
         api.ignored(),
         api.trash(),
+        api.meta(),
       ]);
       setTypes(t);
       setChapters(ch);
@@ -80,6 +121,7 @@ export default function App() {
       setReview(rv);
       setIgnored(ig);
       setTrash(tr);
+      setMeta(md);
       if (ch.length) {
         setActiveId(ch[0].id);
         await loadChapter(ch[0].id);
@@ -132,6 +174,16 @@ export default function App() {
         if (items.length === 0) return null;
         return { items, index: Math.min(t.index, items.length - 1) };
       });
+    },
+    [refresh, detail]
+  );
+
+  // Bulk triage from Review: one request and one refresh for the whole selection.
+  const resolveMany = useCallback(
+    async (ids: number[], action: string) => {
+      await api.resolveMany(ids, action);
+      await refresh();
+      if (detail) setDetail(await api.chapter(detail.chapter.id));
     },
     [refresh, detail]
   );
@@ -424,6 +476,7 @@ export default function App() {
             ignored={ignored}
             trash={trash}
             onResolve={resolveCandidate}
+            onResolveMany={resolveMany}
             onAlertState={setAlertState}
             onOpenEntity={(id) => setEntityId(id)}
             onOpenGun={(id) => {
@@ -481,6 +534,8 @@ export default function App() {
       )}
 
       <AddChapterModal open={addOpen} onClose={() => setAddOpen(false)} onSubmit={addChapter} />
+
+      {nudgeOpen && <ExportReminderModal onExport={exportBook} onLater={laterNudge} />}
 
       {triage && (
         <TriageModal
