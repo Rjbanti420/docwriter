@@ -137,7 +137,7 @@ function cardMarkdown(card) {
   return out.join('\n');
 }
 
-export function renderBookMarkdown(data) {
+export function* renderBookMarkdownChunks(data) {
   const {
     exportedAt = '',
     chapters = [],
@@ -153,7 +153,6 @@ export function renderBookMarkdown(data) {
   const entities = groups.reduce((n, g) => n + g.cards.length, 0);
   const plural = (n, word, pluralWord = `${word}s`) => `${n} ${n === 1 ? word : pluralWord}`;
 
-  const out = ['# DocWriter export'];
   const counts = [
     plural(chapters.length, 'chapter'),
     `${comma(words)} words`,
@@ -162,51 +161,75 @@ export function renderBookMarkdown(data) {
     plural(questions.length, 'question'),
   ];
   if (exportedAt) counts.push(`exported ${exportedAt}`);
-  out.push('', `_${counts.join(' · ')}_`);
 
-  out.push('', '## Manuscript');
-  if (chapters.length === 0) out.push('', '_No chapters yet._');
+  const manuscript = ['# DocWriter export', '', `_${counts.join(' · ')}_`, '', '## Manuscript'];
+  if (chapters.length === 0) manuscript.push('', '_No chapters yet._');
+  yield manuscript;
   for (const chapter of chapters) {
     const label = [chapter.number, chapter.title]
       .map((v) => String(v ?? '').trim())
       .filter(Boolean)
       .join('. ');
-    out.push('', `### ${label || 'Untitled chapter'}`);
-    if (chapter.wordCount) out.push('', `_${comma(chapter.wordCount)} words_`);
+    const lines = ['', `### ${label || 'Untitled chapter'}`];
+    if (chapter.wordCount) lines.push('', `_${comma(chapter.wordCount)} words_`);
     const text = prose(chapter.text);
-    if (text) out.push('', text);
+    if (text) lines.push('', text);
+    yield lines;
   }
 
-  out.push('', '## Bible');
-  if (entities === 0) out.push('', '_No entities yet._');
-  for (const group of groups) {
-    out.push('', `### ${group.typeName}`);
-    for (const card of group.cards) out.push('', cardMarkdown(card));
+  if (entities === 0) {
+    yield ['', '## Bible', '', '_No entities yet._'];
+  } else {
+    yield ['', '## Bible'];
+    for (const group of groups) {
+      yield ['', `### ${group.typeName}`];
+      for (const card of group.cards) yield ['', cardMarkdown(card)];
+    }
   }
 
-  out.push('', '## Planning', '', "### Chekhov's Guns");
-  if (guns.length === 0) out.push('', '_No guns yet._');
-  for (const gun of guns) out.push('', cardMarkdown(gun));
+  if (guns.length === 0) {
+    yield ['', '## Planning', '', "### Chekhov's Guns", '', '_No guns yet._'];
+  } else {
+    yield ['', '## Planning', '', "### Chekhov's Guns"];
+    for (const gun of guns) yield ['', cardMarkdown(gun)];
+  }
 
-  out.push('', '### Questions');
-  if (questions.length === 0) out.push('', '_No questions yet._');
-  for (const q of questions) {
-    out.push('', `- **[${q.status}]** ${inline(q.text)}`);
-    if (q.source) out.push(`  - Raised in ${q.source}`);
-    if (q.delivered) out.push(`  - Delivered in ${q.delivered}`);
-    const answer = inline(q.answer);
-    if (answer) out.push(`  - **Answer:** ${answer}`);
+  if (questions.length === 0) {
+    yield ['', '### Questions', '', '_No questions yet._'];
+  } else {
+    yield ['', '### Questions'];
+    for (const q of questions) {
+      const lines = ['', `- **[${q.status}]** ${inline(q.text)}`];
+      if (q.source) lines.push(`  - Raised in ${q.source}`);
+      if (q.delivered) lines.push(`  - Delivered in ${q.delivered}`);
+      const answer = inline(q.answer);
+      if (answer) lines.push(`  - **Answer:** ${answer}`);
+      yield lines;
+    }
   }
 
   // Unlike the other Planning subsections, no duels means no heading at all.
   if (duels.length > 0) {
-    out.push('', '### Duels');
-    for (const duel of duels) out.push('', duelMarkdown(duel));
+    yield ['', '### Duels'];
+    for (const duel of duels) yield ['', duelMarkdown(duel)];
   }
 
-  out.push('', '## Appendix');
-  out.push('', '**Power levels**', '', powerLevels.length ? powerLevels.join(' · ') : '_None defined._');
-  out.push('', '**Types**', '', types.length ? types.join(' · ') : '_None defined._');
+  yield [
+    '',
+    '## Appendix',
+    '',
+    '**Power levels**',
+    '',
+    powerLevels.length ? powerLevels.join(' · ') : '_None defined._',
+    '',
+    '**Types**',
+    '',
+    types.length ? types.join(' · ') : '_None defined._',
+  ];
+}
 
-  return `${out.join('\n').trim()}\n`;
+export function renderBookMarkdown(data) {
+  const lines = [];
+  for (const chunk of renderBookMarkdownChunks(data)) lines.push(...chunk);
+  return `${lines.join('\n').trim()}\n`;
 }

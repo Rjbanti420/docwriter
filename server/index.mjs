@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { randomInt } from 'node:crypto';
 import { db, migrate } from './db.mjs';
-import { detect, normalizeKey, findLookalike } from './detect.mjs';
+import { detect, normalizeKey, findLookalike, buildLookalikeIndex } from './detect.mjs';
 import { mergeFields, newAliasList, repointReferences } from './entitymerge.mjs';
 import {
   effectiveNumber,
@@ -23,7 +23,7 @@ import {
   dedupeQuestions,
 } from './planning.mjs';
 import { isNudgeDue, NUDGE_FREQUENCIES } from './nudge.mjs';
-import { renderBookMarkdown } from './exportmd.mjs';
+import { renderBookMarkdownChunks } from './exportmd.mjs';
 import { MAX_FIGHTERS_PER_SIDE, resolveDuel, snapshotCombatants } from './duel.mjs';
 import { detectGunCandidates } from './gunscan.mjs';
 
@@ -80,8 +80,22 @@ function getEntityKeyMap() {
   const map = new Map();
   for (const e of db.prepare('SELECT id, name FROM entities WHERE trashed_at IS NULL').all())
     map.set(normalizeKey(e.name), e.id);
-  for (const a of db.prepare('SELECT entity_id, alias FROM aliases').all()) map.set(normalizeKey(a.alias), a.entity_id);
+  // A hidden card must not keep swallowing its alias: only live owners count.
+  for (const a of db
+    .prepare(
+      `SELECT a.entity_id, a.alias FROM aliases a
+       JOIN entities e ON e.id = a.entity_id
+       WHERE e.trashed_at IS NULL`
+    )
+    .all())
+    map.set(normalizeKey(a.alias), a.entity_id);
   return map;
+}
+
+// The id already answering to this spelling, if any. Aliases count, so a new
+// card cannot silently shadow one that is already reachable.
+function keyConflict(name) {
+  return getEntityKeyMap().get(normalizeKey(String(name ?? '').trim())) ?? null;
 }
 
 function getIgnoredSet() {
@@ -91,6 +105,20 @@ function getIgnoredSet() {
 const insertMentionStmt = db.prepare(
   `INSERT INTO mentions (entity_id, chapter_id, revision_id, start_off, end_off, surface_text, context_sentence)
    VALUES (?, ?, ?, ?, ?, ?, ?)`
+);
+
+// Gun scanning prepares these once, not once per chapter in a long scan.
+const deletePendingGunCandidates = db.prepare(
+  "DELETE FROM gun_candidates WHERE chapter_id = ? AND status = 'pending'"
+);
+const insertGunCandidate = db.prepare(
+  `INSERT INTO gun_candidates (chapter_id, title, normalized, excerpt, score, signals, tier)
+   VALUES (?, ?, ?, ?, ?, ?, ?)`
+);
+const gunCandidateExists = db.prepare('SELECT 1 FROM gun_candidates WHERE chapter_id = ? AND normalized = ?');
+const upsertGunScan = db.prepare(
+  `INSERT INTO gun_scans (chapter_id, scanned_at) VALUES (?, datetime('now'))
+   ON CONFLICT(chapter_id) DO UPDATE SET scanned_at = datetime('now')`
 );
 
 function addMention(entityId, chapterId, revisionId, o) {
@@ -167,63 +195,93 @@ function refreshPosthumous(entityId) {
   }
 }
 
-function generateAlerts(chapterId) {
-  const chapter = db.prepare('SELECT * FROM chapters WHERE id = ?').get(chapterId);
-  if (!chapter) return;
+// Accept and merge touch every chapter an entity appears in. Loading the tracked
+// list, each entity's chapter orders and the dead list once per batch keeps a
+// protagonist present in 2000 chapters from doing that work 2000 times.
+function generateAlertsFor(chapterIds) {
+  const chapterStmt = db.prepare('SELECT * FROM chapters WHERE id = ?');
+  const chapters = [];
+  const seen = new Set();
+  for (const chapterId of chapterIds) {
+    if (seen.has(chapterId)) continue;
+    seen.add(chapterId);
+    const chapter = chapterStmt.get(chapterId);
+    if (chapter) chapters.push(chapter);
+  }
+  if (!chapters.length) return;
+
   const tracked = db
     .prepare("SELECT id, name, tracking, gap_threshold, fields FROM entities WHERE tracking IN ('reappearance','absence')")
     .all();
+  const ordersById = new Map();
+  for (const row of db
+    .prepare(
+      `SELECT DISTINCT m.entity_id, c.sort_order AS o
+       FROM mentions m JOIN chapters c ON c.id = m.chapter_id
+       JOIN entities e ON e.id = m.entity_id
+       WHERE e.tracking IN ('reappearance','absence')
+       ORDER BY m.entity_id, c.sort_order`
+    )
+    .all()) {
+    const orders = ordersById.get(row.entity_id);
+    if (orders) orders.push(row.o);
+    else ordersById.set(row.entity_id, [row.o]);
+  }
+  const deadById = new Map(tracked.map((ent) => [ent.id, deathChapterFor(ent) !== null]));
 
-  for (const ent of tracked) {
-    const dead = deathChapterFor(ent) !== null;
-    const orders = db
-      .prepare(
-        `SELECT DISTINCT c.sort_order AS o FROM mentions m JOIN chapters c ON c.id = m.chapter_id
-         WHERE m.entity_id = ? ORDER BY c.sort_order`
-      )
-      .all(ent.id)
-      .map((r) => r.o);
-    const here = orders.includes(chapter.sort_order);
-    const threshold = ent.gap_threshold ?? 0;
+  const resolveDormant = db.prepare(
+    "UPDATE alerts SET state = 'resolved' WHERE entity_id = ? AND kind = 'dormant' AND state != 'resolved'"
+  );
+  const findReappeared = db.prepare(
+    "SELECT id FROM alerts WHERE entity_id = ? AND kind = 'reappeared' AND chapter_id = ? AND state != 'resolved'"
+  );
+  const insertReappeared = db.prepare(
+    "INSERT INTO alerts (entity_id, kind, chapter_id, detail) VALUES (?, 'reappeared', ?, ?)"
+  );
+  const findDormant = db.prepare(
+    "SELECT id FROM alerts WHERE entity_id = ? AND kind = 'dormant' AND state != 'resolved'"
+  );
+  const updateDormant = db.prepare('UPDATE alerts SET detail = ?, chapter_id = ? WHERE id = ?');
+  const insertDormant = db.prepare(
+    "INSERT INTO alerts (entity_id, kind, chapter_id, detail) VALUES (?, 'dormant', ?, ?)"
+  );
 
-    if (here) {
-      db.prepare("UPDATE alerts SET state = 'resolved' WHERE entity_id = ? AND kind = 'dormant' AND state != 'resolved'").run(ent.id);
-    }
+  for (const chapter of chapters) {
+    for (const ent of tracked) {
+      const dead = deadById.get(ent.id);
+      const orders = ordersById.get(ent.id) ?? [];
+      const at = lowerBound(orders, chapter.sort_order);
+      const here = orders[at] === chapter.sort_order;
+      const threshold = ent.gap_threshold ?? 0;
 
-    if (ent.tracking === 'reappearance' && here && threshold > 0 && !dead) {
-      const prior = orders.filter((o) => o < chapter.sort_order);
-      if (prior.length) {
-        const gap = countChaptersBetween(prior[prior.length - 1], chapter.sort_order);
-        if (gap >= threshold) {
-          const exists = db
-            .prepare("SELECT id FROM alerts WHERE entity_id = ? AND kind = 'reappeared' AND chapter_id = ? AND state != 'resolved'")
-            .get(ent.id, chapterId);
-          if (!exists) {
-            db.prepare(
-              `INSERT INTO alerts (entity_id, kind, chapter_id, detail) VALUES (?, 'reappeared', ?, ?)`
-            ).run(ent.id, chapterId, `returns after ${gap} chapter${gap === 1 ? '' : 's'}`);
+      if (here) resolveDormant.run(ent.id);
+
+      if (ent.tracking === 'reappearance' && here && threshold > 0 && !dead) {
+        if (at > 0) {
+          const gap = countChaptersBetween(orders[at - 1], chapter.sort_order);
+          if (gap >= threshold && !findReappeared.get(ent.id, chapter.id)) {
+            insertReappeared.run(ent.id, chapter.id, `returns after ${gap} chapter${gap === 1 ? '' : 's'}`);
           }
         }
       }
-    }
 
-    if (ent.tracking === 'absence' && !here && threshold > 0 && !dead) {
-      const prior = orders.filter((o) => o <= chapter.sort_order);
-      if (prior.length) {
-        const gap = countChaptersBetween(prior[prior.length - 1], chapter.sort_order, true);
-        if (gap >= threshold) {
-          const detail = `no appearance for ${gap} chapter${gap === 1 ? '' : 's'}`;
-          const existing = db
-            .prepare("SELECT id FROM alerts WHERE entity_id = ? AND kind = 'dormant' AND state != 'resolved'")
-            .get(ent.id);
-          if (existing) db.prepare('UPDATE alerts SET detail = ?, chapter_id = ? WHERE id = ?').run(detail, chapterId, existing.id);
-          else db.prepare("INSERT INTO alerts (entity_id, kind, chapter_id, detail) VALUES (?, 'dormant', ?, ?)").run(ent.id, chapterId, detail);
+      if (ent.tracking === 'absence' && !here && threshold > 0 && !dead) {
+        const upto = upperBound(orders, chapter.sort_order);
+        if (upto > 0) {
+          const gap = countChaptersBetween(orders[upto - 1], chapter.sort_order, true);
+          if (gap >= threshold) {
+            const detail = `no appearance for ${gap} chapter${gap === 1 ? '' : 's'}`;
+            const existing = findDormant.get(ent.id);
+            if (existing) updateDormant.run(detail, chapter.id, existing.id);
+            else insertDormant.run(ent.id, chapter.id, detail);
+          }
         }
       }
     }
   }
 
   // Dead characters: mentions after their death chapter become posthumous alerts.
+  // refreshPosthumous reads every mention itself, so once per entity is enough.
   const dead = db
     .prepare(
       `SELECT e.id FROM entities e
@@ -234,8 +292,66 @@ function generateAlerts(chapterId) {
   for (const ent of dead) refreshPosthumous(ent.id);
 }
 
+function generateAlerts(chapterId) {
+  generateAlertsFor([chapterId]);
+}
+
+function lowerBound(values, value) {
+  let lo = 0;
+  let hi = values.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (values[mid] < value) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+function upperBound(values, value) {
+  let lo = 0;
+  let hi = values.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (values[mid] <= value) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+// An entity only needs its chapters re-checked when it has a rule that can raise
+// an alert. The common accept path defaults to tracking off and no death marker.
+function needsAlertRefresh(entity) {
+  if (entity.tracking !== 'off') return true;
+  const death = parseEntityFields(entity.fields).death;
+  return !!(death && typeof death === 'object' && !Array.isArray(death) && Number.isFinite(Number(death.chapter)));
+}
+
+// Keep the current revision plus a short tail. Old revision rows cascade their
+// mentions and candidates; runScan has already re-linked this chapter to the new
+// revision, so deleting the old rows only drops history, not the live scan.
+function pruneChapterHistory(chapterId) {
+  db.prepare(
+    `DELETE FROM revisions
+      WHERE chapter_id = ?
+        AND id NOT IN (SELECT id FROM revisions WHERE chapter_id = ? ORDER BY id DESC LIMIT 10)`
+  ).run(chapterId, chapterId);
+  db.prepare(
+    `DELETE FROM scans
+      WHERE chapter_id = ?
+        AND id NOT IN (SELECT id FROM scans WHERE chapter_id = ? ORDER BY id DESC LIMIT 10)`
+  ).run(chapterId, chapterId);
+  db.prepare(
+    `DELETE FROM alerts
+      WHERE chapter_id = ? AND state = 'resolved'
+        AND id NOT IN (
+          SELECT id FROM alerts WHERE chapter_id = ? AND state = 'resolved' ORDER BY id DESC LIMIT 10
+        )`
+  ).run(chapterId, chapterId);
+}
+
 function runScan(chapterId, revisionId, text) {
   const known = getEntityKeyMap();
+  const lookalikeIndex = buildLookalikeIndex(known);
   const ignored = getIgnoredSet();
   const { candidates, mentions } = detect(text, known, ignored, ENGLISH_WORDS);
 
@@ -259,7 +375,7 @@ function runScan(chapterId, revisionId, text) {
 
   for (const c of candidates) {
     const typeId = typeIdByName.get(c.suggestedType) ?? typeIdByName.get('Character') ?? null;
-    const possible = findLookalike(c.key, known);
+    const possible = findLookalike(c.key, known, lookalikeIndex);
     insertCand.run(
       chapterId,
       revisionId,
@@ -285,24 +401,24 @@ function runScan(chapterId, revisionId, text) {
     linked
   );
   maybeAutoScanGuns(chapterId, text);
+  pruneChapterHistory(chapterId);
 
   return { found: candidates.length, linked };
 }
 
 // Option C: a card that loses its last mention (e.g. its only chapter was
 // deleted) is moved to Trash rather than destroyed, so notes are recoverable.
-function sweepOrphans() {
-  const ids = db
-    .prepare(
-      `SELECT e.id FROM entities e
-       WHERE e.trashed_at IS NULL
-         AND NOT EXISTS (SELECT 1 FROM mentions m WHERE m.entity_id = e.id)`
-    )
-    .all()
-    .map((r) => r.id);
-  const upd = db.prepare("UPDATE entities SET trashed_at = datetime('now') WHERE id = ?");
-  for (const id of ids) upd.run(id);
-  return ids.length;
+// Only cards that actually lost a mention in the deleted chapter can become
+// orphans. A hand-made card with no mentions at all is not trash.
+function sweepOrphans(entityIds) {
+  const mentioned = db.prepare('SELECT 1 FROM mentions WHERE entity_id = ? LIMIT 1');
+  const trash = db.prepare("UPDATE entities SET trashed_at = datetime('now') WHERE id = ? AND trashed_at IS NULL");
+  let trashed = 0;
+  for (const id of new Set(entityIds)) {
+    if (mentioned.get(id)) continue;
+    trashed += trash.run(id).changes ?? 0;
+  }
+  return trashed;
 }
 
 function chapterRow(id) {
@@ -342,26 +458,18 @@ function gunScanOptions() {
   };
 }
 
-function scanGunChapter(chapterId) {
+function scanGunChapter(chapterId, options = null) {
   const chapter = chapterRow(chapterId);
   if (!chapter) return { found: 0, created: 0, skipped: 0 };
-  const found = detectGunCandidates(chapterText(chapterId), gunScanOptions());
-  db.prepare("DELETE FROM gun_candidates WHERE chapter_id = ? AND status = 'pending'").run(chapterId);
-  const insert = db.prepare(
-    `INSERT INTO gun_candidates (chapter_id, title, normalized, excerpt, score, signals, tier)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  );
-  const exists = db.prepare('SELECT 1 FROM gun_candidates WHERE chapter_id = ? AND normalized = ?');
+  const found = detectGunCandidates(chapterText(chapterId), options ?? gunScanOptions());
+  deletePendingGunCandidates.run(chapterId);
   let created = 0;
   for (const c of found) {
-    if (exists.get(chapterId, c.normalized)) continue;
-    insert.run(chapterId, c.title, c.normalized, c.excerpt, c.score, JSON.stringify(c.signals), c.tier);
+    if (gunCandidateExists.get(chapterId, c.normalized)) continue;
+    insertGunCandidate.run(chapterId, c.title, c.normalized, c.excerpt, c.score, JSON.stringify(c.signals), c.tier);
     created += 1;
   }
-  db.prepare(
-    `INSERT INTO gun_scans (chapter_id, scanned_at) VALUES (?, datetime('now'))
-     ON CONFLICT(chapter_id) DO UPDATE SET scanned_at = datetime('now')`
-  ).run(chapterId);
+  upsertGunScan.run(chapterId);
   return { found: found.length, created, skipped: found.length - created };
 }
 
@@ -451,20 +559,35 @@ app.delete('/api/power-levels/:id', (req, res) => {
 
 
 app.get('/api/chapters', (_req, res) => {
-  const rows = db
-    .prepare(
-      `SELECT c.*, (SELECT COUNT(*) FROM mentions m WHERE m.chapter_id = c.id) AS mention_count,
-              (SELECT COUNT(*) FROM candidates k WHERE k.chapter_id = c.id AND k.status IN ('pending','later')) AS candidate_count
-       FROM chapters c ORDER BY c.sort_order`
-    )
-    .all();
+  const rows = db.prepare('SELECT * FROM chapters ORDER BY sort_order').all();
+  const mentions = new Map(
+    db.prepare('SELECT chapter_id, COUNT(*) AS n FROM mentions GROUP BY chapter_id').all().map((r) => [r.chapter_id, r.n])
+  );
+  const candidates = new Map(
+    db
+      .prepare("SELECT chapter_id, COUNT(*) AS n FROM candidates WHERE status IN ('pending','later') GROUP BY chapter_id")
+      .all()
+      .map((r) => [r.chapter_id, r.n])
+  );
+  for (const row of rows) {
+    row.mention_count = mentions.get(row.id) ?? 0;
+    row.candidate_count = candidates.get(row.id) ?? 0;
+  }
   res.json(rows);
 });
 
 app.post('/api/chapters', (req, res) => {
-  const { number = '', title = '', text = '' } = req.body ?? {};
-  const max = db.prepare('SELECT MAX(sort_order) AS m FROM chapters').get().m;
-  const order = (max ?? -1) + 1;
+  const { number = '', title = '', text = '', afterChapterId = null } = req.body ?? {};
+  let order;
+  if (afterChapterId == null || afterChapterId === '') {
+    const max = db.prepare('SELECT MAX(sort_order) AS m FROM chapters').get().m;
+    order = (max ?? -1) + 1;
+  } else {
+    const after = db.prepare('SELECT sort_order FROM chapters WHERE id = ?').get(Number(afterChapterId));
+    if (!after) return res.status(400).json({ error: 'after chapter not found' });
+    order = after.sort_order + 1;
+    db.prepare('UPDATE chapters SET sort_order = sort_order + 1 WHERE sort_order >= ?').run(order);
+  }
   const info = db
     .prepare("INSERT INTO chapters (number, title, sort_order, word_count, updated_at) VALUES (?, ?, ?, ?, datetime('now'))")
     .run(String(number), String(title), order, wordCount(text));
@@ -475,6 +598,7 @@ app.post('/api/chapters', (req, res) => {
   db.prepare('UPDATE chapters SET current_revision_id = ? WHERE id = ?').run(revisionId, chapterId);
 
   const scan = runScan(chapterId, revisionId, text);
+  reconcileGuns();
   res.json({ chapter: chapterRow(chapterId), scan });
 });
 
@@ -488,7 +612,20 @@ app.get('/api/chapters/:id', (req, res) => {
        FROM candidates WHERE chapter_id = ? AND status IN ('pending','later') AND tier = 'primary'
        ORDER BY confidence DESC`
     )
-    .all(id);
+    .all(id)
+    .map((c) => {
+      // The reader only underlines mention spans; the id is enough for triage to
+      // fetch the full contexts from /api/candidates/:id.
+      let positions = '[]';
+      try {
+        positions = JSON.stringify(
+          JSON.parse(c.positions || '[]').map((p) => ({ start: p.start, end: p.end }))
+        );
+      } catch {
+        /* corrupt positions just leave no underline */
+      }
+      return { ...c, positions };
+    });
   res.json({ chapter, text: chapterText(id), mentions: chapterMentions(id), candidates });
 });
 
@@ -524,6 +661,11 @@ app.delete('/api/chapters/:id', (req, res) => {
   const chapter = chapterRow(id);
   if (!chapter) return res.status(404).json({ error: 'not found' });
   const renumber = req.query.renumber === '1' || req.query.renumber === 'true';
+  // Collect before the delete: the mentions cascade with the chapter.
+  const affected = db
+    .prepare('SELECT DISTINCT entity_id FROM mentions WHERE chapter_id = ?')
+    .all(id)
+    .map((row) => row.entity_id);
 
   db.prepare('DELETE FROM chapters WHERE id = ?').run(id);
 
@@ -535,24 +677,58 @@ app.delete('/api/chapters/:id', (req, res) => {
       upd.run(i, num, c.id);
     });
   }
-  const trashed = sweepOrphans();
+  const trashed = sweepOrphans(affected);
   reconcileGuns();
   res.json({ ok: true, trashed });
 });
 
-app.get('/api/review', (_req, res) => {
-  const pending = db
+const REVIEW_TIER = (tier) =>
+  (tier === 'demoted' ? "COALESCE(k.tier,'primary') = 'demoted'" : "COALESCE(k.tier,'primary') != 'demoted'");
+
+// Review lists stay bounded: the reader only ever sees a few hundred at a time,
+// and the full positions/contexts are fetched when a row is opened for triage.
+// One short context is kept so the collapsed row still shows where it came from.
+function reviewPendingRows(tier, limit, offset) {
+  return db
     .prepare(
-      `SELECT k.*, c.number AS chapter_number, c.title AS chapter_title, t.name AS type_name, t.color AS type_color,
-              pe.name AS possible_name
+      `SELECT k.id, k.chapter_id, k.revision_id, k.surface_text, k.normalized, k.occurrences,
+              k.suggested_type_id, k.confidence, k.signals, k.possible_entity_id, k.entity_id,
+              k.tier, k.status, c.number AS chapter_number, c.title AS chapter_title,
+              t.name AS type_name, t.color AS type_color, pe.name AS possible_name,
+              CASE WHEN json_valid(k.contexts) THEN json_extract(k.contexts, '$[0]') END AS first_context
        FROM candidates k
        JOIN chapters c ON c.id = k.chapter_id
        LEFT JOIN types t ON t.id = k.suggested_type_id
        LEFT JOIN entities pe ON pe.id = k.possible_entity_id
-       WHERE k.status IN ('pending','later')
-       ORDER BY k.confidence DESC, k.occurrences DESC`
+       WHERE k.status IN ('pending','later') AND ${REVIEW_TIER(tier)}
+       ORDER BY k.confidence DESC, k.occurrences DESC, k.id
+       LIMIT ? OFFSET ?`
     )
-    .all();
+    .all(limit, offset)
+    .map(({ first_context, ...row }) => ({
+      ...row,
+      contexts: JSON.stringify(first_context == null ? [] : [first_context]),
+    }));
+}
+
+const reviewPendingTotal = () => {
+  const row = db
+    .prepare(
+      `SELECT
+        COALESCE(SUM(CASE WHEN COALESCE(tier,'primary') = 'demoted' THEN 1 ELSE 0 END), 0) AS demoted_n,
+        COALESCE(SUM(CASE WHEN COALESCE(tier,'primary') != 'demoted' THEN 1 ELSE 0 END), 0) AS primary_n
+       FROM candidates WHERE status IN ('pending','later')`
+    )
+    .get();
+  return { primary: row.primary_n, demoted: row.demoted_n };
+};
+
+app.get('/api/review', (_req, res) => {
+  const limit = 100;
+  const totals = reviewPendingTotal();
+  const pending = [...reviewPendingRows('primary', limit, 0), ...reviewPendingRows('demoted', limit, 0)].sort(
+    (a, b) => b.confidence - a.confidence || b.occurrences - a.occurrences || a.id - b.id
+  );
 
   const alerts = db
     .prepare(
@@ -568,7 +744,41 @@ app.get('/api/review', (_req, res) => {
     )
     .all();
 
-  res.json({ pending, alerts });
+  res.json({
+    pending,
+    alerts,
+    pendingTotals: totals,
+    pendingHasMore: {
+      primary: pending.filter((c) => c.tier !== 'demoted').length < totals.primary,
+      demoted: pending.filter((c) => c.tier === 'demoted').length < totals.demoted,
+    },
+  });
+});
+
+app.get('/api/review/pending', (req, res) => {
+  const tier = req.query.tier === 'demoted' ? 'demoted' : 'primary';
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit ?? 100) || 100));
+  const offset = Math.max(0, Number(req.query.offset ?? 0) || 0);
+  const total = reviewPendingTotal()[tier];
+  const pending = reviewPendingRows(tier, limit, offset);
+  res.json({ pending, total, hasMore: offset + pending.length < total });
+});
+
+app.get('/api/candidates/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const candidate = db
+    .prepare(
+      `SELECT k.*, c.number AS chapter_number, c.title AS chapter_title,
+              t.name AS type_name, t.color AS type_color, pe.name AS possible_name
+       FROM candidates k
+       JOIN chapters c ON c.id = k.chapter_id
+       LEFT JOIN types t ON t.id = k.suggested_type_id
+       LEFT JOIN entities pe ON pe.id = k.possible_entity_id
+       WHERE k.id = ?`
+    )
+    .get(id);
+  if (!candidate) return res.status(404).json({ error: 'not found' });
+  res.json(candidate);
 });
 
 // The two triage actions Review batches, defined once so both routes share them.
@@ -632,14 +842,23 @@ app.post('/api/candidates/:id/resolve', (req, res) => {
       for (const p of positions) addMention(targetId, sib.chapter_id, sib.revision_id, p);
       db.prepare("UPDATE candidates SET status = 'accepted', entity_id = ? WHERE id = ?").run(targetId, sib.id);
     }
-    for (const chapter of db.prepare('SELECT DISTINCT chapter_id FROM mentions WHERE entity_id = ?').all(targetId)) {
-      generateAlerts(chapter.chapter_id);
+    if (needsAlertRefresh(target)) {
+      generateAlertsFor(
+        db
+          .prepare('SELECT DISTINCT chapter_id FROM mentions WHERE entity_id = ?')
+          .all(targetId)
+          .map((row) => row.chapter_id)
+      );
     }
     return res.json({ ok: true, entityId: targetId });
   }
 
   if (action === 'accept') {
     const entityName = (name || candidate.surface_text).trim();
+    const existingId = keyConflict(entityName);
+    if (existingId != null) {
+      return res.status(409).json({ error: `name already in use: ${entityName}`, entityId: existingId });
+    }
     const resolvedTypeId = typeId ?? candidate.suggested_type_id ?? null;
     const threshold = tracking === 'off' ? null : gapThreshold ?? null;
     const info = db
@@ -657,8 +876,13 @@ app.post('/api/candidates/:id/resolve', (req, res) => {
       db.prepare("UPDATE candidates SET status = 'accepted', entity_id = ? WHERE id = ?").run(entityId, sib.id);
     }
 
-    for (const chapter of db.prepare('SELECT DISTINCT chapter_id FROM mentions WHERE entity_id = ?').all(entityId)) {
-      generateAlerts(chapter.chapter_id);
+    if (tracking !== 'off') {
+      generateAlertsFor(
+        db
+          .prepare('SELECT DISTINCT chapter_id FROM mentions WHERE entity_id = ?')
+          .all(entityId)
+          .map((row) => row.chapter_id)
+      );
     }
     return res.json({ ok: true, entityId });
   }
@@ -666,24 +890,80 @@ app.post('/api/candidates/:id/resolve', (req, res) => {
   res.status(400).json({ error: 'unknown action' });
 });
 
+// List payloads drop the base64 portrait (often hundreds of KB per card) and
+// report only whether one exists; the image route serves the bytes on demand.
+const ENTITY_FIELDS_SQL = `
+  CASE WHEN json_valid(e.fields) THEN json_remove(e.fields, '$.image') ELSE e.fields END AS fields,
+  CASE WHEN json_valid(e.fields)
+    THEN (CASE WHEN json_type(e.fields, '$.image') = 'text' AND length(json_extract(e.fields, '$.image')) > 0
+      THEN 1 ELSE 0 END)
+    ELSE 0 END AS has_image`;
+
+// One grouped mention pass instead of three correlated subqueries per card.
+function attachMentionSpans(rows) {
+  const spans = new Map(
+    db
+      .prepare(
+        `SELECT m.entity_id, COUNT(*) AS n, MIN(c.sort_order) AS lo, MAX(c.sort_order) AS hi
+         FROM mentions m JOIN chapters c ON c.id = m.chapter_id
+         GROUP BY m.entity_id`
+      )
+      .all()
+      .map((r) => [r.entity_id, r])
+  );
+  const numbers = new Map(db.prepare('SELECT sort_order, number FROM chapters').all().map((c) => [c.sort_order, c.number]));
+  for (const row of rows) {
+    const span = spans.get(row.id);
+    row.mention_count = span?.n ?? 0;
+    row.first_chapter = span ? numbers.get(span.lo) ?? null : null;
+    row.last_chapter = span ? numbers.get(span.hi) ?? null : null;
+  }
+  return rows;
+}
+
 app.get('/api/entities', (_req, res) => {
   const rows = db
     .prepare(
-      `SELECT e.*, t.name AS type_name, t.color AS type_color, t.icon AS type_icon,
-        (SELECT COUNT(*) FROM mentions m WHERE m.entity_id = e.id) AS mention_count,
-        (SELECT c.number FROM mentions m JOIN chapters c ON c.id = m.chapter_id WHERE m.entity_id = e.id ORDER BY c.sort_order LIMIT 1) AS first_chapter,
-        (SELECT c.number FROM mentions m JOIN chapters c ON c.id = m.chapter_id WHERE m.entity_id = e.id ORDER BY c.sort_order DESC LIMIT 1) AS last_chapter
+      `SELECT e.id, e.name, e.type_id, e.summary, ${ENTITY_FIELDS_SQL}, e.tracking, e.gap_threshold,
+              e.trashed_at, e.created_at, e.updated_at,
+              t.name AS type_name, t.color AS type_color, t.icon AS type_icon
        FROM entities e LEFT JOIN types t ON t.id = e.type_id
        WHERE e.trashed_at IS NULL
        ORDER BY t.sort_order, e.name COLLATE NOCASE`
     )
     .all();
-  res.json(rows);
+  res.json(attachMentionSpans(rows));
+});
+
+app.get('/api/entities/:id/image', (req, res) => {
+  const id = Number(req.params.id);
+  const row = db.prepare('SELECT fields FROM entities WHERE id = ?').get(id);
+  if (!row) return res.status(404).end();
+  const image = parseEntityFields(row.fields).image;
+  if (typeof image !== 'string' || !image) return res.status(404).end();
+  const match = /^data:([^;,]+)(;base64)?,(.*)$/s.exec(image);
+  if (!match) {
+    // Legacy rows may hold a remote URL; anything else has no bytes to serve.
+    if (/^https?:\/\//i.test(image)) return res.redirect(image);
+    return res.status(404).end();
+  }
+  const mime = match[1].toLowerCase();
+  if (!mime.startsWith('image/')) return res.status(404).end();
+  const bytes = match[2]
+    ? Buffer.from(match[3], 'base64')
+    : Buffer.from(decodeURIComponent(match[3]), 'binary');
+  res.set('Content-Type', mime);
+  res.set('Cache-Control', 'private, no-cache');
+  res.send(bytes);
 });
 
 app.post('/api/entities', (req, res) => {
   const { name, typeId, tracking = 'off', gapThreshold = null, summary = '' } = req.body ?? {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'name required' });
+  const existingId = keyConflict(name);
+  if (existingId != null) {
+    return res.status(409).json({ error: `name already in use: ${String(name).trim()}`, entityId: existingId });
+  }
   const threshold = tracking === 'off' ? null : gapThreshold ?? null;
   if (tracking !== 'off' && !threshold) return res.status(400).json({ error: 'gap threshold required' });
   const info = db
@@ -804,13 +1084,14 @@ app.post('/api/entities/:id/merge', (req, res) => {
   if (tracking !== 'off' && threshold == null) threshold = b.gap_threshold ?? a.gap_threshold ?? null;
   if (tracking === 'off') threshold = null;
 
+  const mergedFields = JSON.stringify(mergeFields(a.fields, b.fields));
   db.prepare(
     `UPDATE entities SET summary = ?, type_id = ?, fields = ?, tracking = ?, gap_threshold = ?,
        updated_at = datetime('now') WHERE id = ?`
   ).run(
     (a.summary || '').trim() ? a.summary : b.summary,
     a.type_id ?? b.type_id,
-    JSON.stringify(mergeFields(a.fields, b.fields)),
+    mergedFields,
     tracking,
     threshold,
     id
@@ -840,8 +1121,10 @@ app.post('/api/entities/:id/merge', (req, res) => {
   //    the merged reality so dormant/posthumous/gap stay honest.
   db.prepare("UPDATE alerts SET state = 'resolved' WHERE entity_id = ? AND state != 'resolved'").run(absorbedId);
   db.prepare("DELETE FROM alerts WHERE entity_id = ? AND kind = 'posthumous'").run(absorbedId);
-  for (const row of db.prepare('SELECT DISTINCT chapter_id FROM mentions WHERE entity_id = ?').all(id)) {
-    generateAlerts(row.chapter_id);
+  if (needsAlertRefresh({ tracking, fields: mergedFields })) {
+    generateAlertsFor(
+      db.prepare('SELECT DISTINCT chapter_id FROM mentions WHERE entity_id = ?').all(id).map((row) => row.chapter_id)
+    );
   }
   refreshPosthumous(id);
 
@@ -882,13 +1165,14 @@ app.post('/api/entities/:id/merge', (req, res) => {
 app.get('/api/trash', (_req, res) => {
   const rows = db
     .prepare(
-      `SELECT e.*, t.name AS type_name, t.color AS type_color, t.icon AS type_icon,
-        (SELECT COUNT(*) FROM mentions m WHERE m.entity_id = e.id) AS mention_count
+      `SELECT e.id, e.name, e.type_id, e.summary, ${ENTITY_FIELDS_SQL}, e.tracking, e.gap_threshold,
+              e.trashed_at, e.created_at, e.updated_at,
+              t.name AS type_name, t.color AS type_color, t.icon AS type_icon
        FROM entities e LEFT JOIN types t ON t.id = e.type_id
        WHERE e.trashed_at IS NOT NULL ORDER BY e.trashed_at DESC`
     )
     .all();
-  res.json(rows);
+  res.json(attachMentionSpans(rows));
 });
 
 app.post('/api/entities/:id/restore', (req, res) => {
@@ -1019,9 +1303,12 @@ app.post('/api/guns/scan', (req, res) => {
   let created = 0;
   let skipped = 0;
   const chapters = [];
+  // One options load for the whole request: entities, aliases, ignored names and
+  // existing guns do not change while the scan runs.
+  const options = gunScanOptions();
   for (const chapterId of ids) {
     if (!chapterRow(chapterId)) continue;
-    const scan = scanGunChapter(chapterId);
+    const scan = scanGunChapter(chapterId, options);
     created += scan.created;
     skipped += scan.skipped;
     chapters.push({ chapterId, ...scan });
@@ -1523,14 +1810,17 @@ app.get('/api/backup', (_req, res) => {
   const target = join(tmpdir(), `docwriter-backup-${process.pid}-${Date.now()}.db`);
   try {
     db.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
-    res.set('Content-Disposition', 'attachment; filename="docwriter-backup.db"');
-    res.set('Content-Type', 'application/octet-stream');
-    res.send(readFileSync(target));
   } catch (e) {
-    res.status(500).json({ error: String(e) });
-  } finally {
-    rmSync(target, { force: true });
+    return res.status(500).json({ error: String(e) });
   }
+  res.set('Content-Disposition', 'attachment; filename="docwriter-backup.db"');
+  res.set('Content-Type', 'application/octet-stream');
+  // sendFile streams the snapshot instead of loading a whole second copy into
+  // memory. The temp file is removed once the transfer settles.
+  res.sendFile(target, (err) => {
+    rmSync(target, { force: true });
+    if (err && !res.headersSent) res.status(500).json({ error: String(err) });
+  });
 });
 
 // ---------- Markdown export ----------
@@ -1545,7 +1835,7 @@ app.get('/api/backup', (_req, res) => {
 // leader · members · operates in · purpose · accomplishments fields.
 const ORG_TYPES = ['Organisation', 'Location', 'Country'];
 
-const META_KEYS = ['export_nudge', 'last_export_at', 'last_nudged_on'];
+const META_KEYS = ['export_nudge', 'last_export_at', 'last_nudged_on', 'last_chapter'];
 
 function metaRows() {
   const out = {};
@@ -1570,11 +1860,13 @@ function metaState() {
   // Nothing written yet is nothing to export, so a brand-new book does not open
   // with a nag. The period itself starts with the writer's first chapter.
   const hasWork = db.prepare('SELECT COUNT(*) AS n FROM chapters').get().n > 0;
+  const lastChapter = /^\d+$/.test(rows.last_chapter ?? '') ? Number(rows.last_chapter) : null;
   return {
     nudge,
     lastExportAt,
     lastNudgedOn,
     today,
+    last_chapter: lastChapter,
     due: hasWork && isNudgeDue({ nudge, lastExportAt, lastNudgedOn, today }),
   };
 }
@@ -1607,17 +1899,18 @@ function entryItems(rows) {
 }
 
 function exportEntities(nameById, chapterNumberById, levelById) {
-  const rows = db
-    .prepare(
-      `SELECT e.*, t.name AS type_name,
-        (SELECT COUNT(*) FROM mentions m WHERE m.entity_id = e.id) AS mention_count,
-        (SELECT c.number FROM mentions m JOIN chapters c ON c.id = m.chapter_id WHERE m.entity_id = e.id ORDER BY c.sort_order LIMIT 1) AS first_chapter,
-        (SELECT c.number FROM mentions m JOIN chapters c ON c.id = m.chapter_id WHERE m.entity_id = e.id ORDER BY c.sort_order DESC LIMIT 1) AS last_chapter
-       FROM entities e LEFT JOIN types t ON t.id = e.type_id
-       WHERE e.trashed_at IS NULL
-       ORDER BY t.sort_order, e.name COLLATE NOCASE`
-    )
-    .all();
+  const rows = attachMentionSpans(
+    db
+      .prepare(
+        `SELECT e.id, e.name, e.type_id, e.summary, ${ENTITY_FIELDS_SQL}, e.tracking, e.gap_threshold,
+                e.trashed_at, e.created_at, e.updated_at,
+                t.name AS type_name
+         FROM entities e LEFT JOIN types t ON t.id = e.type_id
+         WHERE e.trashed_at IS NULL
+         ORDER BY t.sort_order, e.name COLLATE NOCASE`
+      )
+      .all()
+  );
 
   const aliases = new Map();
   for (const row of db.prepare('SELECT entity_id, alias FROM aliases ORDER BY id').all()) {
@@ -1746,7 +2039,7 @@ app.get('/api/export', (_req, res) => {
     const nameById = new Map(db.prepare('SELECT id, name FROM entities').all().map((e) => [e.id, e.name]));
     const levelById = new Map(db.prepare('SELECT id, name FROM power_levels').all().map((l) => [l.id, l.name]));
 
-    const markdown = renderBookMarkdown({
+    const doc = {
       exportedAt: todayLocal(),
       chapters: db
         .prepare(
@@ -1761,12 +2054,23 @@ app.get('/api/export', (_req, res) => {
       duels: allDuels(),
       powerLevels: db.prepare('SELECT name FROM power_levels ORDER BY sort_order, name').all().map((l) => l.name),
       types: db.prepare('SELECT name FROM types ORDER BY sort_order, name').all().map((t) => t.name),
-    });
+    };
 
     res.set('Content-Disposition', `attachment; filename="docwriter-export-${todayLocal()}.md"`);
     res.set('Content-Type', 'text/markdown; charset=utf-8');
-    res.send(markdown);
+    // One write per chapter (and per card), so a long book never has to become
+    // one giant string in memory.
+    let first = true;
+    for (const chunk of renderBookMarkdownChunks(doc)) {
+      res.write((first ? '' : '\n') + chunk.join('\n'));
+      first = false;
+    }
+    res.end('\n');
   } catch (e) {
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
     res.status(500).json({ error: String(e) });
   }
 });
@@ -1791,7 +2095,10 @@ app.put('/api/meta', (req, res) => {
     if (key === 'export_nudge' && !NUDGE_FREQUENCIES.includes(value)) {
       return res.status(400).json({ error: `bad reminder frequency: ${value}` });
     }
-    if (key !== 'export_nudge' && value !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    if (key === 'last_chapter' && value !== '' && !/^\d+$/.test(value)) {
+      return res.status(400).json({ error: `bad chapter id for ${key}: ${value}` });
+    }
+    if (key !== 'export_nudge' && key !== 'last_chapter' && value !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
       return res.status(400).json({ error: `bad date for ${key}: ${value}` });
     }
     patch.push([key, value]);

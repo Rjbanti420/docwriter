@@ -128,6 +128,7 @@ export default function ReviewView({
   trash,
   onResolve,
   onResolveMany,
+  onLoadMore,
   onAlertState,
   onOpenEntity,
   onOpenGun,
@@ -142,6 +143,7 @@ export default function ReviewView({
   trash: Entity[];
   onResolve: (c: Candidate, action: string, extra?: Record<string, unknown>) => void;
   onResolveMany: (ids: number[], action: string) => Promise<void>;
+  onLoadMore: (tier: 'primary' | 'demoted') => Promise<void>;
   onAlertState: (id: number, state: string) => void;
   onOpenEntity: (id: number) => void;
   onOpenGun: (id: number) => void;
@@ -152,6 +154,7 @@ export default function ReviewView({
 }) {
   const [tab, setTab] = useState<'names' | 'alerts' | 'rejected' | 'trash'>('names');
   const [showMore, setShowMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState<'primary' | 'demoted' | null>(null);
   const [selectedTrash, setSelectedTrash] = useState<number[]>([]);
   const [selectedNames, setSelectedNames] = useState<number[]>([]);
 
@@ -194,6 +197,14 @@ export default function ReviewView({
     setSelectedNames((prev) => (allOn ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])]));
   };
   const clearNamesSelection = () => setSelectedNames([]);
+  const loadMore = async (tier: 'primary' | 'demoted') => {
+    setLoadingMore(tier);
+    try {
+      await onLoadMore(tier);
+    } finally {
+      setLoadingMore(null);
+    }
+  };
   const bulkResolve = async (action: 'ignore' | 'later') => {
     const ids = selectedIds;
     if (ids.length === 0) return;
@@ -274,6 +285,15 @@ export default function ReviewView({
               ))}
             </div>
           )}
+          {review.pendingHasMore?.primary && (
+            <div style={{ marginTop: 12 }}>
+              <button disabled={loadingMore === 'primary'} onClick={() => loadMore('primary')}>
+                {loadingMore === 'primary'
+                  ? 'Loading…'
+                  : `Show more names (${primary.length} of ${review.pendingTotals?.primary ?? '?'})`}
+              </button>
+            </div>
+          )}
 
           {demoted.length > 0 && (
             <div style={{ marginTop: 18 }}>
@@ -310,6 +330,15 @@ export default function ReviewView({
                       />
                     ))}
                   </div>
+                  {review.pendingHasMore?.demoted && (
+                    <div style={{ marginTop: 12 }}>
+                      <button disabled={loadingMore === 'demoted'} onClick={() => loadMore('demoted')}>
+                        {loadingMore === 'demoted'
+                          ? 'Loading…'
+                          : `Show more low-confidence (${demoted.length} of ${review.pendingTotals?.demoted ?? '?'})`}
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>

@@ -1,17 +1,27 @@
 import { useEffect, useState } from 'react';
+import { chapterLabel } from '../chapters';
+import type { Chapter } from '../types';
 
 export default function AddChapterModal({
   open,
+  chapters,
   onClose,
   onSubmit,
 }: {
   open: boolean;
+  chapters: Chapter[];
   onClose: () => void;
-  onSubmit: (body: { number: string; title: string; text: string }) => Promise<void>;
+  onSubmit: (body: {
+    number: string;
+    title: string;
+    text: string;
+    afterChapterId: number | null;
+  }) => Promise<void>;
 }) {
   const [number, setNumber] = useState('');
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
+  const [after, setAfter] = useState('end');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -19,12 +29,17 @@ export default function AddChapterModal({
       setNumber('');
       setTitle('');
       setText('');
+      setAfter('end');
       setBusy(false);
     }
   }, [open]);
 
   if (!open) return null;
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const cleanNumber = number.trim();
+  const duplicate =
+    cleanNumber !== '' &&
+    chapters.some((c) => c.number.trim().toLowerCase() === cleanNumber.toLowerCase());
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -45,6 +60,22 @@ export default function AddChapterModal({
             </div>
           </div>
           <div className="field">
+            <label>Placement</label>
+            <select value={after} onChange={(e) => setAfter(e.target.value)}>
+              <option value="end">At the end</option>
+              {chapters.map((c) => (
+                <option key={c.id} value={c.id}>
+                  After {chapterLabel(c)}
+                </option>
+              ))}
+            </select>
+            {duplicate && (
+              <p className="progress" style={{ color: 'var(--color-caution)' }}>
+                Chapter {cleanNumber} already exists. Numbers are labels; this one will share it.
+              </p>
+            )}
+          </div>
+          <div className="field">
             <label>Text — paste straight from Word</label>
             <textarea
               autoFocus
@@ -63,7 +94,12 @@ export default function AddChapterModal({
             onClick={async () => {
               setBusy(true);
               try {
-                await onSubmit({ number, title, text });
+                await onSubmit({
+                  number,
+                  title,
+                  text,
+                  afterChapterId: after === 'end' ? null : Number(after),
+                });
               } finally {
                 setBusy(false);
               }

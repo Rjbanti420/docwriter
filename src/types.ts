@@ -57,7 +57,7 @@ export interface Candidate {
   surface_text: string;
   normalized: string;
   occurrences: number;
-  positions: string;
+  positions?: string;
   contexts: string;
   suggested_type_id: number | null;
   confidence: number;
@@ -103,6 +103,8 @@ export interface Entity {
   mention_count?: number;
   first_chapter?: string;
   last_chapter?: string;
+  /** The list payload omits the base64 image; load it from /api/entities/:id/image. */
+  has_image?: boolean;
 }
 
 export interface Alias {
@@ -137,6 +139,8 @@ export interface ChapterDetail {
 export interface ReviewData {
   pending: Candidate[];
   alerts: Alert[];
+  pendingTotals?: { primary: number; demoted: number };
+  pendingHasMore?: { primary: boolean; demoted: boolean };
 }
 
 export interface IgnoredToken {
@@ -235,6 +239,8 @@ export interface ExportMeta {
   lastNudgedOn: string | null;
   /** The server's local day, so the client never stamps a date of its own. */
   today: string;
+  /** The last opened chapter id, or null. Stored server-side because Electron clears localStorage. */
+  last_chapter: number | null;
   due: boolean;
 }
 

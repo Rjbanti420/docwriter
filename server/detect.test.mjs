@@ -3,7 +3,7 @@
 // of their own. These run on plain strings: no database, no server.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { detect, findLookalike, normalizeKey, splitSentences } from './detect.mjs';
+import { detect, findLookalike, buildLookalikeIndex, normalizeKey, splitSentences } from './detect.mjs';
 
 function run(text, { keys = new Map(), ignored = new Set(), dict = new Set() } = {}) {
   return detect(text, keys, ignored, dict);
@@ -64,10 +64,50 @@ test('findLookalike: short names are never suggested', () => {
   assert.equal(findLookalike('abi', new Map([['abi', 1], ['aida', 2]])), null);
 });
 
+test('findLookalike: the length index finds the same candidates', () => {
+  const keys = new Map([
+    ['kael', 1],
+    ['kaela', 2],
+    ['brynn', 3],
+    ['brightwood hall', 4],
+    ['muller', 5],
+    ['müller', 6],
+    ['abc', 7],
+    ['kaelx', 8],
+  ]);
+  const index = buildLookalikeIndex(keys);
+  assert.equal(findLookalike('kaela', keys, index), 2);
+  assert.equal(findLookalike('muller', keys, index), 5);
+  assert.equal(findLookalike('müller', keys, index), 6);
+  assert.equal(findLookalike('brightwood hal', keys, index), 4);
+  assert.equal(findLookalike('kaeli', keys, index), null, 'Kael and Kaela are still a tie');
+  assert.equal(findLookalike('abcdefgh', keys, index), null, 'far lengths are never compared');
+});
+
 test('normalizeKey folds case, a leading article and a possessive', () => {
   assert.equal(normalizeKey('The Silver Order'), 'silver order');
   assert.equal(normalizeKey('Kael\u2019s'), 'kael');
   assert.equal(normalizeKey('  A  Blade '), 'blade');
+});
+
+test('normalizeKey keeps accented letters instead of dropping them', () => {
+  assert.equal(normalizeKey('Zo\u00eb'), 'zo\u00eb');
+  assert.equal(normalizeKey('M\u00fcller'), 'm\u00fcller');
+  assert.equal(normalizeKey('\u00c9lise\u2019s'), '\u00e9lise');
+});
+
+test('detect: accented names are found and matched whole', () => {
+  const { candidates } = run('Zo\u00eb met \u00c9lise. Bront\u00eb nodded. M\u00fcller waited.');
+  const keys = candidates.map((c) => c.key);
+  for (const key of ['zo\u00eb', '\u00e9lise', 'bront\u00eb', 'm\u00fcller']) {
+    assert.ok(keys.includes(key), `${key} should be detected, got ${JSON.stringify(keys)}`);
+  }
+});
+
+test('detect: an accented known name is a mention, not a new candidate', () => {
+  const { candidates, mentions } = run('Zo\u00eb ran. Zo\u00eb fell.', { keys: new Map([['zo\u00eb', 7]]) });
+  assert.equal(candidates.length, 0);
+  assert.equal(mentions.length, 2);
 });
 
 test('splitSentences does not end a sentence at an abbreviation', () => {

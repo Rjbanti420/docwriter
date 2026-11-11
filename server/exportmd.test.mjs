@@ -3,7 +3,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderBookMarkdown } from './exportmd.mjs';
+import { renderBookMarkdown, renderBookMarkdownChunks } from './exportmd.mjs';
 
 const card = (patch) => ({ name: 'Tomas Rell', lines: [], sections: [], ...patch });
 
@@ -299,4 +299,35 @@ test('duels export in the order handed to the renderer', () => {
     duels: [duel({ title: 'Newest first' }), duel({ title: 'Older second' })],
   });
   assert.ok(md.indexOf('#### Newest first') < md.indexOf('#### Older second'));
+});
+
+test('the streaming chunks join to exactly the same Markdown', () => {
+  const data = {
+    exportedAt: '2026-11-11',
+    chapters: [
+      { number: '1', title: 'One', wordCount: 3, text: 'A line.\n\nAnother.' },
+      { number: '', title: '', wordCount: 0, text: '' },
+    ],
+    groups: [{ typeName: 'Character', cards: [card({ lines: ['Aliases: Tom'] })] }],
+    guns: [card({ name: 'The Brass Key' })],
+    questions: [{ status: 'open', text: 'Who took it?', source: 'Ch 1', answer: '' }],
+    duels: [duel()],
+    powerLevels: ['Primor', 'Seeker'],
+    types: ['Character', 'Item'],
+  };
+  let streamed = '';
+  let first = true;
+  for (const chunk of renderBookMarkdownChunks(data)) {
+    streamed += (first ? '' : '\n') + chunk.join('\n');
+    first = false;
+  }
+  assert.equal(streamed + '\n', renderBookMarkdown(data));
+
+  let empty = '';
+  first = true;
+  for (const chunk of renderBookMarkdownChunks({})) {
+    empty += (first ? '' : '\n') + chunk.join('\n');
+    first = false;
+  }
+  assert.equal(empty + '\n', renderBookMarkdown({}));
 });

@@ -141,9 +141,15 @@ CREATE TABLE IF NOT EXISTS scans (
 
 CREATE INDEX IF NOT EXISTS idx_mentions_entity ON mentions(entity_id);
 CREATE INDEX IF NOT EXISTS idx_mentions_chapter ON mentions(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_mentions_entity_chapter ON mentions(entity_id, chapter_id);
 CREATE INDEX IF NOT EXISTS idx_candidates_chapter ON candidates(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidates(status);
+CREATE INDEX IF NOT EXISTS idx_revisions_chapter ON revisions(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_scans_chapter ON scans(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_state ON alerts(state);
+CREATE INDEX IF NOT EXISTS idx_alerts_entity ON alerts(entity_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_chapter ON alerts(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_aliases_entity ON aliases(entity_id);
 
 -- Chekhov's Guns: a planted detail and its planned payoff chapter.
 -- Chapter links are id references (never the displayed number), so renumbering

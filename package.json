@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "test": "node --test server/*.test.mjs",
+    "bench": "node scripts/bench.mjs",
     "dev:server": "node --watch server/index.mjs",
     "dev:web": "vite",
     "build": "vite build",

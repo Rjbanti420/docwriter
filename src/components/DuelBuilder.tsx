@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
+import { createEntityWithConflictPrompt } from '../nameConflict';
 import DuelCard from './DuelCard';
 import { parseFields } from '../entityMedia';
 import { getDeath } from '../entityRelations';
@@ -424,22 +425,36 @@ export default function DuelBuilder({
 
   async function createCharacter(side: DuelSideKey, name: string) {
     if (!characterType) throw new Error('The Character type is missing.');
-    const createdEntity = await api.createEntity({ name, typeId: characterType.id });
-    const id = Number(createdEntity.id);
+    const createdEntity = await createEntityWithConflictPrompt({ name, typeId: characterType.id });
+    if (!createdEntity) return;
+    const id = createdEntity.id;
     if (!Number.isFinite(id)) throw new Error('The server did not return a character id.');
-    const stub: Entity = {
-      id,
-      name,
-      type_id: characterType.id,
-      summary: '',
-      fields: '{}',
-      tracking: 'off',
-      gap_threshold: null,
-      type_name: 'Character',
-      type_icon: characterType.icon,
-      type_color: characterType.color,
-    };
-    setCreated((previous) => [...previous, stub]);
+    let character: Entity;
+    if (createdEntity.existing) {
+      character = (await api.entity(id)).entity;
+      if (character.type_id !== characterType.id) {
+        alert('That name belongs to a different kind of card.');
+        return;
+      }
+      if (selectedIds.has(id)) {
+        alert('That character is already in this duel.');
+        return;
+      }
+    } else {
+      character = {
+        id,
+        name,
+        type_id: characterType.id,
+        summary: '',
+        fields: '{}',
+        tracking: 'off',
+        gap_threshold: null,
+        type_name: 'Character',
+        type_icon: characterType.icon,
+        type_color: characterType.color,
+      };
+      setCreated((previous) => [...previous, character]);
+    }
     setState((previous) => addFighter(previous, side, id));
     setPicker(null);
     onChanged();

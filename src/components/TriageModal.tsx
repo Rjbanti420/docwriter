@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { api } from '../api';
 import type { Candidate, Type } from '../types';
 
 export default function TriageModal({
@@ -18,6 +19,7 @@ export default function TriageModal({
 }) {
   const item = items[index];
   const [typeId, setTypeId] = useState<number | null>(null);
+  const [full, setFull] = useState<Candidate | null>(null);
   const [view, setView] = useState<'list' | 'grid'>('list');
   const [bulkTypeId, setBulkTypeId] = useState<number | null>(
     () => types.find((t) => t.name === 'Character')?.id ?? types[0]?.id ?? null
@@ -30,6 +32,25 @@ export default function TriageModal({
       setTypeId(item.suggested_type_id ?? fallback);
     }
   }, [item?.id, types]);
+
+  // Review rows carry one context to stay small; the modal fetches the full
+  // occurrence list only for the row actually open.
+  useEffect(() => {
+    let cancelled = false;
+    setFull(null);
+    if (!item) return;
+    api
+      .candidate(item.id)
+      .then((c: Candidate) => {
+        if (!cancelled) setFull(c);
+      })
+      .catch(() => {
+        /* resolved or deleted meanwhile */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item?.id]);
 
   const allSelected = items.length > 0 && selectedIds.length === items.length;
   const toggleSelected = (id: number) =>
@@ -100,7 +121,7 @@ export default function TriageModal({
 
   const contexts: string[] = (() => {
     try {
-      return JSON.parse(item.contexts || '[]');
+      return JSON.parse((full && full.id === item.id ? full.contexts : item.contexts) || '[]');
     } catch {
       return [];
     }

@@ -1,5 +1,23 @@
 import type { Duel, DuelCreatePayload } from './types';
 
+// Keeps the old message and exposes the status plus the parsed body, so callers
+// can act on a 409 (a name already belongs to a live card) without string parsing.
+export class ApiError extends Error {
+  status: number;
+  body: unknown;
+
+  constructor(status: number, statusText: string, raw: string) {
+    super(`${status} ${statusText} ${raw}`.trim());
+    this.name = 'ApiError';
+    this.status = status;
+    try {
+      this.body = JSON.parse(raw);
+    } catch {
+      this.body = raw;
+    }
+  }
+}
+
 async function req<T = any>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...opts,
@@ -7,7 +25,7 @@ async function req<T = any>(path: string, opts: RequestInit = {}): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`${res.status} ${res.statusText} ${body}`);
+    throw new ApiError(res.status, res.statusText, body);
   }
   return res.json();
 }
@@ -68,13 +86,16 @@ export const api = {
   deletePowerLevel: (id: number) => req(`/power-levels/${id}`, { method: 'DELETE' }),
   chapters: () => req('/chapters'),
   chapter: (id: number) => req(`/chapters/${id}`),
-  addChapter: (body: { number?: string; title?: string; text: string }) =>
+  addChapter: (body: { number?: string; title?: string; text: string; afterChapterId?: number | null }) =>
     req('/chapters', { method: 'POST', body: JSON.stringify(body) }),
   updateChapter: (id: number, body: Record<string, unknown>) =>
     req(`/chapters/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteChapter: (id: number, renumber: boolean) =>
     req(`/chapters/${id}?renumber=${renumber ? 1 : 0}`, { method: 'DELETE' }),
   review: () => req('/review'),
+  reviewPending: (tier: 'primary' | 'demoted', offset: number, limit = 100) =>
+    req(`/review/pending?tier=${tier}&offset=${offset}&limit=${limit}`),
+  candidate: (id: number) => req(`/candidates/${id}`),
   resolve: (id: number, body: Record<string, unknown>) =>
     req(`/candidates/${id}/resolve`, { method: 'POST', body: JSON.stringify(body) }),
   resolveMany: (ids: number[], action: string) =>

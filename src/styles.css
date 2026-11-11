@@ -4457,9 +4457,25 @@ textarea:focus {
   --color-item: #9a6fd6;
   --color-faction: #d9627a;
 
-  --shadow-card: 0 1px 2px color-mix(in srgb, var(--color-text) 7%, transparent), 0 16px 30px -20px color-mix(in srgb, var(--color-text) 34%, transparent);
-  --shadow-drawer: 14px 0 44px rgba(6, 16, 18, 0.24);
-  --shadow-modal: 0 34px 90px -24px rgba(6, 16, 18, 0.55), 0 2px 8px rgba(6, 16, 18, 0.2);
+  --shadow-card:
+    inset 0 1px 0 color-mix(in srgb, #fff 42%, transparent),
+    0 1px 1px color-mix(in srgb, var(--color-text) 6%, transparent),
+    0 10px 24px -16px color-mix(in srgb, var(--color-text) 38%, transparent),
+    0 28px 48px -28px color-mix(in srgb, var(--color-text) 28%, transparent);
+  --shadow-lift:
+    inset 0 1px 0 color-mix(in srgb, #fff 50%, transparent),
+    0 2px 4px color-mix(in srgb, var(--color-text) 8%, transparent),
+    0 18px 36px -16px color-mix(in srgb, var(--color-text) 32%, transparent),
+    0 36px 60px -28px color-mix(in srgb, var(--color-accent) 28%, transparent);
+  --shadow-drawer:
+    18px 0 48px -8px rgba(6, 16, 18, 0.32),
+    4px 0 12px rgba(6, 16, 18, 0.12),
+    inset -1px 0 0 color-mix(in srgb, #fff 14%, transparent);
+  --shadow-modal:
+    inset 0 1px 0 color-mix(in srgb, #fff 36%, transparent),
+    0 2px 6px rgba(6, 16, 18, 0.16),
+    0 24px 48px -16px rgba(6, 16, 18, 0.38),
+    0 48px 100px -28px rgba(6, 16, 18, 0.45);
 }
 
 /* Fog (light) */
@@ -4783,3 +4799,221 @@ button.primary {
 .proto-add input { flex: 1; min-width: 0; height: 42px; }
 .proto-add button { flex: none; height: 42px; }
 .inspector .lookalike { width: 100%; margin-top: 0; cursor: pointer; }
+
+/* 28. Depth and motion ----------------------------------------------------- */
+/* Interaction motion only. Reading stays still; surfaces lift, cast, and
+   arrive. prefers-reduced-motion already kills animation and transition. */
+
+@keyframes dw-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes dw-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dw-pop {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes dw-sheet {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.main-inner {
+  animation: dw-rise 0.42s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+
+.topbar {
+  box-shadow: 0 14px 28px -22px color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.menu-btn {
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 55%, transparent),
+    0 1px 1px color-mix(in srgb, var(--color-text) 8%, transparent),
+    0 10px 22px -12px color-mix(in srgb, var(--color-text) 50%, transparent);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+.menu-btn:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 60%, transparent),
+    0 14px 28px -12px color-mix(in srgb, var(--color-text) 48%, transparent);
+}
+.menu-btn:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.dw-sidebar {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #fff 8%, transparent), transparent 120px),
+    color-mix(in srgb, var(--color-side) 94%, var(--color-base));
+}
+.dw-sidebar.is-open .dw-nav__item,
+.dw-sidebar.is-open .dw-chapter {
+  animation: dw-rise 0.38s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+.dw-sidebar.is-open .dw-nav__item:nth-child(1) { animation-delay: 0.04s; }
+.dw-sidebar.is-open .dw-nav__item:nth-child(2) { animation-delay: 0.08s; }
+.dw-sidebar.is-open .dw-nav__item:nth-child(3) { animation-delay: 0.12s; }
+.dw-sidebar.is-open .dw-nav__item:nth-child(4) { animation-delay: 0.16s; }
+.dw-sidebar.is-open .dw-chapter:nth-child(1) { animation-delay: 0.08s; }
+.dw-sidebar.is-open .dw-chapter:nth-child(2) { animation-delay: 0.11s; }
+.dw-sidebar.is-open .dw-chapter:nth-child(3) { animation-delay: 0.14s; }
+.dw-sidebar.is-open .dw-chapter:nth-child(4) { animation-delay: 0.17s; }
+.dw-sidebar.is-open .dw-chapter:nth-child(5) { animation-delay: 0.2s; }
+.dw-sidebar.is-open .dw-chapter:nth-child(6) { animation-delay: 0.23s; }
+.dw-sidebar.is-open .dw-chapter:nth-child(n + 7) { animation-delay: 0.26s; }
+
+.dw-nav__item,
+.dw-chapter {
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+}
+.dw-nav__item:hover,
+.dw-chapter:hover {
+  transform: translateX(3px);
+}
+.dw-nav__item.is-active,
+.dw-chapter.is-active {
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 28%, transparent),
+    0 8px 16px -12px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+.dw-nav__item.is-active:hover,
+.dw-chapter.is-active:hover {
+  transform: none;
+}
+
+.card,
+.panel,
+.stat,
+.theme-card,
+.dw-card,
+.entity-card,
+.paper,
+.list-group {
+  box-shadow: var(--shadow-card);
+}
+.card,
+.dw-card,
+.entity-card,
+.stat,
+.theme-card {
+  transition:
+    transform 0.22s cubic-bezier(0.22, 0.8, 0.24, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease,
+    background 0.22s ease;
+}
+.card:hover,
+.dw-card:hover,
+.stat:hover,
+.theme-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift);
+}
+.entity-card:hover,
+.bible .entity-card:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 46%, transparent),
+    0 2px 4px color-mix(in srgb, var(--color-text) 8%, transparent),
+    0 22px 40px -18px color-mix(in srgb, var(--e, var(--color-accent)) 42%, transparent);
+}
+
+.entity-grid > .entity-card,
+.list > .card,
+.dw-list > .dw-card {
+  animation: dw-rise 0.46s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+.entity-grid > .entity-card:nth-child(1),
+.list > .card:nth-child(1),
+.dw-list > .dw-card:nth-child(1) { animation-delay: 0.02s; }
+.entity-grid > .entity-card:nth-child(2),
+.list > .card:nth-child(2),
+.dw-list > .dw-card:nth-child(2) { animation-delay: 0.05s; }
+.entity-grid > .entity-card:nth-child(3),
+.list > .card:nth-child(3),
+.dw-list > .dw-card:nth-child(3) { animation-delay: 0.08s; }
+.entity-grid > .entity-card:nth-child(4),
+.list > .card:nth-child(4),
+.dw-list > .dw-card:nth-child(4) { animation-delay: 0.11s; }
+.entity-grid > .entity-card:nth-child(5),
+.list > .card:nth-child(5),
+.dw-list > .dw-card:nth-child(5) { animation-delay: 0.14s; }
+.entity-grid > .entity-card:nth-child(6),
+.list > .card:nth-child(6),
+.dw-list > .dw-card:nth-child(6) { animation-delay: 0.17s; }
+.entity-grid > .entity-card:nth-child(n + 7),
+.list > .card:nth-child(n + 7),
+.dw-list > .dw-card:nth-child(n + 7) { animation-delay: 0.2s; }
+
+.paper {
+  position: relative;
+  isolation: isolate;
+  animation: dw-rise 0.4s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+.paper::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 14px -7px -9px 12px;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--color-paper) 72%, var(--color-border-strong));
+  box-shadow: 0 16px 28px -20px color-mix(in srgb, var(--color-text) 45%, transparent);
+  pointer-events: none;
+}
+
+.overlay,
+.dw-ie-backdrop {
+  animation: dw-fade 0.2s ease both;
+}
+.modal,
+.search-pop,
+.entity-hover-card {
+  animation: dw-pop 0.28s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+.dw-ie {
+  animation: dw-sheet 0.34s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+.entity-hover-card.is-above {
+  transform: translate(-50%, -100%);
+}
+
+button:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: translateY(1px) scale(0.985);
+}
+.btn-primary:hover,
+button.primary:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 14px 28px -12px var(--color-accent);
+}
+.search input,
+.tabs {
+  box-shadow: 0 8px 18px -16px color-mix(in srgb, var(--color-text) 40%, transparent);
+}
+.tabs button.active,
+.tabs button[aria-selected="true"] {
+  box-shadow: inset 0 -2px 0 var(--color-accent);
+}

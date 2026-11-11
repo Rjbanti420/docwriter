@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from './api';
+import { api, ApiError } from './api';
+import { askNameConflict } from './nameConflict';
 import type { Candidate, Chapter, ChapterDetail, Entity, ExportMeta, IgnoredToken, ReviewData, Type, View } from './types';
 import AddChapterModal from './components/AddChapterModal';
 import TriageModal from './components/TriageModal';
@@ -22,8 +23,7 @@ export default function App() {
   const [view, setView] = useState<View>('read');
   const [activeId, setActiveId] = useState<number | null>(null);
   const [detail, setDetail] = useState<ChapterDetail | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
+  const [dirty, setDirty] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [triage, setTriage] = useState<{ items: Candidate[]; index: number } | null>(null);
   const [entityId, setEntityId] = useState<number | null>(null);
@@ -34,6 +34,15 @@ export default function App() {
   const [nudgeOpen, setNudgeOpen] = useState(false);
   // One reminder per launch, not one per re-render or per refresh.
   const nudged = useRef(false);
+  // A save can outlive the view: only paint its result if the writer is still
+  // on that chapter.
+  const activeIdRef = useRef<number | null>(null);
+  // Chapter reads can finish out of order; only the newest one may paint.
+  const loadSeq = useRef(0);
+
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
 
   // The export reminder: the book knows when it was last exported or dismissed,
   // so the check is the same on every machine and survives a relaunch.
@@ -70,7 +79,27 @@ export default function App() {
     }
   }, [meta]);
 
+  // ReadView owns the draft; App only needs to know whether leaving would throw
+  // away typing, so every navigation path asks the same question.
+  const confirmDiscard = useCallback(() => {
+    if (!dirty) return true;
+    if (!confirm('You have unsaved changes. Discard them?')) return false;
+    setDirty(false);
+    return true;
+  }, [dirty]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+
   const go = (v: View) => {
+    if (v !== 'read' && !confirmDiscard()) return;
     setView(v);
     setSettingsOpen(false);
     setMenuOpen(false);
@@ -98,10 +127,30 @@ export default function App() {
   const loadTrash = useCallback(async () => setTrash(await api.trash()), []);
 
   const loadChapter = useCallback(async (id: number) => {
+    const seq = ++loadSeq.current;
     const d: ChapterDetail = await api.chapter(id);
+    if (seq !== loadSeq.current) return;
     setDetail(d);
-    setEditing(false);
-    setDraft(d.text);
+  }, []);
+
+  // Any non-load writer (save, add, triage) invalidates a chapter read that is
+  // still in flight, so a slow reply cannot overwrite fresher content.
+  const writeDetail = useCallback((d: ChapterDetail | null) => {
+    loadSeq.current += 1;
+    setDetail(d);
+  }, []);
+
+  // Survives an Electron relaunch, which resets localStorage. Writes are queued
+  // so two fast clicks cannot land in reverse order and save the older chapter.
+  const metaWrite = useRef<Promise<unknown>>(Promise.resolve());
+  const rememberChapter = useCallback((id: number | null) => {
+    const value = id == null ? '' : String(id);
+    metaWrite.current = metaWrite.current
+      .then(() => api.setMeta({ last_chapter: value }))
+      .then((m) => setMeta(m))
+      .catch(() => {
+        /* the next selection tries again */
+      });
   }, []);
 
   useEffect(() => {
@@ -122,9 +171,10 @@ export default function App() {
       setIgnored(ig);
       setTrash(tr);
       setMeta(md);
-      if (ch.length) {
-        setActiveId(ch[0].id);
-        await loadChapter(ch[0].id);
+      const pick = ch.find((c: Chapter) => c.id === md.last_chapter) ?? ch[0];
+      if (pick) {
+        setActiveId(pick.id);
+        await loadChapter(pick.id);
       }
     })();
   }, [loadChapter]);
@@ -135,11 +185,13 @@ export default function App() {
 
   const selectChapter = useCallback(
     async (id: number) => {
+      if (id !== activeId && !confirmDiscard()) return;
       setView('read');
       setActiveId(id);
+      rememberChapter(id);
       await loadChapter(id);
     },
-    [loadChapter]
+    [activeId, confirmDiscard, loadChapter, rememberChapter]
   );
 
   const openSearchChapter = useCallback(
@@ -162,11 +214,34 @@ export default function App() {
 
   const resolveCandidate = useCallback(
     async (c: Candidate, action: string, extra?: Record<string, unknown>) => {
-      await api.resolve(c.id, { action, ...extra });
-      await refresh();
+      let payload: Record<string, unknown> = { action, ...extra };
+      let applied = action;
+      for (;;) {
+        try {
+          await api.resolve(c.id, payload);
+          break;
+        } catch (error) {
+          if (!(error instanceof ApiError) || error.status !== 409 || action !== 'accept') throw error;
+          const existingId = Number((error.body as { entityId?: number } | null)?.entityId);
+          const choice = askNameConflict(String(payload.name ?? c.surface_text), existingId);
+          if (!choice) return;
+          if ('useExisting' in choice) {
+            await api.resolve(c.id, { action: 'merge', entityId: existingId });
+            applied = 'merge';
+            break;
+          }
+          payload = { ...payload, name: choice.name };
+        }
+      }
+      // Only reload what this action can change: an ignore edits the rejected
+      // words and chapter badges, accepting or merging edits cards as well.
+      const loads: Array<Promise<unknown>> = [loadChapters(), loadReview()];
+      if (applied === 'accept' || applied === 'merge') loads.push(loadEntities());
+      if (applied === 'ignore') loads.push(loadIgnored());
+      await Promise.all(loads);
       if (detail && detail.chapter.id === c.chapter_id) {
         const d: ChapterDetail = await api.chapter(c.chapter_id);
-        setDetail(d);
+        writeDetail(d);
       }
       setTriage((t) => {
         if (!t) return t;
@@ -175,69 +250,117 @@ export default function App() {
         return { items, index: Math.min(t.index, items.length - 1) };
       });
     },
-    [refresh, detail]
+    [loadChapters, loadReview, loadEntities, loadIgnored, detail, writeDetail]
   );
 
   // Bulk triage from Review: one request and one refresh for the whole selection.
   const resolveMany = useCallback(
     async (ids: number[], action: string) => {
       await api.resolveMany(ids, action);
-      await refresh();
-      if (detail) setDetail(await api.chapter(detail.chapter.id));
+      const loads: Array<Promise<unknown>> = [loadChapters(), loadReview()];
+      if (action === 'ignore') loads.push(loadIgnored());
+      await Promise.all(loads);
+      if (detail) writeDetail(await api.chapter(detail.chapter.id));
     },
-    [refresh, detail]
+    [loadChapters, loadReview, loadIgnored, detail, writeDetail]
+  );
+
+  // Review ships the first 100 rows of each tier; Show more appends the next page.
+  const loadMoreCandidates = useCallback(
+    async (tier: 'primary' | 'demoted') => {
+      const offset = review.pending.filter((c) => (c.tier === 'demoted') === (tier === 'demoted')).length;
+      const res: { pending: Candidate[]; total: number; hasMore: boolean } = await api.reviewPending(tier, offset);
+      setReview((prev) => {
+        if (!prev) return prev;
+        const seen = new Set(prev.pending.map((c) => c.id));
+        const totals = prev.pendingTotals ?? { primary: 0, demoted: 0 };
+        const hasMore = prev.pendingHasMore ?? { primary: false, demoted: false };
+        return {
+          ...prev,
+          pending: [...prev.pending, ...res.pending.filter((c) => !seen.has(c.id))],
+          pendingTotals: { ...totals, [tier]: res.total },
+          pendingHasMore: { ...hasMore, [tier]: res.hasMore },
+        };
+      });
+    },
+    [review.pending]
   );
 
   const addChapter = useCallback(
-    async (body: { number: string; title: string; text: string }) => {
+    async (body: {
+      number: string;
+      title: string;
+      text: string;
+      afterChapterId?: number | null;
+    }) => {
       const res = await api.addChapter(body);
       await refresh();
       setAddOpen(false);
       setActiveId(res.chapter.id);
+      rememberChapter(res.chapter.id);
       const d: ChapterDetail = await api.chapter(res.chapter.id);
-      setDetail(d);
-      setEditing(false);
-      setDraft(d.text);
+      writeDetail(d);
       setView('read');
       const rv: ReviewData = await api.review();
       setReview(rv);
       openTriage(rv.pending.filter((c) => c.chapter_id === res.chapter.id && c.tier !== 'demoted'));
     },
-    [refresh]
+    [refresh, rememberChapter, writeDetail]
   );
 
-  const saveChapter = useCallback(async () => {
-    if (!activeId) return;
-    await api.updateChapter(activeId, { text: draft });
-    await refresh();
-    await loadChapter(activeId);
-    const rv: ReviewData = await api.review();
-    setReview(rv);
-    openTriage(rv.pending.filter((c) => c.chapter_id === activeId && c.tier !== 'demoted'));
-  }, [activeId, draft, refresh, loadChapter]);
+  const saveChapter = useCallback(
+    async (text: string) => {
+      const id = activeId;
+      if (!id) return;
+      await api.updateChapter(id, { text });
+      await refresh();
+      const d: ChapterDetail = await api.chapter(id);
+      const rv: ReviewData = await api.review();
+      setReview(rv);
+      if (activeIdRef.current !== id) return;
+      writeDetail(d);
+      openTriage(rv.pending.filter((c) => c.chapter_id === id && c.tier !== 'demoted'));
+    },
+    [activeId, refresh, writeDetail]
+  );
 
   const deleteChapter = useCallback(
     async (renumber: boolean) => {
       if (!activeId) return;
+      const idx = chapters.findIndex((c) => c.id === activeId);
       await api.deleteChapter(activeId, renumber);
       await refresh();
       const ch: Chapter[] = await api.chapters();
       setChapters(ch);
       if (ch.length) {
-        setActiveId(ch[0].id);
-        await loadChapter(ch[0].id);
+        const next = ch[Math.min(Math.max(idx - 1, 0), ch.length - 1)];
+        setActiveId(next.id);
+        rememberChapter(next.id);
+        await loadChapter(next.id);
       } else {
         setActiveId(null);
-        setDetail(null);
+        rememberChapter(null);
+        writeDetail(null);
       }
     },
-    [activeId, refresh, loadChapter]
+    [activeId, chapters, refresh, loadChapter, rememberChapter, writeDetail]
   );
 
   const openCandidate = useCallback(
-    (candidateId: number) => {
+    async (candidateId: number) => {
       const idx = review.pending.findIndex((c) => c.id === candidateId);
-      if (idx >= 0) setTriage({ items: review.pending, index: idx });
+      if (idx >= 0) {
+        setTriage({ items: review.pending, index: idx });
+        return;
+      }
+      // The row may sit past the 100-per-tier page; fetch it directly rather
+      // than silently doing nothing when a underline is clicked.
+      try {
+        const candidate: Candidate = await api.candidate(candidateId);
+        setTriage({ items: [candidate], index: 0 });
+      } catch {
+        /* already resolved or deleted */
+      }
     },
     [review.pending]
   );
@@ -274,8 +397,10 @@ export default function App() {
     [refresh]
   );
 
-  const reviewBadge =
-    review.pending.length + review.alerts.filter((a) => a.state === 'unread').length;
+  const pendingCount = review.pendingTotals
+    ? review.pendingTotals.primary + review.pendingTotals.demoted
+    : review.pending.length;
+  const reviewBadge = pendingCount + review.alerts.filter((a) => a.state === 'unread').length;
 
   return (
     <div className={`app${menuOpen ? ' menu-open' : ''}`}>
@@ -368,7 +493,9 @@ export default function App() {
             className="dw-icon-btn dw-icon-btn--ghost"
             aria-label="New chapter"
             title="Paste a chapter"
-            onClick={() => setAddOpen(true)}
+            onClick={() => {
+              if (confirmDiscard()) setAddOpen(true);
+            }}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M5 12h14" />
@@ -402,6 +529,7 @@ export default function App() {
             className={`dw-nav__item${settingsOpen ? ' is-active' : ''}`}
             aria-current={settingsOpen ? 'page' : undefined}
             onClick={() => {
+              if (!confirmDiscard()) return;
               setSettingsOpen(true);
               setMenuOpen(false);
               setEntityId(null);
@@ -449,21 +577,15 @@ export default function App() {
             </div>
           ) : (
             <ReadView
+              key={activeId ?? 'none'}
               chapters={chapters}
               entities={entities}
               activeId={activeId}
               detail={detail}
-              editing={editing}
-              draft={draft}
-              setDraft={setDraft}
               onSelect={selectChapter}
-              onEdit={() => {
-                setDraft(detail?.text ?? '');
-                setEditing(true);
-              }}
-              onCancel={() => setEditing(false)}
               onSave={saveChapter}
               onDelete={deleteChapter}
+              onDirtyChange={setDirty}
               onOpenEntity={(id) => setEntityId(id)}
               onOpenCandidate={openCandidate}
               onAdd={() => setAddOpen(true)}
@@ -478,6 +600,7 @@ export default function App() {
             trash={trash}
             onResolve={resolveCandidate}
             onResolveMany={resolveMany}
+            onLoadMore={loadMoreCandidates}
             onAlertState={setAlertState}
             onOpenEntity={(id) => setEntityId(id)}
             onOpenGun={(id) => {
@@ -537,7 +660,12 @@ export default function App() {
         />
       )}
 
-      <AddChapterModal open={addOpen} onClose={() => setAddOpen(false)} onSubmit={addChapter} />
+      <AddChapterModal
+        open={addOpen}
+        chapters={chapters}
+        onClose={() => setAddOpen(false)}
+        onSubmit={addChapter}
+      />
 
       {nudgeOpen && <ExportReminderModal onExport={exportBook} onLater={laterNudge} />}
 

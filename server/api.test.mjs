@@ -67,6 +67,55 @@ test('the API listens on loopback only', async (t) => {
   assert.match(srv.base, /^http:\/\/127\.0\.0\.1:\d+$/);
 });
 
+test('saving a chapter keeps only the newest history rows', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Kael' } });
+  const created = await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '1', title: 'One', text: 'Kael.' },
+  });
+  const id = created.chapter.id;
+  for (let i = 1; i <= 12; i += 1) {
+    await call(srv.base, `/api/chapters/${id}`, { method: 'PUT', body: { text: `Kael. version ${i}` } });
+  }
+
+  // Seed more resolved alerts than the cap, plus one that must survive because
+  // it is still unread. The server is idle between requests.
+  const live = new DatabaseSync(join(srv.dir, 'book.db'));
+  const addAlert = live.prepare("INSERT INTO alerts (kind, chapter_id, state) VALUES ('test', ?, ?)");
+  for (let i = 0; i < 12; i += 1) addAlert.run(id, 'resolved');
+  addAlert.run(id, 'unread');
+  live.close();
+
+  await call(srv.base, `/api/chapters/${id}`, { method: 'PUT', body: { text: 'Kael. version 13' } });
+
+  // Read the backup snapshot so the live WAL cannot hide the result.
+  const res = await fetch(`${srv.base}/api/backup`);
+  const copy = join(srv.dir, 'history.db');
+  writeFileSync(copy, Buffer.from(await res.arrayBuffer()));
+  const check = new DatabaseSync(copy, { readOnly: true });
+  const revisions = check.prepare('SELECT id, text FROM revisions WHERE chapter_id = ? ORDER BY id').all(id);
+  const scans = check.prepare('SELECT COUNT(*) AS n FROM scans WHERE chapter_id = ?').get(id).n;
+  const resolved = check
+    .prepare("SELECT COUNT(*) AS n FROM alerts WHERE chapter_id = ? AND state = 'resolved'")
+    .get(id).n;
+  const unread = check.prepare("SELECT COUNT(*) AS n FROM alerts WHERE chapter_id = ? AND state = 'unread'").get(id).n;
+  const mentions = check.prepare('SELECT revision_id FROM mentions WHERE chapter_id = ?').all(id);
+  const current = check.prepare('SELECT current_revision_id FROM chapters WHERE id = ?').get(id).current_revision_id;
+  check.close();
+
+  assert.equal(revisions.length, 10, 'the newest ten revisions are kept');
+  assert.equal(revisions.at(-1)?.text, 'Kael. version 13');
+  assert.equal(current, revisions.at(-1)?.id, 'the current revision is never pruned');
+  assert.equal(scans, 10, 'the newest ten scans are kept');
+  assert.equal(mentions.length, 1, 'the live mention survived the revision prune');
+  assert.equal(mentions[0]?.revision_id, current, 'the mention points at the current revision');
+  assert.equal(resolved, 10, 'the newest ten resolved alerts are kept');
+  assert.equal(unread, 1, 'an unresolved alert is never pruned');
+});
+
 test('GET /api/backup returns a whole, valid database', async (t) => {
   const srv = await startServer();
   t.after(srv.stop);
@@ -172,6 +221,158 @@ test('bulk triage resolves a whole selection in one request', async (t) => {
   assert.ok(deferred.every((c) => after.includes(c.id)), 'a deferred name comes back later');
 });
 
+test('accepting a tracked name in several chapters builds one reappearance alert', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  for (let i = 1; i <= 5; i += 1) {
+    const text = i === 1 || i === 5 ? 'Mara Voss crossed the yard. Mara Voss waited.' : `Chapter ${i} was quiet.`;
+    await call(srv.base, '/api/chapters', { method: 'POST', body: { number: String(i), title: `Ch ${i}`, text } });
+  }
+
+  const candidate = (await call(srv.base, '/api/review')).pending.find((c) => c.surface_text === 'Mara Voss');
+  assert.ok(candidate, 'expected a candidate for Mara Voss');
+
+  const accepted = await call(srv.base, `/api/candidates/${candidate.id}/resolve`, {
+    method: 'POST',
+    body: { action: 'accept', tracking: 'reappearance', gapThreshold: 2 },
+  });
+
+  const alerts = (await call(srv.base, '/api/review')).alerts.filter((a) => a.entity_id === accepted.entityId);
+  assert.equal(alerts.length, 1, `expected one alert, got ${JSON.stringify(alerts)}`);
+  assert.equal(alerts[0].kind, 'reappeared');
+  assert.equal(alerts[0].detail, 'returns after 3 chapters');
+  assert.equal(alerts[0].chapter_number, '5');
+});
+
+test('accepting with tracking off changes no alerts and links every chapter', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  // A tracked card with an existing dormant alert must survive the accept untouched.
+  const wren = await call(srv.base, '/api/entities', {
+    method: 'POST',
+    body: { name: 'Wren Hall', tracking: 'absence', gapThreshold: 1 },
+  });
+  for (let i = 1; i <= 3; i += 1) {
+    const text = i <= 2 ? 'Wren Hall waited by the gate.' : 'The gate was empty.';
+    await call(srv.base, '/api/chapters', { method: 'POST', body: { number: String(i), title: `Ch ${i}`, text } });
+  }
+  for (let i = 4; i <= 30; i += 1) {
+    await call(srv.base, '/api/chapters', {
+      method: 'POST',
+      body: { number: String(i), title: `Ch ${i}`, text: 'Ghost Lantern burned on the sill.' },
+    });
+  }
+  const before = (await call(srv.base, '/api/review')).alerts.sort((a, b) => a.id - b.id);
+  assert.ok(before.some((a) => a.entity_id === wren.id && a.kind === 'dormant'));
+
+  const candidate = (await call(srv.base, '/api/review')).pending.find((c) => c.surface_text === 'Ghost Lantern');
+  assert.ok(candidate, 'expected a candidate for Ghost Lantern');
+  const accepted = await call(srv.base, `/api/candidates/${candidate.id}/resolve`, {
+    method: 'POST',
+    body: { action: 'accept' },
+  });
+
+  const detail = await call(srv.base, `/api/entities/${accepted.entityId}`);
+  assert.equal(detail.entity.tracking, 'off');
+  assert.equal(detail.mentions.length, 27, 'all 27 chapter candidates became mentions');
+
+  const after = (await call(srv.base, '/api/review')).alerts.sort((a, b) => a.id - b.id);
+  assert.deepEqual(
+    after.map((a) => [a.id, a.kind, a.chapter_id, a.detail, a.state]),
+    before.map((a) => [a.id, a.kind, a.chapter_id, a.detail, a.state]),
+    'tracking off must not rewrite alerts'
+  );
+});
+
+test('deleting a chapter only trashes cards that lost their last mention', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '1', title: 'One', text: 'Mara Voss drew the blade.' },
+  });
+  await call(srv.base, '/api/chapters', { method: 'POST', body: { number: '2', title: 'Two', text: 'The room was empty.' } });
+  const candidate = (await call(srv.base, '/api/review')).pending.find((c) => c.surface_text === 'Mara Voss');
+  const accepted = await call(srv.base, `/api/candidates/${candidate.id}/resolve`, {
+    method: 'POST',
+    body: { action: 'accept' },
+  });
+  const handmade = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Handmade Card' } });
+
+  const one = (await call(srv.base, '/api/chapters')).find((c) => c.number === '1');
+  const result = await call(srv.base, `/api/chapters/${one.id}?renumber=0`, { method: 'DELETE' });
+  assert.equal(result.trashed, 1, 'only the card that lost its last mention is trashed');
+
+  const trash = await call(srv.base, '/api/trash');
+  assert.ok(trash.some((e) => e.id === accepted.entityId), 'the orphan is in Trash');
+  const live = await call(srv.base, '/api/entities');
+  assert.ok(live.some((e) => e.id === handmade.id), 'a hand-made card with no mentions survives');
+});
+
+test('a trashed card no longer owns its name or aliases', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const kael = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Kael' } });
+  await call(srv.base, `/api/entities/${kael.id}/aliases`, {
+    method: 'POST',
+    body: { alias: 'Mara Voss' },
+  });
+
+  await assert.rejects(
+    call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Mara Voss' } }),
+    /409/,
+    'a live alias already answers to this name'
+  );
+
+  await call(srv.base, '/api/entities/trash', { method: 'POST', body: { ids: [kael.id] } });
+  const born = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Mara Voss' } });
+
+  const chapter = await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '1', title: 'One', text: 'Mara Voss waited by the gate.' },
+  });
+  const detail = await call(srv.base, `/api/chapters/${chapter.chapter.id}`);
+  assert.ok(
+    !detail.mentions.some((m) => m.entity_id === kael.id),
+    'the scanner must not attach a mention to a trashed card'
+  );
+  assert.equal((await call(srv.base, `/api/entities/${born.id}`)).mentions.length, 1, 'the live card owns the name');
+});
+
+test('a duplicate name is refused with the existing card id', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const kael = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Kael' } });
+  const res = await fetch(`${srv.base}/api/entities`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: '  kael ' }),
+  });
+  assert.equal(res.status, 409);
+  assert.equal((await res.json()).entityId, kael.id);
+
+  // A candidate scanned before the card existed can collide when it is accepted.
+  await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '1', title: 'One', text: 'Mara Voss drew the blade.' },
+  });
+  const candidate = (await call(srv.base, '/api/review')).pending.find((c) => c.surface_text === 'Mara Voss');
+  const mara = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Mara Voss' } });
+  const conflict = await fetch(`${srv.base}/api/candidates/${candidate.id}/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'accept' }),
+  });
+  assert.equal(conflict.status, 409);
+  assert.equal((await conflict.json()).entityId, mara.id);
+  assert.equal((await call(srv.base, '/api/entities')).filter((e) => e.name === 'Mara Voss').length, 1);
+});
+
 test('deleting a middle chapter with renumber closes the gap', async (t) => {
   const srv = await startServer();
   t.after(srv.stop);
@@ -230,8 +431,68 @@ test('GET /api/export renders the whole book and leaves Trash out', async (t) =>
   assert.ok(!md.includes('Deleted One'), 'a trashed card is not exported');
 });
 
-test('the export reminder starts due, then a date satisfies it', async (t) => {
+test('the last opened chapter id round-trips through meta', async (t) => {
   const srv = await startServer();
+  t.after(srv.stop);
+
+  const one = await call(srv.base, '/api/chapters', { method: 'POST', body: { number: '1', title: 'One', text: 'Kael.' } });
+  const saved = await call(srv.base, '/api/meta', {
+    method: 'PUT',
+    body: { last_chapter: String(one.chapter.id) },
+  });
+  assert.equal(saved.last_chapter, one.chapter.id);
+
+  const reopened = await call(srv.base, '/api/meta');
+  assert.equal(reopened.last_chapter, one.chapter.id);
+
+  const cleared = await call(srv.base, '/api/meta', { method: 'PUT', body: { last_chapter: '' } });
+  assert.equal(cleared.last_chapter, null);
+
+  const bad = await fetch(`${srv.base}/api/meta`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ last_chapter: 'two' }),
+  });
+  assert.equal(bad.status, 400, 'a non-numeric chapter id is rejected');
+});
+
+test('a chapter can be inserted after another and later chapters shift', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const one = await call(srv.base, '/api/chapters', { method: 'POST', body: { number: '1', title: 'One', text: 'Kael.' } });
+  await call(srv.base, '/api/chapters', { method: 'POST', body: { number: '2', title: 'Two', text: 'The room was empty.' } });
+  const three = await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '3', title: 'Three', text: 'The door closed.' },
+  });
+
+  await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '1a', title: 'Between', text: 'A new scene.', afterChapterId: one.chapter.id },
+  });
+  const chapters = await call(srv.base, '/api/chapters');
+  assert.deepEqual(chapters.map((c) => c.title), ['One', 'Between', 'Two', 'Three']);
+  assert.deepEqual(chapters.map((c) => c.sort_order), [0, 1, 2, 3]);
+
+  const bad = await fetch(`${srv.base}/api/chapters`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ number: '9', title: 'Nowhere', text: 'x', afterChapterId: 99999 }),
+  });
+  assert.equal(bad.status, 400, 'an unknown insert target is rejected');
+
+  const gun = await call(srv.base, '/api/guns', { method: 'POST', body: { title: 'The brass key', plannedNumber: '4' } });
+  const four = await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '4', title: 'Four', text: 'The key.', afterChapterId: three.chapter.id },
+  });
+  const guns = await call(srv.base, '/api/guns');
+  const linked = guns.find((g) => g.id === gun.id);
+  assert.equal(linked.planned_chapter_id, four.chapter.id, 'inserting the planned chapter arms the gun');
+});
+
+test('the export reminder starts due, then a date satisfies it', async (t) => {  const srv = await startServer();
   t.after(srv.stop);
 
   const empty = await call(srv.base, '/api/meta');
@@ -272,7 +533,6 @@ test('the export reminder starts due, then a date satisfies it', async (t) => {
 });
 
 // ---------- duels ----------
-
 import { resolveDuel } from './duel.mjs';
 import {
   addFighter,
@@ -758,4 +1018,133 @@ test('a manual gun scan replaces pending results but not the automatic first pas
   const pending = await call(srv.base, '/api/guns/candidates');
   assert.ok(!pending.some((c) => c.normalized === 'brass key'));
   assert.ok(pending.some((c) => c.normalized === 'silver locket'));
+});
+
+test('a multi-chapter gun scan matches scanning each chapter alone', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const texts = [
+    'Maren set the brass key on the table. The brass key was cold. She carried the brass key to the vault.',
+    'He carried the silver locket. The silver locket was warm. He hid the silver locket in the drawer.',
+    'They carried the iron compass. The iron compass was heavy. They followed the iron compass north.',
+  ];
+  for (const [index, text] of texts.entries()) {
+    await call(srv.base, '/api/chapters', {
+      method: 'POST',
+      body: { number: String(index + 1), title: `Ch ${index + 1}`, text },
+    });
+  }
+
+  const chapterIds = (await call(srv.base, '/api/chapters')).map((c) => c.id);
+  const together = await call(srv.base, '/api/guns/scan', { method: 'POST', body: { chapterIds } });
+  assert.ok(together.created > 0, 'the fixture produces guns');
+
+  const separately = [];
+  for (const chapterId of chapterIds) {
+    const one = await call(srv.base, '/api/guns/scan', { method: 'POST', body: { chapterIds: [chapterId] } });
+    separately.push(one.chapters[0]);
+  }
+  assert.deepEqual(together.chapters, separately);
+});
+
+test('entity lists omit the portrait but keep a working image route', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+  const dataUrl = `data:image/png;base64,${png.toString('base64')}`;
+  const { id } = await call(srv.base, '/api/entities', {
+    method: 'POST',
+    body: { name: 'Portrait Card' },
+  });
+  await call(srv.base, `/api/entities/${id}`, {
+    method: 'PUT',
+    body: { fields: { rank: 'A', image: dataUrl } },
+  });
+
+  const list = await call(srv.base, '/api/entities');
+  const card = list.find((e) => e.id === id);
+  assert.equal(card.has_image, 1);
+  assert.equal(JSON.parse(card.fields).image, undefined, 'the list drops the base64 image');
+  assert.equal(JSON.parse(card.fields).rank, 'A', 'other fields survive the strip');
+
+  const detail = await call(srv.base, `/api/entities/${id}`);
+  assert.equal(JSON.parse(detail.entity.fields).image, dataUrl, 'the editor still gets the full card');
+
+  const image = await fetch(`${srv.base}/api/entities/${id}/image`);
+  assert.equal(image.status, 200);
+  assert.equal(image.headers.get('content-type'), 'image/png');
+  assert.deepEqual(Buffer.from(await image.arrayBuffer()), png);
+
+  const empty = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'No Portrait' } });
+  assert.equal((await fetch(`${srv.base}/api/entities/${empty.id}/image`)).status, 404);
+
+  await call(srv.base, `/api/entities/${id}`, { method: 'PUT', body: { fields: { image: 'not-a-data-url' } } });
+  assert.equal((await fetch(`${srv.base}/api/entities/${id}/image`)).status, 404);
+});
+
+test('entity lists count mentions and chapters in one grouped pass', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Kael' } });
+  const one = await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '1', title: 'One', text: 'Kael drew the blade.' },
+  });
+  await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '2', title: 'Two', text: 'Kael ran. Kael stopped.' },
+  });
+
+  const card = (await call(srv.base, '/api/entities')).find((e) => e.name === 'Kael');
+  assert.equal(card.mention_count, 3);
+  assert.equal(card.first_chapter, '1');
+  assert.equal(card.last_chapter, '2');
+
+  const chapters = await call(srv.base, '/api/chapters');
+  const first = chapters.find((c) => c.id === one.chapter.id);
+  assert.equal(first.mention_count, 1);
+  assert.equal(first.candidate_count, 0);
+});
+
+test('review ships bounded rows and a candidate detail route', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const created = await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: {
+      number: '1',
+      title: 'One',
+      text: 'Mara Voss crossed the yard. Mara Voss waited. The Silver Order marched east.',
+    },
+  });
+
+  const review = await call(srv.base, '/api/review');
+  assert.ok(review.pending.length > 0);
+  for (const c of review.pending) {
+    assert.ok(!('positions' in c), 'positions are left to the detail route');
+    assert.ok(JSON.parse(c.contexts).length <= 1, 'only one context rides on a list row');
+  }
+  assert.equal(review.pendingTotals.primary, review.pending.filter((c) => c.tier !== 'demoted').length);
+  assert.equal(typeof review.pendingTotals.demoted, 'number');
+
+  const page = await call(srv.base, '/api/review/pending?tier=primary&offset=0&limit=1');
+  assert.equal(page.pending.length, 1);
+  assert.equal(page.total, review.pendingTotals.primary);
+  assert.equal(page.hasMore, page.total > 1);
+
+  const full = await call(srv.base, `/api/candidates/${review.pending[0].id}`);
+  assert.ok(Array.isArray(JSON.parse(full.positions)));
+  assert.ok(JSON.parse(full.contexts).length >= 1);
+
+  const detail = await call(srv.base, `/api/chapters/${created.chapter.id}`);
+  assert.ok(detail.candidates.length > 0);
+  for (const c of detail.candidates) {
+    for (const p of JSON.parse(c.positions)) {
+      assert.deepEqual(Object.keys(p).sort(), ['end', 'start']);
+    }
+  }
 });

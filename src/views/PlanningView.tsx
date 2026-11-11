@@ -478,10 +478,11 @@ function ScanModal({
   kind: 'questions' | 'guns';
   chapters: Chapter[];
   onClose: () => void;
-  onScan: (ids: number[]) => Promise<void>;
+  onScan: (ids: number[], onProgress?: (done: number, total: number) => void) => Promise<void>;
 }) {
   const [sel, setSel] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const all = chapters.length > 0 && sel.length === chapters.length;
   const toggle = (id: number) =>
     setSel((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -527,14 +528,19 @@ function ScanModal({
             disabled={sel.length === 0 || busy}
             onClick={async () => {
               setBusy(true);
+              setProgress(null);
               try {
-                await onScan(sel);
+                await onScan(sel, (done, total) => setProgress({ done, total }));
               } finally {
                 setBusy(false);
               }
             }}
           >
-            {busy ? 'Scanning…' : 'Scan selected'}
+            {busy
+              ? progress
+                ? `Scanning ${progress.done}/${progress.total}…`
+                : 'Scanning…'
+              : 'Scan selected'}
           </button>
         </div>
       </div>
@@ -673,16 +679,31 @@ export default function PlanningView({
     await api.resolveGunCandidate(cand.id, { action: 'reject' });
     await after();
   }
-  async function scan(ids: number[], kind: 'questions' | 'guns') {
-    const r: { created: number; skipped: number } =
-      kind === 'guns' ? await api.scanGuns(ids) : await api.scanQuestions(ids);
+  async function scan(
+    ids: number[],
+    kind: 'questions' | 'guns',
+    onProgress?: (done: number, total: number) => void
+  ) {
+    // Small batches keep one long scan from freezing the server and let the
+    // modal count its way through a 2000-chapter book.
+    const chunkSize = 20;
+    let created = 0;
+    let skipped = 0;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      const r: { created: number; skipped: number } =
+        kind === 'guns' ? await api.scanGuns(chunk) : await api.scanQuestions(chunk);
+      created += r.created;
+      skipped += r.skipped;
+      onProgress?.(Math.min(i + chunkSize, ids.length), ids.length);
+    }
     setScanKind(null);
     const noun = kind === 'guns' ? 'gun' : 'question';
     setNotice(
-      r.created === 0
+      created === 0
         ? `No new ${noun}s found.`
-        : `Found ${r.created} new ${noun}${r.created === 1 ? '' : 's'}${
-            r.skipped ? ` · ${r.skipped} already tracked` : ''
+        : `Found ${created} new ${noun}${created === 1 ? '' : 's'}${
+            skipped ? ` · ${skipped} already tracked` : ''
           }.`
     );
     await after();
@@ -964,7 +985,7 @@ export default function PlanningView({
           kind={scanKind}
           chapters={chapters}
           onClose={() => setScanKind(null)}
-          onScan={(ids) => scan(ids, scanKind)}
+          onScan={(ids, onProgress) => scan(ids, scanKind, onProgress)}
         />
       )}
       {reviewOpen && gunReview && gunReview.pending > 0 && (

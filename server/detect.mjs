@@ -116,7 +116,7 @@ const ADVERBS = new Set([
 ]);
 
 function isCapitalized(w) {
-  return /^[A-Z][a-zA-Z'’-]+$/.test(w) && !/^[A-Z]+$/.test(w);
+  return /^\p{Lu}[\p{L}\p{M}'’-]+$/u.test(w) && !/^\p{Lu}+$/u.test(w);
 }
 
 function isConnector(w) {
@@ -177,7 +177,7 @@ export function splitSentences(text) {
       const next = j < text.length ? text[j] : '';
       if (next === '' || /\s/.test(next)) {
         const before = text.slice(start, i + 1);
-        const lastWord = (before.match(/[A-Za-z]+\.$/) || [])[0];
+        const lastWord = (before.match(/\p{L}+\.$/u) || [])[0];
         if (!(lastWord && ABBREVIATIONS.test(lastWord))) {
           push(start, j);
           i = j;
@@ -195,7 +195,7 @@ export function splitSentences(text) {
 }
 
 function tokenize(str) {
-  const re = /[A-Za-z][A-Za-z'’-]*/g;
+  const re = /\p{L}[\p{L}\p{M}'’-]*/gu;
   const out = [];
   let m;
   while ((m = re.exec(str))) out.push({ word: m[0], offset: m.index });
@@ -206,7 +206,7 @@ export function normalizeKey(phrase) {
   return phrase
     .toLowerCase()
     .replace(/[’']s\b/g, '')
-    .replace(/[^a-z0-9\s'’-]/g, ' ')
+    .replace(/[^\p{L}\p{N}\s'’-]/gu, ' ')
     .replace(/[\s\-_]+/g, ' ')
     .trim()
     .replace(/^(the|a|an)\s+/, '');
@@ -443,25 +443,40 @@ export function levenshtein(a, b) {
 // the candidate (Kael / Kaela, Aria / Aryan) mean we cannot tell which one the
 // writer meant, and "same thing" merges two cards with no undo — so an ambiguous
 // match is dropped rather than guessed at.
-export function findLookalike(key, entityKeys) {
+// Known keys grouped by length once per scan. A candidate can only match a key
+// within two characters, so each call then walks at most five small buckets
+// instead of every live name.
+export function buildLookalikeIndex(entityKeys) {
+  const byLength = new Map();
+  for (const known of entityKeys.keys()) {
+    if (known.length < 4) continue;
+    const bucket = byLength.get(known.length);
+    if (bucket) bucket.push(known);
+    else byLength.set(known.length, [known]);
+  }
+  return byLength;
+}
+
+export function findLookalike(key, entityKeys, index = buildLookalikeIndex(entityKeys)) {
   if (key.length < 4) return null;
   if (entityKeys.has(key)) return entityKeys.get(key);
 
   let best = Infinity;
   let bestId = null;
   const tied = new Set();
-  for (const known of entityKeys.keys()) {
-    if (known.length < 4 || Math.abs(known.length - key.length) > 2) continue;
-    const d = levenshtein(known, key);
-    if (d > 2) continue;
-    const id = entityKeys.get(known);
-    if (d < best) {
-      best = d;
-      bestId = id;
-      tied.clear();
-      tied.add(id);
-    } else if (d === best) {
-      tied.add(id); // same entity reached twice is fine; a different one is not
+  for (let length = key.length - 2; length <= key.length + 2; length += 1) {
+    for (const known of index.get(length) ?? []) {
+      const d = levenshtein(known, key);
+      if (d > 2) continue;
+      const id = entityKeys.get(known);
+      if (d < best) {
+        best = d;
+        bestId = id;
+        tied.clear();
+        tied.add(id);
+      } else if (d === best) {
+        tied.add(id); // same entity reached twice is fine; a different one is not
+      }
     }
   }
   return tied.size === 1 ? bestId : null;

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, CSSProperties, ReactNode } from 'react';
 import { api } from '../api';
+import { createEntityWithConflictPrompt } from '../nameConflict';
 import { fileToDataUrl, getEntityImage, parseFields } from '../entityMedia';
+import type { EntityFields } from '../entityMedia';
 import { getDeath, getLeaderId, getMemberIds, getOperatesInId, getOwnerIds } from '../entityRelations';
 import { chapterLabel, chapterNumber } from '../chapters';
 import type { Chapter, Entity, EntityDetail, PowerLevel, Type } from '../types';
@@ -420,11 +422,12 @@ export default function EntityPanel({
   const itemTypeId = types.find((t) => t.name === 'Item')?.id ?? null;
 
   /** Persist an item's holder list, folding away any legacy single `owner`. */
-  async function setItemHolders(itemId: number, rawFields: string | null, holders: number[]) {
-    const fields = parseFields(rawFields);
-    if (holders.length > 0) fields.owners = holders;
-    else delete fields.owners;
-    delete fields.owner; // write the array form only
+  // The entity list omits the base64 image, so always re-read the full card
+  // before a fields write; otherwise assigning an item would erase its portrait.
+  async function updateItemFields(itemId: number, update: (fields: EntityFields) => void) {
+    const full: EntityDetail = await api.entity(itemId);
+    const fields = parseFields(full.entity.fields);
+    update(fields);
     await api.updateEntity(itemId, { fields });
     await load();
     onChanged();
@@ -433,26 +436,48 @@ export default function EntityPanel({
   /** Item side: set (or clear) the entities that hold this item. */
   async function setOwners(next: number[]) {
     if (!detail) return;
-    await setItemHolders(entityId, detail.entity.fields, next);
+    await updateItemFields(entityId, (fields) => {
+      if (next.length > 0) fields.owners = next;
+      else delete fields.owners;
+      delete fields.owner; // write the array form only
+    });
   }
 
   async function assignItem(itemId: number) {
-    const item = entities.find((x) => x.id === itemId);
-    if (!item) return;
-    await setItemHolders(itemId, item.fields, [...new Set([...getOwnerIds(item.fields), entityId])]);
+    await updateItemFields(itemId, (fields) => {
+      fields.owners = [...new Set([...getOwnerIds(JSON.stringify(fields)), entityId])];
+      delete fields.owner;
+    });
   }
 
   async function unassignItem(itemId: number) {
-    const item = entities.find((x) => x.id === itemId);
-    if (!item) return;
-    await setItemHolders(itemId, item.fields, getOwnerIds(item.fields).filter((h) => h !== entityId));
+    await updateItemFields(itemId, (fields) => {
+      const owners = getOwnerIds(JSON.stringify(fields)).filter((h) => h !== entityId);
+      if (owners.length > 0) fields.owners = owners;
+      else delete fields.owners;
+      delete fields.owner;
+    });
   }
 
   async function createItem() {
     const n = newItemName.trim();
     if (!n || itemTypeId == null) return;
-    const created = await api.createEntity({ name: n, typeId: itemTypeId });
-    await api.updateEntity(created.id, { fields: { owners: [entityId] } });
+    const created = await createEntityWithConflictPrompt({ name: n, typeId: itemTypeId });
+    if (!created) return;
+    let owners = [entityId];
+    let fields: EntityFields = { owners };
+    if (created.existing) {
+      const existing: EntityDetail = await api.entity(created.id);
+      if (existing.entity.type_id !== itemTypeId) {
+        alert('That name belongs to a card that is not an Item.');
+        return;
+      }
+      fields = parseFields(existing.entity.fields);
+      owners = [...new Set([...getOwnerIds(JSON.stringify(fields)), entityId])];
+      fields.owners = owners;
+      delete fields.owner;
+    }
+    await api.updateEntity(created.id, { fields });
     setNewItemName('');
     await load();
     onChanged();

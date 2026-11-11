@@ -12,14 +12,10 @@ export default function ReadView({
   entities,
   activeId,
   detail,
-  editing,
-  draft,
-  setDraft,
   onSelect,
-  onEdit,
-  onCancel,
   onSave,
   onDelete,
+  onDirtyChange,
   onOpenEntity,
   onOpenCandidate,
   onAdd,
@@ -28,14 +24,10 @@ export default function ReadView({
   entities: Entity[];
   activeId: number | null;
   detail: ChapterDetail | null;
-  editing: boolean;
-  draft: string;
-  setDraft: (s: string) => void;
   onSelect: (id: number) => void;
-  onEdit: () => void;
-  onCancel: () => void;
-  onSave: () => Promise<void>;
+  onSave: (text: string) => Promise<void>;
   onDelete: (renumber: boolean) => Promise<void>;
+  onDirtyChange: (dirty: boolean) => void;
   onOpenEntity: (id: number) => void;
   onOpenCandidate: (id: number) => void;
   onAdd: () => void;
@@ -43,6 +35,11 @@ export default function ReadView({
   const [showDelete, setShowDelete] = useState(false);
   const [renumber, setRenumber] = useState(false);
   const [saving, setSaving] = useState(false);
+  // The editor owns the text it is showing. App is told only whether it is
+  // dirty, so a chapter change cannot quietly overwrite what was typed.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [dirty, setDirty] = useState(false);
   const [fontSize, setFontSize] = useState(() => {
     try {
       const v = Number(localStorage.getItem('docwriter.readingSize'));
@@ -50,6 +47,26 @@ export default function ReadView({
     } catch {}
     return DEFAULT_READ;
   });
+
+  useEffect(() => {
+    if (!editing) setDraft(detail?.text ?? '');
+  }, [detail?.text, editing]);
+
+  useEffect(() => {
+    onDirtyChange(dirty);
+  }, [dirty, onDirtyChange]);
+
+  const startEdit = () => {
+    setDraft(detail?.text ?? '');
+    setDirty(false);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setDraft(detail?.text ?? '');
+    setDirty(false);
+    setEditing(false);
+  };
 
   useEffect(() => {
     document.documentElement.style.setProperty('--text-reading', `${fontSize}px`);
@@ -81,10 +98,13 @@ export default function ReadView({
       {chapter && (
         <>
           <div className="toolbar">
-            <button disabled={idx <= 0} onClick={() => onSelect(chapters[idx - 1].id)}>
+            <button disabled={idx <= 0 || saving} onClick={() => onSelect(chapters[idx - 1].id)}>
               ← Prev
             </button>
-            <button disabled={idx >= chapters.length - 1} onClick={() => onSelect(chapters[idx + 1].id)}>
+            <button
+              disabled={idx >= chapters.length - 1 || saving}
+              onClick={() => onSelect(chapters[idx + 1].id)}
+            >
               Next →
             </button>
             <div style={{ flex: 1 }} />
@@ -108,21 +128,23 @@ export default function ReadView({
             </button>
             {!editing ? (
               <>
-                <button onClick={onEdit}>Edit</button>
+                <button onClick={startEdit}>Edit</button>
                 <button className="danger" onClick={() => setShowDelete(true)}>
                   Delete chapter
                 </button>
               </>
             ) : (
               <>
-                <button onClick={onCancel}>Cancel</button>
+                <button onClick={cancelEdit}>Cancel</button>
                 <button
                   className="primary"
                   disabled={saving}
                   onClick={async () => {
                     setSaving(true);
                     try {
-                      await onSave();
+                      await onSave(draft);
+                      setDirty(false);
+                      setEditing(false);
                     } finally {
                       setSaving(false);
                     }
@@ -138,11 +160,16 @@ export default function ReadView({
             <textarea
               className="editor-textarea"
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              readOnly={saving}
+              onChange={(e) => {
+                const next = e.target.value;
+                setDraft(next);
+                setDirty(next !== (detail?.text ?? ''));
+              }}
               spellCheck
             />
           ) : (
-            <div className="paper">
+            <div className="paper" key={chapter.id}>
               <div className="paper-inner">
                 <div className="paper-head">
                   <div className="paper-meta">

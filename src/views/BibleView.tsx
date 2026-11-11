@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { api } from '../api';
-import { getEntityImage } from '../entityMedia';
+import { createEntityWithConflictPrompt } from '../nameConflict';
 import { getDeath } from '../entityRelations';
 import { chapterNumber } from '../chapters';
 import type { Chapter, Entity, Type } from '../types';
@@ -129,7 +129,7 @@ export default function BibleView({
               className="btn-primary"
               disabled={!name.trim()}
               onClick={async () => {
-                await api.createEntity({ name, typeId });
+                if (!(await createEntityWithConflictPrompt({ name, typeId }))) return;
                 setName('');
                 setShowNew(false);
                 onChanged();
@@ -178,7 +178,7 @@ export default function BibleView({
               </div>
               <div className="entity-grid">
                 {list.map((e) => {
-                  const image = getEntityImage(e.fields);
+                  const image = e.has_image ? `/api/entities/${e.id}/image` : null;
                   const death = e.type_name === 'Character' ? getDeath(e.fields) : null;
                   const deathChapter = death?.chapter != null ? chapters.find((c) => c.id === death.chapter) : undefined;
                   return (

@@ -87,7 +87,7 @@ const PART_WORDS =
 const DESCRIPTIVE_WORDS =
   /\b(old|new|small|tiny|little|large|big|heavy|light|sharp|blunt|brass|copper|silver|gold|golden|iron|steel|wooden|glass|paper|leather|black|white|red|blue|green|yellow|dark|bright|cold|warm|worn|tattered|chipped|cracked|broken|locked|sealed|ornate|plain|strange|odd|familiar|brand|beautiful|ugly|dirty|clean|ancient|holy|cursed)\b/i;
 
-const POSSESSIVE = /^[A-Za-z][A-Za-z'’-]*['’]s$/;
+const POSSESSIVE = /^\p{L}[\p{L}\p{M}'’-]*['’]s$/u;
 
 function singular(word) {
   if (word.endsWith('ies') && word.length > 4) return word.slice(0, -3) + 'y';
@@ -110,7 +110,7 @@ function isModifier(word) {
 }
 
 function tokenize(str) {
-  const re = /[A-Za-z][A-Za-z'’-]*/g;
+  const re = /\p{L}[\p{L}\p{M}'’-]*/gu;
   const out = [];
   let m;
   while ((m = re.exec(str))) out.push({ word: m[0], offset: m.index });
@@ -119,6 +119,26 @@ function tokenize(str) {
 
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// splitSentences returns sorted, non-overlapping ranges; binary search keeps a
+// chapter with hundreds of name matches off a linear sentence scan per match.
+function sentenceAt(sentences, offset) {
+  let lo = 0;
+  let hi = sentences.length - 1;
+  let found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (sentences[mid].start <= offset) {
+      found = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  if (found < 0) return null;
+  const sentence = sentences[found];
+  return offset < sentence.end ? sentence : null;
 }
 
 /** Comparison form used for global ignore and duplicate suppression. */
@@ -177,7 +197,10 @@ export function detectGunCandidates(text, opts = {}) {
     groups.set(norm, { ...candidate, normalized: norm, occurrences: 1 });
   };
 
-  // Known Items, locations and organisations are high-precision mentions.
+  // Known Items, locations and organisations are high-precision mentions. One
+  // combined alternation scans the chapter once instead of once per entity name;
+  // longest names come first so a title is not cut short by its own prefix.
+  const known = [];
   for (const e of entities) {
     if (e?.typeName === 'Character') continue;
     const type = String(e?.typeName ?? '');
@@ -188,35 +211,46 @@ export function detectGunCandidates(text, opts = {}) {
       const n = normalizeGunTitle(name);
       if (!n || seen.has(n)) continue;
       seen.add(n);
-      const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(name).replace(/\s+/g, '\\s+')}(?![\\p{L}\\p{N}])`, 'giu');
-      let m;
-      while ((m = re.exec(src))) {
-        const sentence = sentences.find((s) => m.index >= s.start && m.index < s.end);
-        if (!sentence) continue;
-        const context = src.slice(sentence.start, sentence.end).trim();
-        const lower = context.toLowerCase();
-        signalCandidate({
-          title: String(e.name),
-          base,
-          category: type === 'Item' ? 'object' : 'place',
-          head: `${type === 'Item' ? 'object' : 'place'}:${n}`,
-          context,
-          sentence,
-          start: m.index,
-          end: m.index + m[0].length,
-          add,
-          extra: {
-            sim: SIMILE_WORDS.test(lower),
-            promise: PROMISE_WORDS.test(lower),
-            action: ACTION_WORDS.test(lower),
-            dialogue: /["“”]/.test(context),
-            paragraphEnd: /^\s*\n\s*\n/.test(src.slice(sentence.end)) || src.slice(sentence.end).trim() === '',
-            detailed: DESCRIPTIVE_WORDS.test(lower),
-            part: PART_WORDS.test(lower),
-            known: true,
-          },
-        });
-      }
+      known.push({ entity: e, type, base, name, normalized: n });
+    }
+  }
+  known.sort((a, b) => b.name.length - a.name.length);
+  if (known.length) {
+    const alternatives = known.map((entry) => `(${escapeRe(entry.name).replace(/\s+/g, '\\s+')})`);
+    const re = new RegExp(
+      `(?<![\\p{L}\\p{N}])(?:${alternatives.join('|')})(?![\\p{L}\\p{N}])`,
+      'giu'
+    );
+    let m;
+    while ((m = re.exec(src))) {
+      const index = m.slice(1).findIndex((part) => part !== undefined);
+      if (index < 0) continue;
+      const entry = known[index];
+      const sentence = sentenceAt(sentences, m.index);
+      if (!sentence) continue;
+      const context = src.slice(sentence.start, sentence.end).trim();
+      const lower = context.toLowerCase();
+      signalCandidate({
+        title: String(entry.entity.name),
+        base: entry.base,
+        category: entry.type === 'Item' ? 'object' : 'place',
+        head: `${entry.type === 'Item' ? 'object' : 'place'}:${entry.normalized}`,
+        context,
+        sentence,
+        start: m.index,
+        end: m.index + m[0].length,
+        add,
+        extra: {
+          sim: SIMILE_WORDS.test(lower),
+          promise: PROMISE_WORDS.test(lower),
+          action: ACTION_WORDS.test(lower),
+          dialogue: /["“”]/.test(context),
+          paragraphEnd: /^\s*\n\s*\n/.test(src.slice(sentence.end)) || src.slice(sentence.end).trim() === '',
+          detailed: DESCRIPTIVE_WORDS.test(lower),
+          part: PART_WORDS.test(lower),
+          known: true,
+        },
+      });
     }
   }
 

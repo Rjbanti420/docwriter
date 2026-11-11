@@ -6,6 +6,14 @@ test('normalizeGunTitle drops articles and possessives for global ignore', () =>
   assert.equal(normalizeGunTitle('The Brass Key'), 'brass key');
   assert.equal(normalizeGunTitle('His brass key'), 'brass key');
   assert.equal(normalizeGunTitle('the brass key'), 'brass key');
+  assert.equal(normalizeGunTitle('Zo\u00eb\u2019s Brass Key'), 'zo\u00eb brass key');
+});
+
+test('a known Item with an accented name is matched whole', () => {
+  const found = detectGunCandidates('The M\u00fcller Compass hung beside the door.', {
+    entities: [{ name: 'The M\u00fcller Compass', typeName: 'Item' }],
+  });
+  assert.equal(found[0]?.normalized, 'm\u00fcller compass');
 });
 
 test('a rejected plural also suppresses its singular', () => {
@@ -75,4 +83,25 @@ test('abstract nouns only surface with promise language', () => {
   assert.ok(!plain.some((c) => c.normalized === 'secret'));
   const promised = detectGunCandidates('She would remember the secret. The secret would return.');
   assert.ok(promised.some((c) => c.normalized === 'secret'));
+});
+
+test('one combined pass finds every known entity and alias in a chapter', () => {
+  const text = [
+    'Klein set the Brass Key on the table.',
+    'The Brass Key was cold in his palm.',
+    'He lifted the Silver Locket. The Silver Locket glowed.',
+    'They reached Awwa County at dusk. Awwa County was quiet.',
+  ].join('\n\n');
+  const found = detectGunCandidates(text, {
+    entities: [
+      { name: 'The Brass Key', typeName: 'Item', aliases: ['Key of Brass'] },
+      { name: 'The Silver Locket', typeName: 'Item' },
+      { name: 'Awwa County', typeName: 'Country' },
+      { name: 'Klein', typeName: 'Character', aliases: ['Klein the Bold'] },
+    ],
+  });
+  assert.ok(found.some((c) => c.normalized === 'brass key'), 'the key is found');
+  assert.ok(found.some((c) => c.normalized === 'silver locket'), 'the locket is found');
+  assert.ok(found.some((c) => c.normalized === 'awwa county'), 'the place is found');
+  assert.ok(!found.some((c) => c.normalized.includes('klein')), 'characters are still skipped');
 });
