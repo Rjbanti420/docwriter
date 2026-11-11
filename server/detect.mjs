@@ -90,7 +90,7 @@ const LOC_KW = new Set([
   'dock', 'docks', 'outpost', 'camp', 'settlement', 'colony', 'province',
   'region', 'frontier', 'wastes', 'barrens',
 ]);
-const ITEM_KW = new Set([
+export const ITEM_KW = new Set([
   'sword', 'blade', 'amulet', 'ring', 'crown', 'stone', 'book', 'scroll',
   'staff', 'wand', 'shield', 'armor', 'armour', 'dagger', 'spear', 'bow',
   'arrow', 'potion', 'elixir', 'tome', 'orb', 'gem', 'jewel', 'relic',

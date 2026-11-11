@@ -18,7 +18,11 @@ const PLACE_TYPES = ['Location', 'Country'];
 /** Types sharing the Organisation editor: leader · members · operates in · purpose · accomplishments. */
 const ORG_TYPES = ['Organisation', 'Location', 'Country'];
 
-/** Item rank ladder, from the mundane to the singular. */
+/**
+ * Item rank ladder, from the mundane to the singular.
+ * CHANGE BOTH OR DUEL SCORING SILENTLY CHANGES: keep in step with ITEM_RANKS in
+ * server/duel.mjs, which the duel engine ranks by position.
+ */
 const ITEM_RANKS = ['Mundane', 'Elusive', 'Hazardous', 'Desolating', 'Cataclysmic', 'Singular'];
 
 /** Default hues for writer-made power levels — cycled as they are created. */
@@ -163,6 +167,7 @@ export default function EntityPanel({
   // Item-only fields (kept in the `fields` JSON bag; Origin reuses `summary`).
   const [description, setDescription] = useState('');
   const [rank, setRank] = useState('');
+  const [role, setRole] = useState('');
   const [boon, setBoon] = useState('');
   const [curse, setCurse] = useState('');
   const [evolvable, setEvolvable] = useState(false);
@@ -205,6 +210,7 @@ export default function EntityPanel({
     const fields = parseFields(d.entity.fields);
     setDescription(typeof fields.description === 'string' ? fields.description : '');
     setRank(typeof fields.rank === 'string' ? fields.rank : '');
+    setRole(typeof fields.role === 'string' ? fields.role : '');
     setBoon(typeof fields.boon === 'string' ? fields.boon : '');
     setCurse(typeof fields.curse === 'string' ? fields.curse : '');
     setEvolvable(fields.evolvable === true);
@@ -290,6 +296,7 @@ export default function EntityPanel({
       (isItemType
         ? description !== String(storedFields.description ?? '') ||
           rank !== String(storedFields.rank ?? '') ||
+          role !== String(storedFields.role ?? '') ||
           boon !== String(storedFields.boon ?? '') ||
           curse !== String(storedFields.curse ?? '') ||
           evolvable !== (storedFields.evolvable === true)
@@ -320,6 +327,7 @@ export default function EntityPanel({
       };
       put('description', description);
       put('rank', rank);
+      put('role', role);
       put('boon', boon);
       put('curse', curse);
       put('evolvable', evolvable);
@@ -654,9 +662,27 @@ export default function EntityPanel({
                     />
                   </div>
 
-                  <div className="dw-ie__field">
-                    <span className="dw-ie__label">Rank</span>
-                    <RankSelect value={rank} onChange={setRank} />
+                  <div className="dw-ie__pair">
+                    <div className="dw-ie__field">
+                      <span className="dw-ie__label">Rank</span>
+                      <RankSelect value={rank} onChange={setRank} />
+                    </div>
+                    <div className="dw-ie__field">
+                      <span className="dw-ie__label">Role</span>
+                      <div className="segmented segmented--tight" role="group" aria-label="Role">
+                        {ROLE_OPTIONS.map((o) => (
+                          <button
+                            key={o.value}
+                            type="button"
+                            aria-pressed={roleValue(role) === o.value}
+                            onClick={() => setRole(o.value)}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="dw-ie__hint">Both is the default and the most versatile.</span>
+                    </div>
                   </div>
 
                   <div className="dw-ie__pair">
@@ -1149,6 +1175,19 @@ const RANK_OPTIONS: { value: string; label: string }[] = [
 /** Storage uses '' for unranked; the CSS colours key off a lowercase `data-rank`. */
 function rankKey(value: string): string {
   return value ? value.toLowerCase() : 'unranked';
+}
+
+const ROLE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'offense', label: 'Offense' },
+  { value: 'defense', label: 'Defense' },
+  { value: 'both', label: 'Both' },
+  { value: 'none', label: 'None' },
+];
+
+/** Mirrors normalizeRole in server/duel.mjs: an absent or unknown role means Both. */
+function roleValue(value: string): string {
+  const role = value.trim().toLowerCase();
+  return ROLE_OPTIONS.some((o) => o.value === role) ? role : 'both';
 }
 
 /** Close a popover on an outside click or on Escape (taken in the capture phase). */

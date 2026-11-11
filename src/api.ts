@@ -1,3 +1,5 @@
+import type { Duel, DuelCreatePayload } from './types';
+
 async function req<T = any>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...opts,
@@ -89,6 +91,18 @@ export const api = {
     req(`/guns/${id}/decide`, { method: 'POST', body: JSON.stringify(body) }),
   fireGun: (id: number) => req(`/guns/${id}/fire`, { method: 'POST' }),
   reopenGun: (id: number) => req(`/guns/${id}/reopen`, { method: 'POST' }),
+  scanGuns: (chapterIds: number[]) =>
+    req('/guns/scan', { method: 'POST', body: JSON.stringify({ chapterIds }) }),
+  gunCandidates: (status = 'pending') => req(`/guns/candidates?status=${status}`),
+  resolveGunCandidate: (id: number, body: Record<string, unknown>) =>
+    req(`/guns/candidates/${id}/resolve`, { method: 'POST', body: JSON.stringify(body) }),
+  gunReview: () => req('/guns/review'),
+  laterGunReview: () => req('/guns/review/later', { method: 'POST' }),
+
+  duels: () => req<Duel[]>('/duels'),
+  createDuel: (payload: DuelCreatePayload) =>
+    req<Duel>('/duels', { method: 'POST', body: JSON.stringify(payload) }),
+  deleteDuel: (id: number) => req(`/duels/${id}`, { method: 'DELETE' }),
 
   questions: () => req('/questions'),
   addQuestion: (body: Record<string, unknown>) =>

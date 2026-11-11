@@ -174,6 +174,18 @@ CREATE TABLE IF NOT EXISTS gun_history (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Duel records are immutable snapshots: names, abilities, Items, terrain and the
+-- score breakdown are copied at creation, with no foreign keys to entities. A
+-- deleted, trashed or merged fighter therefore cannot break an old duel.
+CREATE TABLE IF NOT EXISTS duels (
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  sides TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  narrative TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- Questions the novel raises, so each one gets answered.
 CREATE TABLE IF NOT EXISTS questions (
   id INTEGER PRIMARY KEY,
@@ -197,6 +209,36 @@ CREATE TABLE IF NOT EXISTS question_candidates (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Objects the gun scan found, waiting for the writer to add or ignore them.
+-- Ignoring writes the normalized title to gun_ignored, so the same suggestion
+-- never comes back in another chapter.
+CREATE TABLE IF NOT EXISTS gun_candidates (
+  id INTEGER PRIMARY KEY,
+  chapter_id INTEGER NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  normalized TEXT NOT NULL,
+  excerpt TEXT DEFAULT '',
+  score REAL DEFAULT 0,
+  signals TEXT DEFAULT '[]',
+  tier TEXT DEFAULT 'primary',
+  status TEXT DEFAULT 'pending',
+  gun_id INTEGER REFERENCES guns(id) ON DELETE SET NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS gun_ignored (
+  id INTEGER PRIMARY KEY,
+  normalized TEXT NOT NULL UNIQUE,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- One automatic gun scan per chapter. A row only exists after the first
+-- non-empty save, so existing chapters stay untouched until the writer scans.
+CREATE TABLE IF NOT EXISTS gun_scans (
+  chapter_id INTEGER PRIMARY KEY REFERENCES chapters(id) ON DELETE CASCADE,
+  scanned_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_guns_status ON guns(status);
 CREATE INDEX IF NOT EXISTS idx_guns_planned ON guns(planned_number);
 CREATE INDEX IF NOT EXISTS idx_gun_history_gun ON gun_history(gun_id);
@@ -204,6 +246,9 @@ CREATE INDEX IF NOT EXISTS idx_questions_source ON questions(source_chapter_id);
 CREATE INDEX IF NOT EXISTS idx_questions_delivered ON questions(delivered_chapter_id);
 CREATE INDEX IF NOT EXISTS idx_qc_chapter ON question_candidates(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_qc_status ON question_candidates(status);
+CREATE INDEX IF NOT EXISTS idx_gc_chapter ON gun_candidates(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_gc_status ON gun_candidates(status);
+CREATE INDEX IF NOT EXISTS idx_gc_normalized ON gun_candidates(normalized);
 `;
 
 const BUILTIN_TYPES = [

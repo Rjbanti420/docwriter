@@ -93,3 +93,210 @@ test('questions show their derived status and sub-bullets', () => {
   assert.match(md, /^ {2}- Raised in Ch 3 — Ash$/m);
   assert.match(md, /^ {2}- \*\*Answer:\*\* It was never locked\.$/m);
 });
+
+const duelSides = {
+  terrain: 'the Rusted Pass',
+  A: [
+    {
+      characterId: 1,
+      name: 'Kael',
+      dead: false,
+      powerRank: 2,
+      abilities: [
+        { id: 'k1', name: 'Ashfall' },
+        { id: 'k2', name: 'The Long Count' },
+      ],
+      items: [{ id: 10, name: 'a chipped sword', rank: 'Hazardous', role: 'offense' }],
+    },
+  ],
+  B: [
+    {
+      characterId: 2,
+      name: 'Mira',
+      dead: false,
+      powerRank: 1,
+      abilities: [{ id: 'm1', name: 'Mirror Step' }],
+      items: [{ id: 11, name: 'a boiled-leather shield', rank: 'Elusive', role: 'defense' }],
+    },
+  ],
+};
+
+const duelOutcome = {
+  winnerSide: 'A',
+  skillSide: null,
+  chosenBy: null,
+  seed: 141183972,
+  roll: 0.0691,
+  probabilityA: 0.4345,
+  scores: { A: 18, B: 25.5 },
+  breakdown: {
+    A: {
+      score: 18,
+      fighters: [{ name: 'Kael', base: 10, power: 2, abilities: 2, attack: 3, defence: 0 }],
+    },
+    B: {
+      score: 25.5,
+      fighters: [{ name: 'Mira', base: 10, power: 1, abilities: 1, attack: 0, defence: 2 }],
+    },
+  },
+};
+
+const duel = (patch = {}) => ({
+  title: 'Kael vs Mira',
+  created_at: '2026-10-21 12:00:00',
+  sides: duelSides,
+  outcome: duelOutcome,
+  narrative: 'Kael opens with Ashfall. Mira answers with Mirror Step.',
+  ...patch,
+});
+
+test('a rolled duel exports its snapshot, result and audit line', () => {
+  const md = renderBookMarkdown({ duels: [duel()] });
+  assert.match(md, /^### Duels$/m);
+  assert.match(md, /^#### Kael vs Mira$/m);
+  assert.match(md, /^- Created: 2026-10-21 · Terrain: the Rusted Pass$/m);
+  assert.match(
+    md,
+    /^- Side A: Kael — Abilities: Ashfall, The Long Count — Items: a chipped sword \(offense, Hazardous\)$/m
+  );
+  assert.match(
+    md,
+    /^- Side B: Mira — Abilities: Mirror Step — Items: a boiled-leather shield \(defense, Elusive\)$/m
+  );
+  assert.match(md, /^- Winner: Kael$/m);
+  assert.match(md, /^- Scores: 18 vs 25\.5$/m);
+  assert.match(md, /^- Win chance for A 43\.5% · seed 141183972 · roll 0\.0691$/m);
+  assert.match(md, /Kael opens with Ashfall\. Mira answers with Mirror Step\./);
+  assert.doesNotMatch(md, /Winner chosen by you|More skilled:/);
+});
+
+test('a chosen-winner duel says so and omits the roll audit', () => {
+  const md = renderBookMarkdown({
+    duels: [duel({ outcome: { ...duelOutcome, chosenBy: 'A', skillSide: null } })],
+  });
+  assert.match(md, /^- Winner: Kael$/m);
+  assert.match(md, /^- Winner chosen by you$/m);
+  assert.match(md, /^- Scores: 18 vs 25\.5$/m);
+  assert.doesNotMatch(md, /More skilled:|Win chance for A|seed 141183972|roll 0\.0691/);
+});
+
+test('a skilled-side duel names the side and keeps its audit', () => {
+  const md = renderBookMarkdown({
+    duels: [duel({ outcome: { ...duelOutcome, winnerSide: 'B', skillSide: 'B' } })],
+  });
+  assert.match(md, /^- Winner: Mira$/m);
+  assert.match(md, /^- More skilled: Mira$/m);
+  assert.match(md, /^- Win chance for A 43\.5% · seed 141183972 · roll 0\.0691$/m);
+  assert.doesNotMatch(md, /Winner chosen by you/);
+});
+
+test('a 3v3 with a dead fighter keeps one line per fighter', () => {
+  const sides = {
+    ...duelSides,
+    A: [
+      ...duelSides.A,
+      { name: 'Ren', dead: false, abilities: [{ id: 'r1', name: 'Nine Breaths' }], items: [] },
+      { name: 'Tamsin', dead: false, abilities: [], items: [] },
+    ],
+    B: [
+      ...duelSides.B,
+      {
+        name: 'Vane',
+        dead: true,
+        abilities: [{ id: 'v1', name: 'Iron Verdict' }],
+        items: [{ id: 12, name: 'a long grey blade', rank: 'Desolating', role: 'offense' }],
+      },
+      { name: 'Sable', dead: false, abilities: [{ id: 's1', name: 'Salt Wind' }], items: [] },
+    ],
+  };
+  const md = renderBookMarkdown({
+    duels: [
+      duel({
+        title: 'Kael + Ren + Tamsin vs Mira + Vane + Sable',
+        sides,
+        outcome: { ...duelOutcome, chosenBy: 'A' },
+      }),
+    ],
+  });
+  assert.equal((md.match(/^- Side [AB]: /gm) ?? []).length, 6);
+  assert.match(md, /^- Side A: Ren — Abilities: Nine Breaths$/m);
+  assert.match(md, /^- Side A: Tamsin$/m);
+  assert.match(
+    md,
+    /^- Side B: Vane \(dead\) — Abilities: Iron Verdict — Items: a long grey blade \(offense, Desolating\)$/m
+  );
+  assert.match(md, /^- Side B: Sable — Abilities: Salt Wind$/m);
+});
+
+test('a legacy-shaped duel exports without the newer breakdown fields', () => {
+  const sides = {
+    terrain: '',
+    A: [
+      {
+        name: 'Kael',
+        dead: false,
+        abilities: ['Old Trick'],
+        items: [{ name: 'a plain ring', rank: '' }],
+      },
+    ],
+    B: [{ name: 'Mira', dead: false, abilities: [], items: [] }],
+  };
+  const outcome = {
+    winnerSide: 'B',
+    skillSide: null,
+    chosenBy: null,
+    seed: 7,
+    roll: 0.9,
+    probabilityA: 0.4,
+    scores: { A: 17, B: 20 },
+    breakdown: {
+      A: { score: 17, fighters: [{ name: 'Kael', base: 10, power: 2, abilities: 1, attack: 0, defence: 2 }] },
+      B: { score: 20, fighters: [{ name: 'Mira', base: 10, power: 1, abilities: 1, attack: 0, defence: 2 }] },
+    },
+  };
+  const md = renderBookMarkdown({ duels: [duel({ sides, outcome })] });
+  assert.match(md, /^- Created: 2026-10-21$/m);
+  assert.match(md, /^- Side A: Kael — Abilities: Old Trick — Items: a plain ring \(both, Unranked\)$/m);
+  assert.match(md, /^- Side B: Mira$/m);
+  assert.match(md, /^- Winner: Mira$/m);
+  assert.match(md, /^- Scores: 17 vs 20$/m);
+  assert.match(md, /^- Win chance for A 40\.0% · seed 7 · roll 0\.9000$/m);
+});
+
+test('special characters in names cannot break the export structure', () => {
+  const sides = {
+    terrain: 'a *strange* # place',
+    A: [
+      {
+        name: 'Kael #1',
+        dead: false,
+        abilities: [{ id: 'k1', name: '- Ashfall *now*' }],
+        items: [{ name: '*a chipped sword*', rank: 'Hazardous', role: 'offense' }],
+      },
+    ],
+    B: [{ name: 'Mira', dead: false, abilities: [], items: [] }],
+  };
+  const md = renderBookMarkdown({
+    duels: [duel({ title: '# The *Fall*\n## Not a heading', sides })],
+  });
+  assert.equal((md.match(/^#### /gm) ?? []).length, 1);
+  assert.doesNotMatch(md, /^## Not a heading$/m);
+  assert.match(md, /^#### # The \*Fall\* ## Not a heading$/m);
+  assert.match(
+    md,
+    /^- Side A: Kael #1 — Abilities: - Ashfall \*now\* — Items: \*a chipped sword\* \(offense, Hazardous\)$/m
+  );
+  assert.match(md, /^- Created: 2026-10-21 · Terrain: a \*strange\* # place$/m);
+});
+
+test('no duels means no Duels heading', () => {
+  const md = renderBookMarkdown({ chapters: [], groups: [], guns: [], questions: [], duels: [] });
+  assert.ok(!md.includes('### Duels'));
+});
+
+test('duels export in the order handed to the renderer', () => {
+  const md = renderBookMarkdown({
+    duels: [duel({ title: 'Newest first' }), duel({ title: 'Older second' })],
+  });
+  assert.ok(md.indexOf('#### Newest first') < md.indexOf('#### Older second'));
+});

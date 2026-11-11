@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import DuelBuilder from '../components/DuelBuilder';
+import DuelList from '../components/DuelList';
 import { chapterLabel, chapterNumber } from '../chapters';
-import type { Chapter, Gun, Question, QuestionCandidate } from '../types';
+import type { Chapter, Entity, Gun, GunCandidate, GunReview, Question, QuestionCandidate, Type } from '../types';
 
-type Tab = 'guns' | 'questions';
+type Tab = 'guns' | 'questions' | 'duels';
 type QFilter = 'all' | 'open' | 'answered' | 'delivered';
 
 /* -------------------------------------------------------------------------- */
@@ -242,6 +244,78 @@ function GunEditor({
   );
 }
 
+function GunCandidateRow({
+  candidate,
+  onAccept,
+  onReject,
+}: {
+  candidate: GunCandidate;
+  onAccept: (title: string) => void;
+  onReject: () => void;
+}) {
+  const [title, setTitle] = useState(candidate.title);
+  return (
+    <li className="dw-card">
+      <div className="dw-card-meta" style={{ marginTop: 0 }}>
+        <span className="dw-ref">
+          ch.{candidate.chapter_number}
+          {candidate.chapter_title ? ` · ${candidate.chapter_title}` : ''}
+        </span>
+        {candidate.tier === 'more' && <span className="dw-badge">more</span>}
+      </div>
+      <input
+        className="q-edit"
+        value={title}
+        onChange={(ev) => setTitle(ev.target.value)}
+        aria-label="Gun title"
+      />
+      <p className="dw-gun-excerpt">{candidate.excerpt}</p>
+      <div className="dw-card-actions" style={{ opacity: 1 }}>
+        <button className="btn-primary" disabled={!title.trim()} onClick={() => onAccept(title.trim())}>
+          Add gun
+        </button>
+        <button className="btn-secondary" onClick={onReject}>
+          Not a gun
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function GunReviewModal({
+  pending,
+  onLook,
+  onLater,
+}: {
+  pending: number;
+  onLook: () => void;
+  onLater: () => void;
+}) {
+  return (
+    <div className="overlay" onClick={onLater}>
+      <div className="modal" onClick={(ev) => ev.stopPropagation()} role="dialog" aria-modal="true">
+        <div className="modal-head">
+          <h2>Potential guns found</h2>
+          <span className="progress">{pending}</span>
+        </div>
+        <div className="modal-body">
+          <p className="progress" style={{ marginTop: 0 }}>
+            {pending === 1 ? 'One object' : `${pending} objects`} from your chapters may be worth bringing back.
+            Review {pending === 1 ? 'it' : 'them'} now, or leave {pending === 1 ? 'it' : 'them'} in Planning → Guns
+            and we'll remind you tomorrow.
+          </p>
+        </div>
+        <div className="modal-foot">
+          <button onClick={onLater}>Later</button>
+          <button className="btn-primary" onClick={onLook}>
+            Look now
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Questions                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -396,10 +470,12 @@ function QuestionEditor({
 }
 
 function ScanModal({
+  kind,
   chapters,
   onClose,
   onScan,
 }: {
+  kind: 'questions' | 'guns';
   chapters: Chapter[];
   onClose: () => void;
   onScan: (ids: number[]) => Promise<void>;
@@ -409,18 +485,20 @@ function ScanModal({
   const all = chapters.length > 0 && sel.length === chapters.length;
   const toggle = (id: number) =>
     setSel((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const guns = kind === 'guns';
 
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={(ev) => ev.stopPropagation()} role="dialog" aria-modal="true">
         <div className="modal-head">
-          <h2>Scan chapters for questions</h2>
+          <h2>Scan chapters for {guns ? 'guns' : 'questions'}</h2>
           <span className="progress">{sel.length} selected</span>
         </div>
         <div className="modal-body">
           <p className="progress" style={{ marginTop: 0 }}>
-            Looks for sentences that end in a question mark. Anything you've already accepted or dismissed is
-            skipped.
+            {guns
+              ? 'Looks for objects the prose handles, describes, repeats, or promises. Anything you have accepted or dismissed is skipped.'
+              : "Looks for sentences that end in a question mark. Anything you've already accepted or dismissed is skipped."}
           </p>
           <div className="toolbar" style={{ marginTop: 0 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -470,39 +548,70 @@ function ScanModal({
 
 export default function PlanningView({
   chapters,
+  entities,
+  types,
   onChanged,
   focusGunId,
   onClearFocus,
+  onOpenEntity,
 }: {
   chapters: Chapter[];
+  entities: Entity[];
+  types: Type[];
   onChanged: () => void;
   focusGunId: number | null;
   onClearFocus: () => void;
+  onOpenEntity: (id: number) => void;
 }) {
   const [tab, setTab] = useState<Tab>('guns');
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [builderDirty, setBuilderDirty] = useState(false);
   const [guns, setGuns] = useState<Gun[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [candidates, setCandidates] = useState<QuestionCandidate[]>([]);
+  const [gunCandidates, setGunCandidates] = useState<GunCandidate[]>([]);
+  const [gunReview, setGunReview] = useState<GunReview | null>(null);
   const [gunEditor, setGunEditor] = useState<Gun | 'new' | null>(null);
   const [questionEditor, setQuestionEditor] = useState<Question | 'new' | null>(null);
-  const [scanOpen, setScanOpen] = useState(false);
+  const [scanKind, setScanKind] = useState<'questions' | 'guns' | null>(null);
+  const [showMoreGuns, setShowMoreGuns] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [filter, setFilter] = useState<QFilter>('all');
   const [notice, setNotice] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const prompted = useRef(false);
 
   // Reload when the chapter list changes (a gun may become "ready").
   const chapterSig = chapters.map((c) => `${c.id}:${c.number}:${c.sort_order}`).join('|');
   const load = useCallback(async () => {
-    const [g, q, c] = await Promise.all([api.guns(), api.questions(), api.questionCandidates()]);
+    const [g, q, c, gc, gr] = await Promise.all([
+      api.guns(),
+      api.questions(),
+      api.questionCandidates(),
+      api.gunCandidates(),
+      api.gunReview(),
+    ]);
     setGuns(g);
     setQuestions(q);
     setCandidates(c);
+    setGunCandidates(gc);
+    setGunReview(gr);
     setLoaded(true);
   }, []);
 
   useEffect(() => {
     load();
   }, [load, chapterSig]);
+
+  // The one automatic prompt per Planning visit, decided by the first review
+  // response. Later is remembered by the server until the next local day; a
+  // reload must not reopen the popup, and a scan during this visit must not
+  // trigger it after the fact.
+  useEffect(() => {
+    if (!gunReview || prompted.current) return;
+    prompted.current = true;
+    if (gunReview.due) setReviewOpen(true);
+  }, [gunReview]);
 
   const after = useCallback(async () => {
     await load();
@@ -513,10 +622,16 @@ export default function PlanningView({
   useEffect(() => {
     if (focusGunId == null || !loaded) return;
     const gun = guns.find((g) => g.id === focusGunId);
+    if (builderOpen && builderDirty && !confirm('Leave the duel builder? Nothing is saved.')) {
+      onClearFocus();
+      return;
+    }
+    setBuilderOpen(false);
+    setBuilderDirty(false);
     setTab('guns');
     if (gun) setGunEditor(gun);
     onClearFocus();
-  }, [focusGunId, loaded, guns, onClearFocus]);
+  }, [focusGunId, loaded, guns, builderOpen, builderDirty, onClearFocus]);
 
   async function decide(gun: Gun, decision: 'used' | 'discussed') {
     await api.decideGun(gun.id, { decision });
@@ -549,17 +664,33 @@ export default function PlanningView({
     await api.resolveQuestionCandidate(cand.id, { action: 'reject' });
     await after();
   }
-  async function scan(ids: number[]) {
-    const r: { created: number; skipped: number } = await api.scanQuestions(ids);
-    setScanOpen(false);
+  async function acceptGunCandidate(cand: GunCandidate, title: string) {
+    await api.resolveGunCandidate(cand.id, { action: 'accept', title });
+    setNotice('Gun added.');
+    await after();
+  }
+  async function rejectGunCandidate(cand: GunCandidate) {
+    await api.resolveGunCandidate(cand.id, { action: 'reject' });
+    await after();
+  }
+  async function scan(ids: number[], kind: 'questions' | 'guns') {
+    const r: { created: number; skipped: number } =
+      kind === 'guns' ? await api.scanGuns(ids) : await api.scanQuestions(ids);
+    setScanKind(null);
+    const noun = kind === 'guns' ? 'gun' : 'question';
     setNotice(
       r.created === 0
-        ? 'No new questions found.'
-        : `Found ${r.created} new question${r.created === 1 ? '' : 's'}${
+        ? `No new ${noun}s found.`
+        : `Found ${r.created} new ${noun}${r.created === 1 ? '' : 's'}${
             r.skipped ? ` · ${r.skipped} already tracked` : ''
           }.`
     );
     await after();
+  }
+  async function laterGunReview() {
+    setReviewOpen(false);
+    await api.laterGunReview();
+    setGunReview((prev) => (prev ? { ...prev, due: false } : prev));
   }
 
   const counts: Record<QFilter, number> = {
@@ -570,6 +701,19 @@ export default function PlanningView({
   };
   const shownQuestions = filter === 'all' ? questions : questions.filter((q) => q.status === filter);
   const openQuestions = counts.open + counts.answered;
+  const primaryGunCandidates = gunCandidates.filter((c) => c.tier === 'primary');
+  const shownGunCandidates =
+    showMoreGuns || primaryGunCandidates.length === 0 ? gunCandidates : primaryGunCandidates;
+  const moreGunCount = gunCandidates.length - primaryGunCandidates.length;
+
+  function changeTab(next: Tab) {
+    if (builderOpen && next !== 'duels') {
+      if (builderDirty && !confirm('Leave the duel builder? Nothing is saved.')) return;
+      setBuilderOpen(false);
+      setBuilderDirty(false);
+    }
+    setTab(next);
+  }
 
   return (
     <div className="main-inner">
@@ -583,15 +727,24 @@ export default function PlanningView({
         </div>
         <div className="reader-head__actions">
           {tab === 'guns' ? (
-            <button className="btn-primary" onClick={() => setGunEditor('new')}>
-              ＋ New gun
-            </button>
-          ) : (
             <>
               <button
                 className="btn-secondary"
                 disabled={chapters.length === 0}
-                onClick={() => setScanOpen(true)}
+                onClick={() => setScanKind('guns')}
+              >
+                Scan chapters
+              </button>
+              <button className="btn-primary" onClick={() => setGunEditor('new')}>
+                ＋ New gun
+              </button>
+            </>
+          ) : tab === 'questions' ? (
+            <>
+              <button
+                className="btn-secondary"
+                disabled={chapters.length === 0}
+                onClick={() => setScanKind('questions')}
               >
                 Scan chapters
               </button>
@@ -599,16 +752,29 @@ export default function PlanningView({
                 ＋ New question
               </button>
             </>
-          )}
+          ) : tab === 'duels' && !builderOpen ? (
+            <button
+              className="btn-primary"
+              onClick={() => {
+                setBuilderDirty(false);
+                setBuilderOpen(true);
+              }}
+            >
+              ＋ New duel
+            </button>
+          ) : null}
         </div>
       </div>
 
       <div className="tabs">
-        <button className={tab === 'guns' ? 'active' : ''} onClick={() => setTab('guns')}>
+        <button className={tab === 'guns' ? 'active' : ''} onClick={() => changeTab('guns')}>
           Chekhov's Guns {guns.length > 0 && <span className="badge">{guns.length}</span>}
         </button>
-        <button className={tab === 'questions' ? 'active' : ''} onClick={() => setTab('questions')}>
+        <button className={tab === 'questions' ? 'active' : ''} onClick={() => changeTab('questions')}>
           Questions {candidates.length > 0 && <span className="badge">{candidates.length}</span>}
+        </button>
+        <button className={tab === 'duels' ? 'active' : ''} onClick={() => changeTab('duels')}>
+          Duels
         </button>
       </div>
 
@@ -629,6 +795,30 @@ export default function PlanningView({
             mind; <strong>Discussed — move on</strong> defers it to the next chapter; <strong>Fired</strong> closes
             it for good.
           </p>
+          {gunCandidates.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div className="group-head">
+                <span className="group-label">Found in your chapters</span>
+                <span className="group-count">{gunCandidates.length}</span>
+                <span className="group-rule" />
+              </div>
+              <ul className="dw-list">
+                {shownGunCandidates.map((c) => (
+                  <GunCandidateRow
+                    key={c.id}
+                    candidate={c}
+                    onAccept={(title) => acceptGunCandidate(c, title)}
+                    onReject={() => rejectGunCandidate(c)}
+                  />
+                ))}
+              </ul>
+              {moreGunCount > 0 && (
+                <button className="ghost" onClick={() => setShowMoreGuns((v) => !v)}>
+                  {showMoreGuns ? 'Show less' : `Show more (${moreGunCount})`}
+                </button>
+              )}
+            </div>
+          )}
           {guns.length === 0 ? (
             <div className="empty-state">
               No guns yet. A locked chest, a scar, a debt — anything you plant that has to come back.
@@ -651,6 +841,23 @@ export default function PlanningView({
           )}
         </>
       )}
+
+      {tab === 'duels' &&
+        (builderOpen ? (
+          <DuelBuilder
+            entities={entities}
+            types={types}
+            onOpenEntity={onOpenEntity}
+            onChanged={onChanged}
+            onDirtyChange={setBuilderDirty}
+            onBack={() => {
+              setBuilderOpen(false);
+              setBuilderDirty(false);
+            }}
+          />
+        ) : (
+          <DuelList />
+        ))}
 
       {tab === 'questions' && (
         <>
@@ -752,7 +959,25 @@ export default function PlanningView({
           }}
         />
       )}
-      {scanOpen && <ScanModal chapters={chapters} onClose={() => setScanOpen(false)} onScan={scan} />}
+      {scanKind && (
+        <ScanModal
+          kind={scanKind}
+          chapters={chapters}
+          onClose={() => setScanKind(null)}
+          onScan={(ids) => scan(ids, scanKind)}
+        />
+      )}
+      {reviewOpen && gunReview && gunReview.pending > 0 && (
+        <GunReviewModal
+          pending={gunReview.pending}
+          onLook={() => {
+            setReviewOpen(false);
+            changeTab('guns');
+            setShowMoreGuns(false);
+          }}
+          onLater={laterGunReview}
+        />
+      )}
     </div>
   );
 }

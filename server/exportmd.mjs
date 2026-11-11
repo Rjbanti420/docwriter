@@ -5,7 +5,8 @@
 // and blank line. Keeping it separate is what makes the shape of the export
 // testable without starting a server.
 //
-// A "card" is one Bible entry or one Chekhov's gun:
+// A "card" is one Bible entry or one Chekhov's gun; a duel uses its own compact
+// snapshot block:
 //   { name, lines: [string], sections: [{ heading, body?, items?: [{name?, body?}] }] }
 // Everything blank is dropped, so an empty book still produces a valid file.
 
@@ -23,6 +24,98 @@ function prose(text) {
 /** Collapse a value onto one line, for a bullet. */
 function inline(text) {
   return prose(text).replace(/\s*\n\s*/g, ' ');
+}
+
+/** 18 -> "18", 25.5 -> "25.5"; matches the card's score labels. */
+function numberLabel(value) {
+  const n = Number(value) || 0;
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function joinNames(names) {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+function sideNames(sides, side) {
+  const fighters = Array.isArray(sides?.[side]) ? sides[side] : [];
+  return joinNames(fighters.map((fighter) => inline(fighter?.name)).filter(Boolean));
+}
+
+/** One fighter on one line: name, abilities in stored order, then Items. */
+function duelFighterLine(side, fighter) {
+  const name = inline(fighter?.name) || 'the fighter';
+  const dead = fighter?.dead ? ' (dead)' : '';
+  const abilities = (Array.isArray(fighter?.abilities) ? fighter.abilities : [])
+    .map((ability) => (typeof ability === 'string' ? ability : ability?.name))
+    .map(inline)
+    .filter(Boolean);
+  const items = (Array.isArray(fighter?.items) ? fighter.items : [])
+    .map((item) => {
+      const itemName = inline(item?.name);
+      if (!itemName) return '';
+      const role = ['offense', 'defense', 'both', 'none'].includes(String(item?.role ?? '').toLowerCase())
+        ? String(item.role).toLowerCase()
+        : 'both';
+      const rank = inline(item?.rank) || 'Unranked';
+      return `${itemName} (${role}, ${rank})`;
+    })
+    .filter(Boolean);
+
+  const parts = [`Side ${side}: ${name}${dead}`];
+  if (abilities.length) parts.push(`Abilities: ${abilities.join(', ')}`);
+  if (items.length) parts.push(`Items: ${items.join(', ')}`);
+  return `- ${parts.join(' — ')}`;
+}
+
+function duelMarkdown(duel) {
+  const sides = duel?.sides ?? {};
+  const outcome = duel?.outcome ?? {};
+  const out = [`#### ${inline(duel?.title) || 'Duel'}`];
+
+  const created = String(duel?.created_at ?? '').slice(0, 10);
+  const terrain = inline(sides?.terrain);
+  const meta = [];
+  if (created) meta.push(`Created: ${created}`);
+  if (terrain) meta.push(`Terrain: ${terrain}`);
+  if (meta.length) out.push(`- ${meta.join(' · ')}`);
+
+  for (const side of ['A', 'B']) {
+    const fighters = Array.isArray(sides?.[side]) ? sides[side] : [];
+    for (const fighter of fighters) out.push(duelFighterLine(side, fighter));
+  }
+
+  const winnerSide = outcome?.winnerSide === 'B' ? 'B' : 'A';
+  out.push(`- Winner: ${sideNames(sides, winnerSide) || `Side ${winnerSide}`}`);
+  if (outcome?.chosenBy) {
+    out.push('- Winner chosen by you');
+  } else if (outcome?.skillSide) {
+    out.push(`- More skilled: ${sideNames(sides, outcome.skillSide) || `Side ${outcome.skillSide}`}`);
+  }
+
+  const scores = outcome?.scores ?? {
+    A: outcome?.breakdown?.A?.score,
+    B: outcome?.breakdown?.B?.score,
+  };
+  if (scores?.A != null && scores?.B != null) {
+    out.push(`- Scores: ${numberLabel(scores.A)} vs ${numberLabel(scores.B)}`);
+  }
+
+  if (!outcome?.chosenBy) {
+    const audit = [];
+    if (outcome?.probabilityA != null && Number.isFinite(Number(outcome.probabilityA))) {
+      audit.push(`Win chance for A ${(Number(outcome.probabilityA) * 100).toFixed(1)}%`);
+    }
+    if (outcome?.seed != null && Number.isInteger(Number(outcome.seed))) audit.push(`seed ${outcome.seed}`);
+    if (outcome?.roll != null && Number.isFinite(Number(outcome.roll))) {
+      audit.push(`roll ${Number(outcome.roll).toFixed(4)}`);
+    }
+    if (audit.length) out.push(`- ${audit.join(' · ')}`);
+  }
+
+  const narrative = prose(duel?.narrative);
+  if (narrative) out.push('', narrative);
+  return out.join('\n');
 }
 
 function cardMarkdown(card) {
@@ -51,6 +144,7 @@ export function renderBookMarkdown(data) {
     groups = [],
     guns = [],
     questions = [],
+    duels = [],
     powerLevels = [],
     types = [],
   } = data ?? {};
@@ -102,6 +196,12 @@ export function renderBookMarkdown(data) {
     if (q.delivered) out.push(`  - Delivered in ${q.delivered}`);
     const answer = inline(q.answer);
     if (answer) out.push(`  - **Answer:** ${answer}`);
+  }
+
+  // Unlike the other Planning subsections, no duels means no heading at all.
+  if (duels.length > 0) {
+    out.push('', '### Duels');
+    for (const duel of duels) out.push('', duelMarkdown(duel));
   }
 
   out.push('', '## Appendix');

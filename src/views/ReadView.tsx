@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import ReaderText from '../components/ReaderText';
-import type { Chapter, ChapterDetail } from '../types';
+import type { Chapter, ChapterDetail, Entity } from '../types';
 
 const READ_SIZE_KEY = 'docwriter.readingSize';
 const MIN_READ = 15;
@@ -9,6 +9,7 @@ const DEFAULT_READ = 19;
 
 export default function ReadView({
   chapters,
+  entities,
   activeId,
   detail,
   editing,
@@ -24,6 +25,7 @@ export default function ReadView({
   onAdd,
 }: {
   chapters: Chapter[];
+  entities: Entity[];
   activeId: number | null;
   detail: ChapterDetail | null;
   editing: boolean;
@@ -155,6 +157,7 @@ export default function ReadView({
                   text={detail!.text}
                   mentions={detail!.mentions}
                   candidates={detail!.candidates}
+                  entities={entities}
                   onMention={onOpenEntity}
                   onUnknown={onOpenCandidate}
                 />

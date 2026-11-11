@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { randomInt } from 'node:crypto';
 import { db, migrate } from './db.mjs';
 import { detect, normalizeKey, findLookalike } from './detect.mjs';
 import { mergeFields, newAliasList, repointReferences } from './entitymerge.mjs';
@@ -23,6 +24,8 @@ import {
 } from './planning.mjs';
 import { isNudgeDue, NUDGE_FREQUENCIES } from './nudge.mjs';
 import { renderBookMarkdown } from './exportmd.mjs';
+import { MAX_FIGHTERS_PER_SIDE, resolveDuel, snapshotCombatants } from './duel.mjs';
+import { detectGunCandidates } from './gunscan.mjs';
 
 const require = createRequire(import.meta.url);
 const ENGLISH_WORDS = new Set(require('an-array-of-english-words'));
@@ -281,6 +284,7 @@ function runScan(chapterId, revisionId, text) {
     candidates.length,
     linked
   );
+  maybeAutoScanGuns(chapterId, text);
 
   return { found: candidates.length, linked };
 }
@@ -312,6 +316,67 @@ function chapterText(id) {
   return rev ? rev.text : '';
 }
 
+function gunScanOptions() {
+  const entities = db
+    .prepare(
+      `SELECT e.id, e.name, t.name AS typeName
+       FROM entities e LEFT JOIN types t ON t.id = e.type_id
+       WHERE e.trashed_at IS NULL`
+    )
+    .all()
+    .map((e) => ({ ...e, aliases: [] }));
+  const byId = new Map(entities.map((e) => [e.id, e]));
+  for (const a of db.prepare('SELECT entity_id, alias FROM aliases').all()) {
+    byId.get(a.entity_id)?.aliases.push(a.alias);
+  }
+  return {
+    entities,
+    excluded: [
+      ...db.prepare('SELECT normalized FROM gun_ignored').all().map((r) => r.normalized),
+      ...db
+        .prepare("SELECT normalized FROM gun_candidates WHERE status = 'accepted'")
+        .all()
+        .map((r) => r.normalized),
+    ],
+    existingGuns: db.prepare('SELECT title FROM guns').all().map((r) => r.title),
+  };
+}
+
+function scanGunChapter(chapterId) {
+  const chapter = chapterRow(chapterId);
+  if (!chapter) return { found: 0, created: 0, skipped: 0 };
+  const found = detectGunCandidates(chapterText(chapterId), gunScanOptions());
+  db.prepare("DELETE FROM gun_candidates WHERE chapter_id = ? AND status = 'pending'").run(chapterId);
+  const insert = db.prepare(
+    `INSERT INTO gun_candidates (chapter_id, title, normalized, excerpt, score, signals, tier)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  );
+  const exists = db.prepare('SELECT 1 FROM gun_candidates WHERE chapter_id = ? AND normalized = ?');
+  let created = 0;
+  for (const c of found) {
+    if (exists.get(chapterId, c.normalized)) continue;
+    insert.run(chapterId, c.title, c.normalized, c.excerpt, c.score, JSON.stringify(c.signals), c.tier);
+    created += 1;
+  }
+  db.prepare(
+    `INSERT INTO gun_scans (chapter_id, scanned_at) VALUES (?, datetime('now'))
+     ON CONFLICT(chapter_id) DO UPDATE SET scanned_at = datetime('now')`
+  ).run(chapterId);
+  return { found: found.length, created, skipped: found.length - created };
+}
+
+// Automatic scan is a one-shot: the first non-empty save of a chapter, never a
+// later revision. A failure must not take the chapter save down with it.
+function maybeAutoScanGuns(chapterId, text) {
+  if (!String(text ?? '').trim()) return;
+  if (db.prepare('SELECT 1 FROM gun_scans WHERE chapter_id = ?').get(chapterId)) return;
+  try {
+    scanGunChapter(chapterId);
+  } catch (err) {
+    console.error('[gunscan] automatic scan failed:', err);
+  }
+}
+
 function chapterMentions(id) {
   return db
     .prepare(
@@ -336,7 +401,10 @@ app.get('/api/types', (_req, res) => {
 // types); only a character's *assignment* rides the entity Save button.
 
 app.get('/api/power-levels', (_req, res) => {
-  res.json(db.prepare('SELECT * FROM power_levels ORDER BY sort_order, name').all());
+  // Same order the duel engine uses for rank positions: sort_order, then id.
+  // Ties are rare (sort_order is MAX+1 on create), but the ladder and the engine
+  // must never disagree about which level is above which.
+  res.json(db.prepare('SELECT * FROM power_levels ORDER BY sort_order, id').all());
 });
 
 app.post('/api/power-levels', (req, res) => {
@@ -917,6 +985,84 @@ app.get('/api/guns', (_req, res) => {
   res.json(allGunsWithState());
 });
 
+app.get('/api/guns/candidates', (req, res) => {
+  const status = String(req.query.status ?? 'pending');
+  const rows = db
+    .prepare(
+      `SELECT k.*, c.number AS chapter_number, c.title AS chapter_title
+       FROM gun_candidates k JOIN chapters c ON c.id = k.chapter_id
+       WHERE k.status = ?
+       ORDER BY c.sort_order, CASE k.tier WHEN 'primary' THEN 0 ELSE 1 END, k.score DESC, k.id`
+    )
+    .all(status);
+  res.json(rows);
+});
+
+app.get('/api/guns/review', (_req, res) => {
+  const pending = db.prepare("SELECT COUNT(*) AS n FROM gun_candidates WHERE status = 'pending'").get().n;
+  const later = db.prepare("SELECT value FROM meta WHERE key = 'gun_review_later_on'").get()?.value ?? '';
+  const today = todayLocal();
+  res.json({ pending, today, due: pending > 0 && later !== today });
+});
+
+app.post('/api/guns/review/later', (_req, res) => {
+  db.prepare(
+    `INSERT INTO meta (key, value) VALUES ('gun_review_later_on', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+  ).run(todayLocal());
+  res.json({ ok: true, due: false });
+});
+
+app.post('/api/guns/scan', (req, res) => {
+  const ids = Array.isArray(req.body?.chapterIds) ? req.body.chapterIds.map(Number).filter(Number.isFinite) : [];
+  if (!ids.length) return res.status(400).json({ error: 'chapterIds required' });
+  let created = 0;
+  let skipped = 0;
+  const chapters = [];
+  for (const chapterId of ids) {
+    if (!chapterRow(chapterId)) continue;
+    const scan = scanGunChapter(chapterId);
+    created += scan.created;
+    skipped += scan.skipped;
+    chapters.push({ chapterId, ...scan });
+  }
+  res.json({ created, skipped, chapters });
+});
+
+app.post('/api/guns/candidates/:id/resolve', (req, res) => {
+  const id = Number(req.params.id);
+  const cand = db.prepare('SELECT * FROM gun_candidates WHERE id = ?').get(id);
+  if (!cand) return res.status(404).json({ error: 'not found' });
+  if (cand.status !== 'pending') return res.status(409).json({ error: 'already resolved' });
+  const action = String(req.body?.action ?? '');
+
+  if (action === 'reject') {
+    db.prepare('INSERT OR IGNORE INTO gun_ignored (normalized) VALUES (?)').run(cand.normalized);
+    db.prepare("UPDATE gun_candidates SET status = 'rejected' WHERE normalized = ? AND status = 'pending'").run(
+      cand.normalized
+    );
+    return res.json({ ok: true });
+  }
+
+  if (action === 'accept') {
+    const title = String(req.body?.title ?? cand.title).trim();
+    if (!title) return res.status(400).json({ error: 'title required' });
+    const appearanceChapterId =
+      req.body?.chapterId !== undefined ? req.body.chapterId ?? null : cand.chapter_id;
+    const info = db
+      .prepare(
+        `INSERT INTO guns (title, explanation, impact, appearance_chapter_id, planned_number, updated_at)
+         VALUES (?, '', '', ?, '', datetime('now'))`
+      )
+      .run(title, appearanceChapterId);
+    const gunId = Number(info.lastInsertRowid);
+    db.prepare("UPDATE gun_candidates SET status = 'accepted', gun_id = ? WHERE id = ?").run(gunId, id);
+    return res.json({ ok: true, gunId });
+  }
+
+  res.status(400).json({ error: 'action must be "accept" or "reject"' });
+});
+
 app.get('/api/guns/:id', (req, res) => {
   const gun = db.prepare('SELECT * FROM guns WHERE id = ?').get(Number(req.params.id));
   if (!gun) return res.status(404).json({ error: 'not found' });
@@ -1026,6 +1172,200 @@ app.post('/api/guns/:id/reopen', (req, res) => {
   db.prepare('UPDATE guns SET outcome = ?, updated_at = datetime(\'now\') WHERE id = ?').run(next.outcome, id);
   insertGunHistory(id, null, history.decision, history.from_number, history.to_number);
   reconcileGuns();
+  res.json({ ok: true });
+});
+
+// ---------- Duels ----------
+//
+// A duel is written once and never recomputed. The route loads every name, rank
+// and role from the book, so a client can only choose who fights, which of their
+// stored abilities/Items they bring, and the terrain. The snapshot is stored with
+// no foreign keys, so a fighter can be deleted or merged later without breaking
+// the record.
+
+const MAX_DUEL_TERRAIN = 80;
+
+function parseDuel(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    sides: JSON.parse(row.sides),
+    outcome: JSON.parse(row.outcome),
+    narrative: row.narrative,
+    created_at: row.created_at,
+  };
+}
+
+/** One order for the Duels tab and the export: newest first, id as the tie-break. */
+function allDuels() {
+  return db.prepare('SELECT * FROM duels ORDER BY created_at DESC, id DESC').all().map(parseDuel);
+}
+
+function badDuel(message) {
+  const error = new Error(message);
+  error.status = 400;
+  return error;
+}
+
+function readDuelSides(body) {
+  const raw = body?.sides;
+  if (!Array.isArray(raw) || raw.length !== 2) throw badDuel('sides must be exactly two');
+  return raw.map((side, index) => {
+    const label = index === 0 ? 'A' : 'B';
+    if (!side || !Array.isArray(side.fighters)) throw badDuel(`side ${label} needs a fighters array`);
+    if (side.fighters.length < 1 || side.fighters.length > MAX_FIGHTERS_PER_SIDE) {
+      throw badDuel(`each side needs 1 to ${MAX_FIGHTERS_PER_SIDE} fighters`);
+    }
+    return side.fighters;
+  });
+}
+
+app.get('/api/duels', (_req, res) => {
+  res.json(allDuels());
+});
+
+app.post('/api/duels', (req, res) => {
+  try {
+    const [rawA, rawB] = readDuelSides(req.body ?? {});
+    const chosenWinner = req.body?.chosenWinner ?? null;
+    const skilledSide = req.body?.skilledSide ?? null;
+    if (chosenWinner != null && chosenWinner !== 'A' && chosenWinner !== 'B') {
+      throw badDuel('chosenWinner must be "A", "B" or null');
+    }
+    if (skilledSide != null && skilledSide !== 'A' && skilledSide !== 'B') {
+      throw badDuel('skilledSide must be "A", "B" or null');
+    }
+    const terrain = String(req.body?.terrain ?? '').trim();
+    if (terrain.length > MAX_DUEL_TERRAIN) {
+      throw badDuel(`terrain must be ${MAX_DUEL_TERRAIN} characters or fewer`);
+    }
+
+    const characters = db
+      .prepare(
+        `SELECT e.id, e.name, e.fields, e.trashed_at, t.name AS type_name
+         FROM entities e LEFT JOIN types t ON t.id = e.type_id`
+      )
+      .all();
+    const characterById = new Map(characters.map((c) => [Number(c.id), c]));
+    const items = db
+      .prepare(
+        `SELECT e.id, e.name, e.fields, e.trashed_at
+         FROM entities e JOIN types t ON t.id = e.type_id WHERE t.name = 'Item'`
+      )
+      .all();
+    const itemById = new Map(items.map((i) => [Number(i.id), i]));
+    const powerLevels = db.prepare('SELECT id, sort_order FROM power_levels ORDER BY sort_order, id').all();
+
+    const seenCharacters = new Set();
+    const itemSide = new Map();
+    const picks = { A: [], B: [] };
+    const selectedItems = new Map(); // characterId -> Set(item id)
+
+    for (const [side, list] of [
+      ['A', rawA],
+      ['B', rawB],
+    ]) {
+      for (const raw of list) {
+        if (!raw || typeof raw !== 'object') throw badDuel('each fighter needs a characterId');
+        const characterId = Number(raw.characterId);
+        const character = characterById.get(characterId);
+        if (!character || character.trashed_at) {
+          throw badDuel(`character ${raw.characterId} is missing or in Trash`);
+        }
+        if (character.type_name !== 'Character') {
+          throw badDuel(`${character.name} is not a Character`);
+        }
+        if (seenCharacters.has(characterId)) {
+          throw badDuel(`${character.name} cannot appear twice in one duel`);
+        }
+        seenCharacters.add(characterId);
+
+        const fields = parseEntityFields(character.fields);
+        const pool = Array.isArray(fields.abilities) ? fields.abilities : [];
+        const poolIds = new Set(
+          pool.filter((ability) => ability && typeof ability === 'object').map((ability) => String(ability.id))
+        );
+        const abilityIds = raw.abilityIds ?? [];
+        if (!Array.isArray(abilityIds)) throw badDuel(`abilityIds for ${character.name} must be an array`);
+        if (abilityIds.length > 3) throw badDuel(`${character.name} can use at most 3 abilities`);
+        for (const id of abilityIds) {
+          if (!poolIds.has(String(id))) {
+            throw badDuel(`ability ${id} does not belong to ${character.name}`);
+          }
+        }
+
+        const itemIds = raw.itemIds ?? [];
+        if (!Array.isArray(itemIds)) throw badDuel(`itemIds for ${character.name} must be an array`);
+        const chosenItems = new Set();
+        for (const rawItemId of itemIds) {
+          const itemId = Number(rawItemId);
+          const item = itemById.get(itemId);
+          if (!item || item.trashed_at) throw badDuel(`item ${rawItemId} is missing or in Trash`);
+          const itemFields = parseEntityFields(item.fields);
+          const owners = Array.isArray(itemFields.owners) ? itemFields.owners.map(Number) : [];
+          if (!owners.includes(characterId)) throw badDuel(`${character.name} does not hold ${item.name}`);
+          const otherSide = itemSide.get(itemId);
+          if (otherSide && otherSide !== side) throw badDuel(`${item.name} cannot be used on both sides`);
+          itemSide.set(itemId, side);
+          chosenItems.add(itemId);
+        }
+        selectedItems.set(characterId, chosenItems);
+        picks[side].push({ characterId, abilityIds: abilityIds.map(String) });
+      }
+    }
+
+    const snapshot = snapshotCombatants({
+      sides: picks,
+      characters: characters.map((c) => ({ id: c.id, name: c.name, fields: parseEntityFields(c.fields) })),
+      items: items.map((i) => ({ id: i.id, name: i.name, fields: parseEntityFields(i.fields) })),
+      powerLevels,
+    });
+    for (const side of ['A', 'B']) {
+      snapshot[side] = snapshot[side].map((fighter) => ({
+        ...fighter,
+        items: fighter.items.filter((item) => selectedItems.get(fighter.characterId)?.has(Number(item.id))),
+      }));
+    }
+
+    const seed = randomInt(0, 4294967296);
+    const result = resolveDuel({
+      sides: snapshot,
+      seed,
+      chosenWinner,
+      skilledSide: chosenWinner ? null : skilledSide,
+      terrain,
+    });
+
+    const breakdown = (side) => ({
+      ...result.scorecard[side],
+      fighters: result.scorecard[side].fighters.map((part, index) => ({
+        name: snapshot[side][index]?.name ?? 'the fighter',
+        ...part,
+      })),
+    });
+    const outcome = {
+      ...result.outcome,
+      roll: result.roll,
+      probabilityA: result.probabilityA,
+      breakdown: { A: breakdown('A'), B: breakdown('B') },
+    };
+    const sides = { terrain, A: snapshot.A, B: snapshot.B };
+    const names = (list) => list.map((fighter) => fighter.name).join(' + ');
+    const title = String(req.body?.title ?? '').trim() || `${names(snapshot.A)} vs ${names(snapshot.B)}`;
+
+    const info = db
+      .prepare('INSERT INTO duels (title, sides, outcome, narrative) VALUES (?, ?, ?, ?)')
+      .run(title, JSON.stringify(sides), JSON.stringify(outcome), result.narrative);
+    res.json(parseDuel(db.prepare('SELECT * FROM duels WHERE id = ?').get(Number(info.lastInsertRowid))));
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    throw e;
+  }
+});
+
+app.delete('/api/duels/:id', (req, res) => {
+  const info = db.prepare('DELETE FROM duels WHERE id = ?').run(Number(req.params.id));
+  if (!info.changes) return res.status(404).json({ error: 'not found' });
   res.json({ ok: true });
 });
 
@@ -1324,6 +1664,8 @@ function exportEntities(nameById, chapterNumberById, levelById) {
       sections.push({ heading: 'History', items: bagItems(fields.history) });
     } else if (type === 'Item') {
       if (String(fields.rank ?? '').trim()) lines.push(`Rank: ${fields.rank}`);
+      const role = String(fields.role ?? '').trim();
+      if (role) lines.push(`Role: ${role[0].toUpperCase()}${role.slice(1)}`);
       if (fields.evolvable === true) lines.push('Evolvable: yes');
       const owners = memberIds(fields.owners);
       if (owners.length) lines.push(`Held by: ${owners.map(nameOf).join(', ')}`);
@@ -1416,6 +1758,7 @@ app.get('/api/export', (_req, res) => {
       groups: exportEntities(nameById, chapterNumberById, levelById),
       guns: exportGuns(chapterById),
       questions: exportQuestions(chapterById),
+      duels: allDuels(),
       powerLevels: db.prepare('SELECT name FROM power_levels ORDER BY sort_order, name').all().map((l) => l.name),
       types: db.prepare('SELECT name FROM types ORDER BY sort_order, name').all().map((t) => t.name),
     });

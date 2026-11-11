@@ -174,6 +174,29 @@ export interface GunHistory {
   created_at: string;
 }
 
+/** An object the gun scan found in a chapter, waiting for Add or Ignore. */
+export interface GunCandidate {
+  id: number;
+  chapter_id: number;
+  title: string;
+  normalized: string;
+  excerpt: string;
+  score: number;
+  signals: string;
+  tier: 'primary' | 'more';
+  status: string;
+  gun_id: number | null;
+  created_at: string;
+  chapter_number: string;
+  chapter_title: string;
+}
+
+export interface GunReview {
+  pending: number;
+  today: string;
+  due: boolean;
+}
+
 export interface Question {
   id: number;
   text: string;
@@ -213,4 +236,97 @@ export interface ExportMeta {
   /** The server's local day, so the client never stamps a date of its own. */
   today: string;
   due: boolean;
+}
+
+/* ---------- Duels ---------- */
+
+export type DuelRole = 'offense' | 'defense' | 'both' | 'none';
+
+export interface DuelAbility {
+  id: string;
+  name: string;
+}
+
+export interface DuelItem {
+  id: number;
+  name: string;
+  rank: string;
+  role: DuelRole;
+}
+
+/** One fighter exactly as they entered the duel; nothing here is looked up later. */
+export interface DuelFighter {
+  characterId: number;
+  name: string;
+  dead: boolean;
+  powerRank: number;
+  abilities: DuelAbility[];
+  items: DuelItem[];
+}
+
+/** The frozen snapshot, terrain included. */
+export interface DuelSides {
+  terrain: string;
+  A: DuelFighter[];
+  B: DuelFighter[];
+}
+
+export interface DuelFighterScore {
+  name: string;
+  total: number;
+  base: number;
+  /** The stored power rank (kept for older records). */
+  power: number;
+  /** powerRank x 2; absent on duels saved before this field existed. */
+  powerPoints?: number;
+  /** The number of abilities used (kept for older records). */
+  abilities: number;
+  /** min(abilities, 3) x 1.5; absent on duels saved before this field existed. */
+  abilityPoints?: number;
+  attack: number;
+  defence: number;
+}
+
+export interface DuelSideScore {
+  fighters: DuelFighterScore[];
+  raw: number;
+  numbers: number;
+  skilled: boolean;
+  /** 1, or 1.5 when this side was picked more skilled; absent on older records. */
+  multiplier?: number;
+  score: number;
+}
+
+export interface DuelOutcome {
+  winnerSide: 'A' | 'B';
+  skillSide: 'A' | 'B' | null;
+  chosenBy: 'A' | 'B' | null;
+  seed: number;
+  roll: number;
+  probabilityA: number;
+  scores: { A: number; B: number };
+  breakdown: { A: DuelSideScore; B: DuelSideScore };
+}
+
+export interface Duel {
+  id: number;
+  title: string;
+  sides: DuelSides;
+  outcome: DuelOutcome;
+  narrative: string;
+  created_at: string;
+}
+
+export interface DuelCreateFighter {
+  characterId: number;
+  abilityIds?: Array<string | number>;
+  itemIds?: number[];
+}
+
+export interface DuelCreatePayload {
+  sides: [{ fighters: DuelCreateFighter[] }, { fighters: DuelCreateFighter[] }];
+  terrain?: string;
+  chosenWinner?: 'A' | 'B' | null;
+  skilledSide?: 'A' | 'B' | null;
+  title?: string;
 }

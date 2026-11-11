@@ -450,6 +450,7 @@ export default function App() {
           ) : (
             <ReadView
               chapters={chapters}
+              entities={entities}
               activeId={activeId}
               detail={detail}
               editing={editing}
@@ -495,9 +496,12 @@ export default function App() {
         {view === 'planning' && (
           <PlanningView
             chapters={chapters}
+            entities={entities}
+            types={types}
             onChanged={refresh}
             focusGunId={planningFocus}
             onClearFocus={() => setPlanningFocus(null)}
+            onOpenEntity={(id) => setEntityId(id)}
           />
         )}
 
