@@ -165,6 +165,7 @@ test('timeline events keep explicit order, links, and unanchor cleanly', async (
       summary: 'Kael arrives.',
       chapterId: chapter.chapter.id,
       storyTime: 'Day 3',
+      storyDay: 3,
       kind: 'battle',
       entities: [
         { entityId: kael.id, role: 'participant' },
@@ -174,13 +175,15 @@ test('timeline events keep explicit order, links, and unanchor cleanly', async (
   });
   const second = await call(srv.base, '/api/timeline/events', {
     method: 'POST',
-    body: { title: 'A quiet morning', storyTime: 'Day 1', kind: 'event' },
+    body: { title: 'A quiet morning', storyTime: 'Day 1', storyDay: 0, kind: 'event' },
   });
 
   let events = await call(srv.base, '/api/timeline/events');
   assert.equal(events.length, 2);
   assert.equal(events[0].id, first.id);
   assert.equal(events[0].story_order, 0);
+  assert.equal(events[0].story_day, 3);
+  assert.equal(events[1].story_day, 0, 'day 0 is a real day, not a blank');
   assert.equal(events[0].chapter_number, '1');
   assert.equal(events[0].entities.length, 2);
   assert.ok(events[0].entities.some((e) => e.entity_id === kael.id && e.role === 'participant'));
@@ -195,12 +198,14 @@ test('timeline events keep explicit order, links, and unanchor cleanly', async (
       summary: 'A reveal.',
       chapterId: null,
       storyTime: 'Day 4',
+      storyDay: 12,
       kind: 'reveal',
       entities: [{ entityId: kael.id, role: 'participant' }],
     },
   });
   events = await call(srv.base, '/api/timeline/events');
   assert.equal(events[0].title, 'The gate opens early');
+  assert.equal(events[0].story_day, 12, 'an update can move an event to another day');
   assert.equal(events[0].chapter_id, null);
   assert.equal(events[0].kind, 'reveal');
   assert.equal(events[0].entities.length, 1);
@@ -256,6 +261,21 @@ test('timeline events keep explicit order, links, and unanchor cleanly', async (
     body: JSON.stringify({ ids: [first.id] }),
   });
   assert.equal(badOrder.status, 400);
+
+  // A blank story day means undated. Clearing is an explicit null; the list
+  // then shows no day or gap for that event.
+  await call(srv.base, `/api/timeline/events/${second.id}`, { method: 'PUT', body: { storyDay: null } });
+  events = await call(srv.base, '/api/timeline/events');
+  assert.equal(events.find((e) => e.id === second.id).story_day, null);
+
+  for (const bad of [-1, 2.5, 'three']) {
+    const res = await fetch(`${srv.base}/api/timeline/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Bad day', storyDay: bad }),
+    });
+    assert.equal(res.status, 400, `storyDay ${bad} is rejected`);
+  }
 });
 
 test('explicit relationships are directional, editable, and merge with their cards', async (t) => {

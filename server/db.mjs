@@ -322,6 +322,8 @@ export function migrate() {
   ensureColumn('power_levels', 'color', "color TEXT DEFAULT ''");
   // alerts stay entity-centric; gun notifications hang off a nullable gun_id.
   ensureColumn('alerts', 'gun_id', 'gun_id INTEGER');
+  // story_day is an authored day count; the app only subtracts, never dates it.
+  ensureColumn('timeline_events', 'story_day', 'story_day INTEGER');
   const count = db.prepare('SELECT COUNT(*) AS n FROM types').get().n;
   if (count === 0) {
     const insert = db.prepare(

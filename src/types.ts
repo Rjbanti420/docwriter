@@ -266,6 +266,8 @@ export interface TimelineEvent {
   chapter_number: string | null;
   chapter_title: string | null;
   story_time: string;
+  /** Authored day count; null when the writer has not placed it on the day line. */
+  story_day: number | null;
   story_order: number;
   kind: TimelineKind;
   created_at: string;
@@ -278,6 +280,7 @@ export interface TimelineEventInput {
   summary: string;
   chapterId: number | null;
   storyTime: string;
+  storyDay?: number | null;
   storyOrder?: number;
   kind: TimelineKind;
   entities: Array<{ entityId: number; role: TimelineRole }>;

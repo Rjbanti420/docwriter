@@ -106,6 +106,7 @@ function EventEditor({
   const [summary, setSummary] = useState(isNew ? draft?.summary ?? '' : event.summary);
   const [chapterId, setChapterId] = useState<number | null>(isNew ? draft?.chapterId ?? null : event.chapter_id);
   const [storyTime, setStoryTime] = useState(isNew ? draft?.storyTime ?? '' : event.story_time);
+  const [storyDay, setStoryDay] = useState(isNew || event.story_day == null ? '' : String(event.story_day));
   const [kind, setKind] = useState<TimelineKind>(isNew ? 'event' : event.kind);
   const [links, setLinks] = useState<LinkDraft[]>(
     isNew
@@ -145,11 +146,18 @@ function EventEditor({
     }
     setSaving(true);
     setError('');
+    const day = storyDay.trim() === '' ? null : Number(storyDay);
+    if (day != null && (!Number.isInteger(day) || day < 0)) {
+      setSaving(false);
+      setError('Story day must be a whole number of days.');
+      return;
+    }
     const input: TimelineEventInput = {
       title: title.trim(),
       summary,
       chapterId,
       storyTime,
+      storyDay: day,
       kind,
       entities: links.map((link) => ({ entityId: link.id, role: link.role })),
     };
@@ -230,6 +238,23 @@ function EventEditor({
           </div>
 
           <div className="field">
+            <label htmlFor="tl-day">Story day</label>
+            <input
+              id="tl-day"
+              type="number"
+              min={0}
+              step={1}
+              value={storyDay}
+              onChange={(ev) => setStoryDay(ev.target.value)}
+              placeholder="e.g. 12"
+            />
+            <p className="progress">
+              Days since the story began. Leave blank if this event has no day yet; the app only counts
+              the difference.
+            </p>
+          </div>
+
+          <div className="field">
             <label htmlFor="tl-summary">What happens</label>
             <textarea
               id="tl-summary"
@@ -299,9 +324,14 @@ function EventEditor({
   );
 }
 
+function dayGapLabel(gap: number): string {
+  return `${gap > 0 ? '+' : ''}${gap} day${Math.abs(gap) === 1 ? '' : 's'}`;
+}
+
 function EventCard({
   event,
   order,
+  dayGap,
   canUp,
   canDown,
   busy,
@@ -314,6 +344,7 @@ function EventCard({
 }: {
   event: TimelineEvent;
   order: number;
+  dayGap?: number | null;
   canUp: boolean;
   canDown: boolean;
   busy: boolean;
@@ -334,6 +365,12 @@ function EventCard({
         <div className="tl-event__meta">
           <span className="tl-kind">{kindLabel(event.kind)}</span>
           {event.story_time && <span className="tl-time">{event.story_time}</span>}
+          {event.story_day != null && <span className="tl-day">Day {event.story_day}</span>}
+          {dayGap != null && (
+            <span className={`tl-gap${dayGap < 0 ? ' is-back' : ''}`} title="Days since the previous dated event">
+              {dayGapLabel(dayGap)}
+            </span>
+          )}
           <span className={`tl-anchor${chapter ? '' : ' is-unplaced'}`}>{anchorLabel(event, chapters)}</span>
         </div>
         <h3>{event.title}</h3>
@@ -569,6 +606,22 @@ export default function TimelineView({
     });
   }, [events, kindFilter, query]);
 
+  // Gaps follow story order, the same explicit order the list shows. Only
+  // dated events count; an undated event never gets a guessed place in the line.
+  const dayTrack = useMemo(() => {
+    const dated = events.filter((event) => event.story_day != null);
+    const gaps = new Map<number, number>();
+    for (let i = 1; i < dated.length; i += 1) {
+      gaps.set(dated[i].id, (dated[i].story_day as number) - (dated[i - 1].story_day as number));
+    }
+    return {
+      gaps,
+      first: dated.length > 0 ? (dated[0].story_day as number) : null,
+      last: dated.length > 1 ? (dated[dated.length - 1].story_day as number) : null,
+      span: dated.length > 1 ? (dated[dated.length - 1].story_day as number) - (dated[0].story_day as number) : null,
+    };
+  }, [events]);
+
   const moveEvent = async (id: number, direction: -1 | 1) => {
     const index = events.findIndex((event) => event.id === id);
     const nextIndex = index + direction;
@@ -766,6 +819,12 @@ export default function TimelineView({
           <p className="progress timeline-note">
             Events are explicit. Use ↑ and ↓ to set story order; the chapter is only where the scene appears.
           </p>
+          {dayTrack.span != null && (
+            <p className="tl-day-span">
+              Story days: Day {dayTrack.first} → Day {dayTrack.last} · {dayTrack.span} day
+              {Math.abs(dayTrack.span) === 1 ? '' : 's'}
+            </p>
+          )}
           <div className="tl-story-tools">
             <input
               className="tl-search"
@@ -884,6 +943,7 @@ export default function TimelineView({
                     key={event.id}
                     event={event}
                     order={index + 1}
+                    dayGap={dayTrack.gaps.get(event.id) ?? null}
                     canUp={index > 0}
                     canDown={index < events.length - 1}
                     busy={busy}

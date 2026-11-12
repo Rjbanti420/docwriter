@@ -2030,6 +2030,18 @@ function readTimelineInput(body, current = null) {
   const kind = body.kind !== undefined ? String(body.kind) : current?.kind ?? 'event';
   if (!TIMELINE_KINDS.has(kind)) return { error: 'invalid kind' };
 
+  let storyDay = current?.story_day ?? null;
+  if (body.storyDay !== undefined) {
+    if (body.storyDay === null || body.storyDay === '') {
+      storyDay = null;
+    } else {
+      storyDay = Number(body.storyDay);
+      if (!Number.isInteger(storyDay) || storyDay < 0) {
+        return { error: 'storyDay must be a whole number of days' };
+      }
+    }
+  }
+
   let storyOrder = current?.story_order ?? null;
   if (body.storyOrder !== undefined) {
     storyOrder = Number(body.storyOrder);
@@ -2064,6 +2076,7 @@ function readTimelineInput(body, current = null) {
     summary: body.summary !== undefined ? String(body.summary) : current?.summary ?? '',
     chapterId,
     storyTime: body.storyTime !== undefined ? String(body.storyTime) : current?.story_time ?? '',
+    storyDay,
     storyOrder,
     kind,
     links,
@@ -2087,10 +2100,18 @@ app.post('/api/timeline/events', (req, res) => {
   if (input.error) return res.status(400).json({ error: input.error });
   const info = db
     .prepare(
-      `INSERT INTO timeline_events (title, summary, chapter_id, story_time, story_order, kind)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO timeline_events (title, summary, chapter_id, story_time, story_day, story_order, kind)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(input.title, input.summary, input.chapterId, input.storyTime, input.storyOrder, input.kind);
+    .run(
+      input.title,
+      input.summary,
+      input.chapterId,
+      input.storyTime,
+      input.storyDay,
+      input.storyOrder,
+      input.kind
+    );
   const id = Number(info.lastInsertRowid);
   replaceTimelineLinks(id, input.links ?? []);
   res.json({ id });
@@ -2124,10 +2145,19 @@ app.put('/api/timeline/events/:id', (req, res) => {
   if (input.error) return res.status(400).json({ error: input.error });
   db.prepare(
     `UPDATE timeline_events
-     SET title = ?, summary = ?, chapter_id = ?, story_time = ?, story_order = ?, kind = ?,
+     SET title = ?, summary = ?, chapter_id = ?, story_time = ?, story_day = ?, story_order = ?, kind = ?,
          updated_at = datetime('now')
      WHERE id = ?`
-  ).run(input.title, input.summary, input.chapterId, input.storyTime, input.storyOrder, input.kind, id);
+  ).run(
+    input.title,
+    input.summary,
+    input.chapterId,
+    input.storyTime,
+    input.storyDay,
+    input.storyOrder,
+    input.kind,
+    id
+  );
   if (input.links) replaceTimelineLinks(id, input.links);
   res.json({ ok: true });
 });
