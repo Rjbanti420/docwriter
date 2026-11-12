@@ -1415,6 +1415,20 @@ function Relationships({
       )}
 
       <div className="dw-ie__rel-add">
+        <input
+          className="dw-ie__input dw-ie__input--surface"
+          list="dw-relationship-labels"
+          value={label}
+          onChange={(ev) => setLabel(ev.target.value)}
+          placeholder="e.g. ally of"
+          aria-label="Relationship label"
+          onKeyDown={(ev) => {
+            if (ev.key === 'Enter') {
+              ev.preventDefault();
+              add();
+            }
+          }}
+        />
         <EntitySelect
           value={target}
           candidates={candidates}
@@ -1423,20 +1437,6 @@ function Relationships({
           label="Relationship target"
           placeholder="Choose a card…"
           clearLabel="None"
-        />
-        <input
-          className="dw-ie__input dw-ie__input--surface"
-          list="dw-relationship-labels"
-          value={label}
-          onChange={(ev) => setLabel(ev.target.value)}
-          placeholder="relationship, e.g. parent of"
-          aria-label="Relationship label"
-          onKeyDown={(ev) => {
-            if (ev.key === 'Enter') {
-              ev.preventDefault();
-              add();
-            }
-          }}
         />
         <button
           type="button"

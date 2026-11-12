@@ -56,6 +56,14 @@ export default function RelationshipOverview({ onOpenEntity }: { onOpenEntity: (
     return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   }, [rows]);
 
+  // One colour per label, taken from the full label list so filtering never
+  // repaints the graph. The chips double as the legend.
+  const toneOf = useMemo(() => {
+    const map = new Map<string, number>();
+    labels.forEach(([name], index) => map.set(name, index % 8));
+    return map;
+  }, [labels]);
+
   const shown = useMemo(() => {
     const term = query.trim().toLowerCase();
     return (rows ?? []).filter((row) => {
@@ -130,6 +138,7 @@ export default function RelationshipOverview({ onOpenEntity }: { onOpenEntity: (
             aria-pressed={label === name}
             onClick={() => setLabel((current) => (current === name ? 'all' : name))}
           >
+            <span className={`rel-swatch rel-c${toneOf.get(name) ?? 0}`} aria-hidden="true" />
             {name} · {count}
           </button>
         ))}
@@ -140,23 +149,27 @@ export default function RelationshipOverview({ onOpenEntity }: { onOpenEntity: (
       ) : view === 'graph' ? (
         <div className="rel-graph-wrap">
           <p className="progress rel-graph__note">
-            Every line is an edge you wrote, pointing from source to target. Nodes sit in alphabetical order; the
-            circle is a layout, not a timeline.
+            Every line is an edge you wrote, pointing from source to target. Colour follows the label, so the chips
+            above are the legend. Nodes sit in alphabetical order; the circle is a layout, not a timeline.
           </p>
           <div className="rel-graph">
             <svg className="rel-graph__edges" viewBox="0 0 100 100" aria-hidden="true">
               <defs>
-                <marker
-                  id="rel-arrow"
-                  viewBox="0 0 10 10"
-                  refX="7"
-                  refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto-start-reverse"
-                >
-                  <path d="M0,0 L10,5 L0,10 z" />
-                </marker>
+                {labels.map(([name], index) => (
+                  <marker
+                    key={name}
+                    id={`rel-arrow-${index % 8}`}
+                    className={`rel-c${index % 8}`}
+                    viewBox="0 0 10 10"
+                    refX="7"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0,0 L10,5 L0,10 z" />
+                  </marker>
+                ))}
               </defs>
               {shown.map((row) => {
                 const from = positions.get(row.source_id);
@@ -170,14 +183,16 @@ export default function RelationshipOverview({ onOpenEntity }: { onOpenEntity: (
                 const length = Math.hypot(dx, dy) || 1;
                 const ux = dx / length;
                 const uy = dy / length;
+                const tone = toneOf.get(row.label) ?? 0;
                 return (
                   <line
                     key={row.id}
+                    className={`rel-c${tone}`}
                     x1={from.x + ux * half(from)}
                     y1={from.y + uy * half(from)}
                     x2={to.x - ux * half(to)}
                     y2={to.y - uy * half(to)}
-                    markerEnd="url(#rel-arrow)"
+                    markerEnd={`url(#rel-arrow-${tone})`}
                   />
                 );
               })}

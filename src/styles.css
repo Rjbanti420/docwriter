@@ -3446,7 +3446,7 @@ textarea:focus {
 }
 .dw-ie__rel-add {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) auto;
   gap: 8px;
   align-items: start;
 }
@@ -5897,12 +5897,27 @@ button.tl-link:hover {
   height: 100%;
   overflow: visible;
 }
+.rel-c0 { --rel-color: var(--color-accent); }
+.rel-c1 { --rel-color: var(--color-character); }
+.rel-c2 { --rel-color: var(--color-location); }
+.rel-c3 { --rel-color: var(--color-item); }
+.rel-c4 { --rel-color: var(--color-faction); }
+.rel-c5 { --rel-color: var(--color-positive); }
+.rel-c6 { --rel-color: var(--color-danger); }
+.rel-c7 { --rel-color: var(--color-caution); }
+.rel-swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rel-color);
+}
 .rel-graph__edges line {
-  stroke: color-mix(in srgb, var(--color-text-secondary) 55%, transparent);
-  stroke-width: 0.3;
+  stroke: var(--rel-color);
+  stroke-width: 0.35;
 }
 .rel-graph__edges marker path {
-  fill: var(--color-text-secondary);
+  fill: var(--rel-color);
 }
 .rel-graph__node {
   position: absolute;
