@@ -283,6 +283,17 @@ export interface TimelineEventInput {
   entities: Array<{ entityId: number; role: TimelineRole }>;
 }
 
+/** A prose sentence that states a time outright, offered for review. */
+export interface TimelineCandidate {
+  chapter_id: number;
+  title: string;
+  summary: string;
+  story_time: string;
+  sentence: string;
+  start: number;
+  end: number;
+}
+
 export type View = 'read' | 'review' | 'bible' | 'planning' | 'timeline';
 
 /** Export-reminder state. Kept in the book, so a relaunch still knows the answer. */

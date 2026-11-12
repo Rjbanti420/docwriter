@@ -26,6 +26,7 @@ import { isNudgeDue, NUDGE_FREQUENCIES } from './nudge.mjs';
 import { renderBookMarkdownChunks } from './exportmd.mjs';
 import { MAX_FIGHTERS_PER_SIDE, resolveDuel, snapshotCombatants } from './duel.mjs';
 import { detectGunCandidates } from './gunscan.mjs';
+import { extractEventCandidates } from './timeline-extract.mjs';
 
 const require = createRequire(import.meta.url);
 const ENGLISH_WORDS = new Set(require('an-array-of-english-words'));
@@ -1163,9 +1164,7 @@ app.get('/api/relationships', (_req, res) => {
 
 app.get('/api/entities/:id/relationships', (req, res) => {
   res.json(relationshipRowsFor(Number(req.params.id)));
-});
-
-app.post('/api/relationships', (req, res) => {
+});app.post('/api/relationships', (req, res) => {
   const input = readRelationshipInput(req.body ?? {});
   if (input.error) return res.status(400).json({ error: input.error });
   const duplicate = duplicateRelationshipId(input.sourceId, input.targetId, input.label);
@@ -1193,6 +1192,24 @@ app.put('/api/relationships/:id', (req, res) => {
 app.delete('/api/relationships/:id', (req, res) => {
   db.prepare('DELETE FROM relationships WHERE id = ?').run(Number(req.params.id));
   res.json({ ok: true });
+});
+
+// Read-only suggestions: sentences in this chapter that state a time outright.
+// Nothing is written; the author still opens the editor and saves.
+app.get('/api/chapters/:id/event-candidates', (req, res) => {
+  const id = Number(req.params.id);
+  const chapter = chapterRow(id);
+  if (!chapter) return res.status(404).json({ error: 'not found' });
+  const existing = new Set(
+    db
+      .prepare('SELECT title FROM timeline_events WHERE chapter_id = ?')
+      .all(id)
+      .map((row) => String(row.title).trim().toLowerCase())
+  );
+  const candidates = extractEventCandidates(chapterText(id))
+    .filter((candidate) => !existing.has(candidate.title.toLowerCase()))
+    .map((candidate) => ({ ...candidate, chapter_id: id }));
+  res.json(candidates);
 });
 
 // Soft delete: move one or more entities to Trash (recoverable), like the orphan

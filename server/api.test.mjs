@@ -1375,3 +1375,39 @@ test('review ships bounded rows and a candidate detail route', async (t) => {
     }
   }
 });
+
+test('event candidates are read-only prose proposals, never events', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const created = await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: {
+      number: '1',
+      title: 'One',
+      text: 'In 1204 the siege ended. Mara drew her sword and said nothing. Three years later she returned to the keep.',
+    },
+  });
+
+  let candidates = await call(srv.base, `/api/chapters/${created.chapter.id}/event-candidates`);
+  assert.equal(candidates.length, 2);
+  assert.deepEqual(
+    candidates.map((c) => c.story_time),
+    ['In 1204', 'Three years later']
+  );
+  assert.ok(candidates.every((c) => c.chapter_id === created.chapter.id));
+
+  // Reading proposals must not create events.
+  assert.deepEqual(await call(srv.base, '/api/timeline/events'), []);
+
+  await call(srv.base, '/api/timeline/events', {
+    method: 'POST',
+    body: { title: 'In 1204 the siege ended.', chapterId: created.chapter.id },
+  });
+  candidates = await call(srv.base, `/api/chapters/${created.chapter.id}/event-candidates`);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].story_time, 'Three years later');
+
+  const missing = await callError(srv.base, '/api/chapters/999999/event-candidates');
+  assert.equal(missing.status, 404);
+});

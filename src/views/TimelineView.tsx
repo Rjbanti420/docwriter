@@ -7,6 +7,7 @@ import type {
   Entity,
   Gun,
   Question,
+  TimelineCandidate,
   TimelineEvent,
   TimelineEventInput,
   TimelineKind,
@@ -78,24 +79,33 @@ function anchorLabel(event: TimelineEvent, chapters: Chapter[]): string {
   return 'Unplaced';
 }
 
+interface EventDraft {
+  title: string;
+  summary: string;
+  chapterId: number | null;
+  storyTime: string;
+}
+
 function EventEditor({
   event,
+  draft,
   chapters,
   entities,
   onClose,
   onSaved,
 }: {
   event: TimelineEvent | 'new';
+  draft?: EventDraft | null;
   chapters: Chapter[];
   entities: Entity[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const isNew = event === 'new';
-  const [title, setTitle] = useState(isNew ? '' : event.title);
-  const [summary, setSummary] = useState(isNew ? '' : event.summary);
-  const [chapterId, setChapterId] = useState<number | null>(isNew ? null : event.chapter_id);
-  const [storyTime, setStoryTime] = useState(isNew ? '' : event.story_time);
+  const [title, setTitle] = useState(isNew ? draft?.title ?? '' : event.title);
+  const [summary, setSummary] = useState(isNew ? draft?.summary ?? '' : event.summary);
+  const [chapterId, setChapterId] = useState<number | null>(isNew ? draft?.chapterId ?? null : event.chapter_id);
+  const [storyTime, setStoryTime] = useState(isNew ? draft?.storyTime ?? '' : event.story_time);
   const [kind, setKind] = useState<TimelineKind>(isNew ? 'event' : event.kind);
   const [links, setLinks] = useState<LinkDraft[]>(
     isNew
@@ -394,6 +404,12 @@ export default function TimelineView({
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [mapActiveOnly, setMapActiveOnly] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestChapterId, setSuggestChapterId] = useState<number | null>(null);
+  const [scannedChapterId, setScannedChapterId] = useState<number | null>(null);
+  const [candidates, setCandidates] = useState<TimelineCandidate[] | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [draft, setDraft] = useState<EventDraft | null>(null);
 
   const chapterSig = chapters
     .map((c) => `${c.id}:${c.number}:${c.title}:${c.sort_order}:${c.word_count}`)
@@ -586,7 +602,35 @@ export default function TimelineView({
 
   const openNew = () => {
     setTab('story');
+    setDraft(null);
     setEditor('new');
+  };
+
+  const scanChapter = async (chapterId: number) => {
+    setScanning(true);
+    setError('');
+    try {
+      setCandidates(await api.eventCandidates(chapterId));
+      setScannedChapterId(chapterId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const useCandidate = (candidate: TimelineCandidate) => {
+    setDraft({
+      title: candidate.title,
+      summary: candidate.summary,
+      chapterId: candidate.chapter_id,
+      storyTime: candidate.story_time,
+    });
+    setEditor('new');
+  };
+
+  const skipCandidate = (candidate: TimelineCandidate) => {
+    setCandidates((current) => current?.filter((item) => item !== candidate) ?? null);
   };
 
   return (
@@ -753,6 +797,74 @@ export default function TimelineView({
             </div>
           </div>
 
+          <div className="tl-suggest">
+            <button
+              type="button"
+              className="btn-secondary"
+              aria-expanded={suggestOpen}
+              onClick={() => setSuggestOpen((open) => !open)}
+            >
+              Suggest from a chapter
+            </button>
+            {suggestOpen && (
+              <div className="tl-suggest__panel">
+                <p className="progress">
+                  Only sentences that state a time are offered. Nothing is saved until you open an event and confirm
+                  it.
+                </p>
+                <div className="tl-suggest__row">
+                  <select
+                    value={suggestChapterId ?? ''}
+                    aria-label="Chapter to scan"
+                    onChange={(ev) => {
+                      const next = ev.target.value ? Number(ev.target.value) : null;
+                      setSuggestChapterId(next);
+                      setCandidates(null);
+                      setScannedChapterId(null);
+                    }}
+                  >
+                    <option value="">Choose a chapter…</option>
+                    {chapters.map((chapter) => (
+                      <option key={chapter.id} value={chapter.id}>
+                        {chapterLabel(chapter)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={!suggestChapterId || scanning}
+                    onClick={() => suggestChapterId != null && void scanChapter(suggestChapterId)}
+                  >
+                    {scanning ? 'Scanning…' : 'Scan'}
+                  </button>
+                </div>
+                {scannedChapterId != null && candidates?.length === 0 ? (
+                  <div className="dw-empty">No sentences with an explicit time cue in this chapter.</div>
+                ) : candidates && candidates.length > 0 ? (
+                  <ul className="tl-suggest__list">
+                    {candidates.map((candidate) => (
+                      <li className="tl-suggest__item" key={`${candidate.start}-${candidate.title}`}>
+                        <div className="tl-suggest__text">
+                          <span className="tl-suggest__cue">{candidate.story_time}</span>
+                          <p>{candidate.sentence}</p>
+                        </div>
+                        <div className="tl-suggest__actions">
+                          <button type="button" className="btn-secondary" onClick={() => useCandidate(candidate)}>
+                            Use
+                          </button>
+                          <button type="button" className="ghost" onClick={() => skipCandidate(candidate)}>
+                            Skip
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            )}
+          </div>
+
           {events.length === 0 ? (
             <div className="empty-state">
               <h2>No story events yet.</h2>
@@ -846,14 +958,20 @@ export default function TimelineView({
 
       {editor && (
         <EventEditor
-          key={editor === 'new' ? 'new' : editor.id}
+          key={editor === 'new' ? `new:${draft?.title ?? ''}` : editor.id}
           event={editor}
+          draft={draft}
           chapters={chapters}
           entities={entities}
-          onClose={() => setEditor(null)}
+          onClose={() => {
+            setEditor(null);
+            setDraft(null);
+          }}
           onSaved={() => {
             setEditor(null);
+            setDraft(null);
             void load();
+            if (scannedChapterId != null) void scanChapter(scannedChapterId);
           }}
         />
       )}

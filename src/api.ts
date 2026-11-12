@@ -3,6 +3,7 @@ import type {
   Duel,
   DuelCreatePayload,
   EntityRelationship,
+  TimelineCandidate,
   TimelineEvent,
   TimelineEventInput,
 } from './types';
@@ -156,6 +157,8 @@ export const api = {
     req(`/questions/candidates/${id}/resolve`, { method: 'POST', body: JSON.stringify(body) }),
 
   timelineEvents: () => req<TimelineEvent[]>('/timeline/events'),
+  eventCandidates: (chapterId: number) =>
+    req<TimelineCandidate[]>(`/chapters/${chapterId}/event-candidates`),
   createTimelineEvent: (body: TimelineEventInput) =>
     req<{ id: number }>('/timeline/events', { method: 'POST', body: JSON.stringify(body) }),
   updateTimelineEvent: (id: number, body: Partial<TimelineEventInput>) =>
