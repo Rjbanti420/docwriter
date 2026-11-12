@@ -483,10 +483,28 @@ function ScanModal({
   const [sel, setSel] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [from, setFrom] = useState(1);
+  const [to, setTo] = useState(chapters.length);
   const all = chapters.length > 0 && sel.length === chapters.length;
   const toggle = (id: number) =>
     setSel((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const guns = kind === 'guns';
+  const clamp = (value: number) => Math.min(Math.max(1, value), chapters.length || 1);
+  const setStart = (value: number) => {
+    const next = clamp(value);
+    setFrom(next);
+    setTo((end) => Math.max(end, next));
+  };
+  const setEnd = (value: number) => {
+    const next = clamp(value);
+    setTo(next);
+    setFrom((start) => Math.min(start, next));
+  };
+  const selectRange = () => {
+    const start = Math.min(from, to);
+    const end = Math.max(from, to);
+    setSel(chapters.slice(start - 1, end).map((c) => c.id));
+  };
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -502,16 +520,50 @@ function ScanModal({
               : "Looks for sentences that end in a question mark. Anything you've already accepted or dismissed is skipped."}
           </p>
           <div className="toolbar" style={{ marginTop: 0 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label className="scan-select">
               <input type="checkbox" checked={all} onChange={() => setSel(all ? [] : chapters.map((c) => c.id))} />
               Select all
             </label>
           </div>
+          <div className="scan-range">
+            <label>
+              From
+              <input
+                type="number"
+                min={1}
+                max={chapters.length}
+                value={from}
+                onChange={(ev) => setStart(Number(ev.target.value))}
+                aria-label="First chapter position"
+              />
+            </label>
+            <label>
+              To
+              <input
+                type="number"
+                min={1}
+                max={chapters.length}
+                value={to}
+                onChange={(ev) => setEnd(Number(ev.target.value))}
+                aria-label="Last chapter position"
+              />
+            </label>
+            <button type="button" className="btn-secondary" onClick={selectRange} disabled={!chapters.length}>
+              Select range
+            </button>
+            <button type="button" className="ghost" onClick={() => setSel([])} disabled={!sel.length}>
+              Clear
+            </button>
+          </div>
+          <p className="progress" style={{ marginTop: 0 }}>
+            {chapters[from - 1] ? chapterLabel(chapters[from - 1]) : '—'} →{' '}
+            {chapters[to - 1] ? chapterLabel(chapters[to - 1]) : '—'} · {sel.length} selected
+          </p>
           <div className="list">
             {chapters.map((c) => (
               <label
                 key={c.id}
-                className="card"
+                className="card scan-chapter"
                 style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', padding: '10px 14px' }}
               >
                 <input type="checkbox" checked={sel.includes(c.id)} onChange={() => toggle(c.id)} />

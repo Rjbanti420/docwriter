@@ -1,4 +1,4 @@
-import type { Duel, DuelCreatePayload } from './types';
+import type { Chapter, Duel, DuelCreatePayload, TimelineEvent, TimelineEventInput } from './types';
 
 // Keeps the old message and exposes the status plus the parsed body, so callers
 // can act on a 409 (a name already belongs to a live card) without string parsing.
@@ -90,6 +90,17 @@ export const api = {
     req('/chapters', { method: 'POST', body: JSON.stringify(body) }),
   updateChapter: (id: number, body: Record<string, unknown>) =>
     req(`/chapters/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  // Save the text first, then rescan in a second request. The writer leaves the
+  // editor as soon as the first response lands; the scan updates mentions later.
+  saveChapterText: (id: number, body: Record<string, unknown>) =>
+    req<{ chapter: Chapter; scan: null; scan_pending: boolean }>(`/chapters/${id}?scan=0`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  scanChapter: (id: number) =>
+    req<{ chapter: Chapter; scan: { found: number; linked: number } | null }>(`/chapters/${id}/scan`, {
+      method: 'POST',
+    }),
   deleteChapter: (id: number, renumber: boolean) =>
     req(`/chapters/${id}?renumber=${renumber ? 1 : 0}`, { method: 'DELETE' }),
   review: () => req('/review'),
@@ -136,6 +147,17 @@ export const api = {
   questionCandidates: (status = 'pending') => req(`/questions/candidates?status=${status}`),
   resolveQuestionCandidate: (id: number, body: Record<string, unknown>) =>
     req(`/questions/candidates/${id}/resolve`, { method: 'POST', body: JSON.stringify(body) }),
+
+  timelineEvents: () => req<TimelineEvent[]>('/timeline/events'),
+  createTimelineEvent: (body: TimelineEventInput) =>
+    req<{ id: number }>('/timeline/events', { method: 'POST', body: JSON.stringify(body) }),
+  updateTimelineEvent: (id: number, body: Partial<TimelineEventInput>) =>
+    req(`/timeline/events/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteTimelineEvent: (id: number) =>
+    req(`/timeline/events/${id}`, { method: 'DELETE' }),
+  reorderTimelineEvents: (ids: number[]) =>
+    req('/timeline/events/reorder', { method: 'PUT', body: JSON.stringify({ ids }) }),
+
   entities: () => req('/entities'),
   createEntity: (body: Record<string, unknown>) =>
     req('/entities', { method: 'POST', body: JSON.stringify(body) }),

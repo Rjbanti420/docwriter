@@ -116,6 +116,148 @@ test('saving a chapter keeps only the newest history rows', async (t) => {
   assert.equal(unread, 1, 'an unresolved alert is never pruned');
 });
 
+test('a deferred save keeps the text immediately and the scan route catches up', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const kael = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Kael' } });
+  const created = await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '1', title: 'One', text: 'Nobody moved.' },
+  });
+  const id = created.chapter.id;
+
+  const saved = await call(srv.base, `/api/chapters/${id}?scan=0`, {
+    method: 'PUT',
+    body: { text: 'Kael waited.' },
+  });
+  assert.equal(saved.scan, null, 'the deferred save does not wait for a scan');
+  assert.equal(saved.scan_pending, true);
+
+  const immediate = await call(srv.base, `/api/chapters/${id}`);
+  assert.equal(immediate.text, 'Kael waited.', 'the text is durable before the scan');
+  assert.equal(immediate.mentions.length, 0, 'the previous revision does not paint stale underlines');
+
+  const scanned = await call(srv.base, `/api/chapters/${id}/scan`, { method: 'POST' });
+  assert.ok(scanned.scan, 'the follow-up scan ran');
+  const after = await call(srv.base, `/api/chapters/${id}`);
+  assert.ok(
+    after.mentions.some((m) => m.entity_id === kael.id),
+    'the scan links the current revision'
+  );
+});
+
+test('timeline events keep explicit order, links, and unanchor cleanly', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const kael = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Kael' } });
+  const vale = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'The Vale' } });
+  const chapter = await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '1', title: 'One', text: 'Kael waited at the gate.' },
+  });
+
+  const first = await call(srv.base, '/api/timeline/events', {
+    method: 'POST',
+    body: {
+      title: 'The gate opens',
+      summary: 'Kael arrives.',
+      chapterId: chapter.chapter.id,
+      storyTime: 'Day 3',
+      kind: 'battle',
+      entities: [
+        { entityId: kael.id, role: 'participant' },
+        { entityId: vale.id, role: 'location' },
+      ],
+    },
+  });
+  const second = await call(srv.base, '/api/timeline/events', {
+    method: 'POST',
+    body: { title: 'A quiet morning', storyTime: 'Day 1', kind: 'event' },
+  });
+
+  let events = await call(srv.base, '/api/timeline/events');
+  assert.equal(events.length, 2);
+  assert.equal(events[0].id, first.id);
+  assert.equal(events[0].story_order, 0);
+  assert.equal(events[0].chapter_number, '1');
+  assert.equal(events[0].entities.length, 2);
+  assert.ok(events[0].entities.some((e) => e.entity_id === kael.id && e.role === 'participant'));
+  assert.ok(events[0].entities.some((e) => e.entity_id === vale.id && e.role === 'location'));
+  assert.equal(events[1].story_order, 1);
+  assert.equal(events[1].chapter_id, null);
+
+  await call(srv.base, `/api/timeline/events/${first.id}`, {
+    method: 'PUT',
+    body: {
+      title: 'The gate opens early',
+      summary: 'A reveal.',
+      chapterId: null,
+      storyTime: 'Day 4',
+      kind: 'reveal',
+      entities: [{ entityId: kael.id, role: 'participant' }],
+    },
+  });
+  events = await call(srv.base, '/api/timeline/events');
+  assert.equal(events[0].title, 'The gate opens early');
+  assert.equal(events[0].chapter_id, null);
+  assert.equal(events[0].kind, 'reveal');
+  assert.equal(events[0].entities.length, 1);
+
+  await call(srv.base, '/api/timeline/events/reorder', {
+    method: 'PUT',
+    body: { ids: [second.id, first.id] },
+  });
+  events = await call(srv.base, '/api/timeline/events');
+  assert.deepEqual(events.map((e) => e.id), [second.id, first.id]);
+
+  // A deleted chapter unanchors the event; a deleted entity removes only its
+  // link, never the event itself.
+  const linked = await call(srv.base, '/api/timeline/events', {
+    method: 'POST',
+    body: {
+      title: 'The gate closes',
+      chapterId: chapter.chapter.id,
+      entities: [{ entityId: kael.id, role: 'participant' }],
+    },
+  });
+  await call(srv.base, `/api/chapters/${chapter.chapter.id}`, { method: 'DELETE' });
+  events = await call(srv.base, '/api/timeline/events');
+  const afterChapter = events.find((e) => e.id === linked.id);
+  assert.equal(afterChapter.chapter_id, null);
+
+  await call(srv.base, `/api/entities/${kael.id}`, { method: 'DELETE' });
+  events = await call(srv.base, '/api/timeline/events');
+  const afterEntity = events.find((e) => e.id === linked.id);
+  assert.equal(afterEntity.entities.length, 0);
+
+  const badTitle = await fetch(`${srv.base}/api/timeline/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: '   ' }),
+  });
+  assert.equal(badTitle.status, 400);
+  const badChapter = await fetch(`${srv.base}/api/timeline/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: 'Nowhere', chapterId: 999999 }),
+  });
+  assert.equal(badChapter.status, 400);
+  const badEntity = await fetch(`${srv.base}/api/timeline/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: 'Nobody', entities: [{ entityId: 999999 }] }),
+  });
+  assert.equal(badEntity.status, 400);
+  const badOrder = await fetch(`${srv.base}/api/timeline/events/reorder`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: [first.id] }),
+  });
+  assert.equal(badOrder.status, 400);
+});
+
 test('GET /api/backup returns a whole, valid database', async (t) => {
   const srv = await startServer();
   t.after(srv.stop);

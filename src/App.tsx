@@ -11,7 +11,19 @@ import ReadView from './views/ReadView';
 import ReviewView from './views/ReviewView';
 import BibleView from './views/BibleView';
 import PlanningView from './views/PlanningView';
+import TimelineView from './views/TimelineView';
 import SettingsView from './views/SettingsView';
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  return (
+    el.tagName === 'INPUT' ||
+    el.tagName === 'TEXTAREA' ||
+    el.tagName === 'SELECT' ||
+    el.isContentEditable
+  );
+}
 
 export default function App() {
   const [types, setTypes] = useState<Type[]>([]);
@@ -32,6 +44,7 @@ export default function App() {
   const [planningFocus, setPlanningFocus] = useState<number | null>(null);
   const [meta, setMeta] = useState<ExportMeta | null>(null);
   const [nudgeOpen, setNudgeOpen] = useState(false);
+  const [scanError, setScanError] = useState<{ id: number; message: string } | null>(null);
   // One reminder per launch, not one per re-render or per refresh.
   const nudged = useRef(false);
   // A save can outlive the view: only paint its result if the writer is still
@@ -118,7 +131,9 @@ export default function App() {
         ? 'Review'
         : view === 'planning'
           ? 'Planning'
-          : 'The Bible';
+          : view === 'timeline'
+            ? 'Timeline'
+            : 'The Bible';
 
   const loadChapters = useCallback(async () => setChapters(await api.chapters()), []);
   const loadEntities = useCallback(async () => setEntities(await api.entities()), []);
@@ -308,20 +323,47 @@ export default function App() {
     [refresh, rememberChapter, writeDetail]
   );
 
+  // The text was already committed by saveChapter; this second request fills in
+  // mentions, candidates and alerts without holding the editor open.
+  const rescanChapter = useCallback(
+    async (id: number) => {
+      setScanError(null);
+      try {
+        await api.scanChapter(id);
+        await refresh();
+        const d: ChapterDetail = await api.chapter(id);
+        const rv: ReviewData = await api.review();
+        setReview(rv);
+        if (activeIdRef.current !== id) return;
+        writeDetail(d);
+        openTriage(rv.pending.filter((c) => c.chapter_id === id && c.tier !== 'demoted'));
+      } catch (err) {
+        setScanError({
+          id,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+    [refresh, writeDetail]
+  );
+
   const saveChapter = useCallback(
     async (text: string) => {
       const id = activeId;
       if (!id) return;
-      await api.updateChapter(id, { text });
-      await refresh();
-      const d: ChapterDetail = await api.chapter(id);
-      const rv: ReviewData = await api.review();
-      setReview(rv);
-      if (activeIdRef.current !== id) return;
-      writeDetail(d);
-      openTriage(rv.pending.filter((c) => c.chapter_id === id && c.tier !== 'demoted'));
+      // Save the text first. A failed request leaves the editor and draft intact
+      // so ReadView can show the retry banner.
+      const saved = await api.saveChapterText(id, { text });
+      if (activeIdRef.current === id) {
+        if (detail?.chapter.id === id) {
+          // Underlines and candidates belong to the old revision; clear them
+          // until the scan returns rather than painting stale offsets.
+          writeDetail({ chapter: saved.chapter, text, mentions: [], candidates: [] });
+        }
+      }
+      void rescanChapter(id);
     },
-    [activeId, refresh, writeDetail]
+    [activeId, detail, rescanChapter, writeDetail]
   );
 
   const deleteChapter = useCallback(
@@ -397,6 +439,68 @@ export default function App() {
     [refresh]
   );
 
+  // One keyboard layer for the paths used constantly: quick-open, chapter
+  // movement while reading, and Escape for whatever is on top.
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      const mod = ev.metaKey || ev.ctrlKey;
+      if (mod && ev.key.toLowerCase() === 'k') {
+        ev.preventDefault();
+        if (document.querySelector('.overlay')) return;
+        const input = document.querySelector<HTMLInputElement>('.search input');
+        if (!input) return;
+        input.focus();
+        input.select();
+        return;
+      }
+
+      if (ev.key === 'Escape') {
+        const overlays = document.querySelectorAll<HTMLElement>('.overlay');
+        const top = overlays[overlays.length - 1];
+        if (top) {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          top.click();
+          return;
+        }
+        const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        if (active?.closest('.search')) {
+          ev.stopImmediatePropagation();
+          active.blur();
+          return;
+        }
+        if (settingsOpen) {
+          ev.stopImmediatePropagation();
+          setSettingsOpen(false);
+          return;
+        }
+        if (menuOpen) {
+          ev.stopImmediatePropagation();
+          setMenuOpen(false);
+          return;
+        }
+        if (entityId != null) {
+          ev.stopImmediatePropagation();
+          setEntityId(null);
+        }
+        return;
+      }
+
+      if (ev.altKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
+        if (isTypingTarget(ev.target)) return;
+        ev.preventDefault();
+        if (document.querySelector('.overlay')) return;
+        const idx = chapters.findIndex((c) => c.id === activeId);
+        if (idx < 0) return;
+        const next = ev.key === 'ArrowLeft' ? idx - 1 : idx + 1;
+        if (!chapters[next]) return;
+        selectChapter(chapters[next].id);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [chapters, activeId, selectChapter, settingsOpen, menuOpen, entityId]);
+
   const pendingCount = review.pendingTotals
     ? review.pendingTotals.primary + review.pendingTotals.demoted
     : review.pending.length;
@@ -471,6 +575,20 @@ export default function App() {
               <path d="M18 12h4" />
             </svg>
             <span>Planning</span>
+          </button>
+          <button
+            className={`dw-nav__item${!settingsOpen && view === 'timeline' ? ' is-active' : ''}`}
+            aria-current={!settingsOpen && view === 'timeline' ? 'page' : undefined}
+            onClick={() => go('timeline')}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 3v18" />
+              <circle cx="5" cy="7" r="2" />
+              <circle cx="5" cy="17" r="2" />
+              <path d="M9 7h10" />
+              <path d="M9 17h10" />
+            </svg>
+            <span>Timeline</span>
           </button>
           <button
             className={`dw-nav__item${!settingsOpen && view === 'bible' ? ' is-active' : ''}`}
@@ -628,6 +746,19 @@ export default function App() {
           />
         )}
 
+        {view === 'timeline' && (
+          <TimelineView
+            chapters={chapters}
+            entities={entities}
+            onOpenChapter={selectChapter}
+            onOpenEntity={(id) => setEntityId(id)}
+            onOpenGun={(id) => {
+              setPlanningFocus(id);
+              go('planning');
+            }}
+          />
+        )}
+
         {view === 'bible' && (
           <BibleView
             entities={entities}
@@ -678,6 +809,18 @@ export default function App() {
           onNavigate={(i) => setTriage((t) => (t ? { ...t, index: i } : t))}
           onClose={() => setTriage(null)}
         />
+      )}
+
+      {scanError && (
+        <div className="app-alert" role="alert" title={scanError.message}>
+          <div>
+            <strong>Text saved.</strong> The rescan failed, so mentions may be out of date.
+          </div>
+          <button onClick={() => rescanChapter(scanError.id)}>Retry scan</button>
+          <button className="ghost" onClick={() => setScanError(null)}>
+            Dismiss
+          </button>
+        </div>
       )}
     </div>
   );

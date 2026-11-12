@@ -228,7 +228,45 @@ export interface QuestionCandidate {
   chapter_title: string;
 }
 
-export type View = 'read' | 'review' | 'bible' | 'planning';
+export type TimelineRole = 'participant' | 'location' | 'item';
+export type TimelineKind = 'event' | 'birth' | 'death' | 'battle' | 'reveal' | 'travel' | 'other';
+
+export interface TimelineEventLink {
+  entity_id: number;
+  role: TimelineRole;
+  name: string;
+  trashed_at?: string | null;
+  type_name?: string | null;
+  type_color?: string | null;
+}
+
+/** An explicit story event; chapter_id is the manuscript anchor, not the order. */
+export interface TimelineEvent {
+  id: number;
+  title: string;
+  summary: string;
+  chapter_id: number | null;
+  chapter_number: string | null;
+  chapter_title: string | null;
+  story_time: string;
+  story_order: number;
+  kind: TimelineKind;
+  created_at: string;
+  updated_at: string;
+  entities: TimelineEventLink[];
+}
+
+export interface TimelineEventInput {
+  title: string;
+  summary: string;
+  chapterId: number | null;
+  storyTime: string;
+  storyOrder?: number;
+  kind: TimelineKind;
+  entities: Array<{ entityId: number; role: TimelineRole }>;
+}
+
+export type View = 'read' | 'review' | 'bible' | 'planning' | 'timeline';
 
 /** Export-reminder state. Kept in the book, so a relaunch still knows the answer. */
 export interface ExportMeta {

@@ -35,6 +35,8 @@ export default function ReadView({
   const [showDelete, setShowDelete] = useState(false);
   const [renumber, setRenumber] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [copied, setCopied] = useState(false);
   // The editor owns the text it is showing. App is told only whether it is
   // dirty, so a chapter change cannot quietly overwrite what was typed.
   const [editing, setEditing] = useState(false);
@@ -59,14 +61,61 @@ export default function ReadView({
   const startEdit = () => {
     setDraft(detail?.text ?? '');
     setDirty(false);
+    setSaveError('');
+    setCopied(false);
     setEditing(true);
   };
 
   const cancelEdit = () => {
     setDraft(detail?.text ?? '');
     setDirty(false);
+    setSaveError('');
+    setCopied(false);
     setEditing(false);
   };
+
+  const saveDraft = async () => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      await onSave(draft);
+      setDirty(false);
+      setEditing(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copyDraft = async () => {
+    try {
+      await navigator.clipboard.writeText(draft);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setSaveError('Could not copy automatically. Select the draft text and copy it manually.');
+    }
+  };
+
+  useEffect(() => {
+    if (!editing) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 's') {
+        ev.preventDefault();
+        if (!saving) void saveDraft();
+        return;
+      }
+      if (ev.key !== 'Escape' || saving) return;
+      // Let App close a modal first; Escape in the editor only leaves the editor.
+      if (document.querySelector('.overlay')) return;
+      if (dirty && !confirm('Discard unsaved changes?')) return;
+      cancelEdit();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editing, saving, draft, dirty, onSave]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--text-reading', `${fontSize}px`);
@@ -98,11 +147,18 @@ export default function ReadView({
       {chapter && (
         <>
           <div className="toolbar">
-            <button disabled={idx <= 0 || saving} onClick={() => onSelect(chapters[idx - 1].id)}>
+            <button
+              disabled={idx <= 0 || saving}
+              aria-keyshortcuts="Alt+ArrowLeft"
+              title="Previous chapter (Alt+←)"
+              onClick={() => onSelect(chapters[idx - 1].id)}
+            >
               ← Prev
             </button>
             <button
               disabled={idx >= chapters.length - 1 || saving}
+              aria-keyshortcuts="Alt+ArrowRight"
+              title="Next chapter (Alt+→)"
               onClick={() => onSelect(chapters[idx + 1].id)}
             >
               Next →
@@ -139,22 +195,27 @@ export default function ReadView({
                 <button
                   className="primary"
                   disabled={saving}
-                  onClick={async () => {
-                    setSaving(true);
-                    try {
-                      await onSave(draft);
-                      setDirty(false);
-                      setEditing(false);
-                    } finally {
-                      setSaving(false);
-                    }
-                  }}
+                  aria-keyshortcuts="Control+S Meta+S"
+                  title="Save now (Ctrl+S). The scan continues in the background."
+                  onClick={saveDraft}
                 >
-                  {saving ? 'Saving & scanning…' : 'Save & rescan'}
+                  {saving ? 'Saving…' : 'Save & rescan'}
                 </button>
               </>
             )}
           </div>
+
+          {saveError && (
+            <div className="save-error" role="alert" title={saveError}>
+              <div>
+                <strong>Couldn’t save this chapter.</strong> Your draft is still here.
+              </div>
+              <button onClick={saveDraft} disabled={saving}>
+                Retry save
+              </button>
+              <button onClick={copyDraft}>{copied ? 'Copied' : 'Copy draft'}</button>
+            </div>
+          )}
 
           {editing ? (
             <textarea

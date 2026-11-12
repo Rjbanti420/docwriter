@@ -120,6 +120,8 @@ export default function SearchBox({
         onKeyDown={onKeyDown}
         placeholder="Search chapters & entities…"
         aria-label="Search chapters and entities"
+        aria-keyshortcuts="Control+K Meta+K"
+        title="Search chapters and entities (Ctrl+K)"
         role="combobox"
         aria-expanded={showPop && hitCount > 0}
         aria-controls="search-results"

@@ -245,6 +245,32 @@ CREATE TABLE IF NOT EXISTS gun_scans (
   scanned_at TEXT DEFAULT (datetime('now'))
 );
 
+-- The story timeline is explicit: the writer records an event, its manuscript
+-- anchor (which may be empty for a planned event), and a manual story order.
+-- story_time is display text, not a parsed date; invented calendars vary.
+CREATE TABLE IF NOT EXISTS timeline_events (
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  summary TEXT DEFAULT '',
+  chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
+  story_time TEXT DEFAULT '',
+  story_order INTEGER NOT NULL DEFAULT 0,
+  kind TEXT DEFAULT 'event',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS timeline_event_entities (
+  event_id INTEGER NOT NULL REFERENCES timeline_events(id) ON DELETE CASCADE,
+  entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  role TEXT DEFAULT 'participant',
+  PRIMARY KEY (event_id, entity_id, role)
+);
+
+CREATE INDEX IF NOT EXISTS idx_timeline_order ON timeline_events(story_order, id);
+CREATE INDEX IF NOT EXISTS idx_timeline_chapter ON timeline_events(chapter_id, story_order);
+CREATE INDEX IF NOT EXISTS idx_timeline_links_entity ON timeline_event_entities(entity_id);
+
 CREATE INDEX IF NOT EXISTS idx_guns_status ON guns(status);
 CREATE INDEX IF NOT EXISTS idx_guns_planned ON guns(planned_number);
 CREATE INDEX IF NOT EXISTS idx_gun_history_gun ON gun_history(gun_id);

@@ -486,14 +486,19 @@ function maybeAutoScanGuns(chapterId, text) {
 }
 
 function chapterMentions(id) {
+  // A deferred save can leave the previous revision's mentions behind until the
+  // scan runs; only the current revision may paint underlines in the reader.
   return db
     .prepare(
       `SELECT m.id, m.entity_id, m.start_off, m.end_off, m.surface_text,
               e.name, t.color AS type_color, t.name AS type_name
        FROM mentions m
+       JOIN chapters c ON c.id = m.chapter_id
        JOIN entities e ON e.id = m.entity_id
        LEFT JOIN types t ON t.id = e.type_id
-       WHERE m.chapter_id = ? AND e.trashed_at IS NULL ORDER BY m.start_off`
+       WHERE m.chapter_id = ? AND m.revision_id = c.current_revision_id
+         AND e.trashed_at IS NULL
+       ORDER BY m.start_off`
     )
     .all(id);
 }
@@ -610,9 +615,10 @@ app.get('/api/chapters/:id', (req, res) => {
     .prepare(
       `SELECT id, surface_text, normalized, positions, confidence, suggested_type_id, possible_entity_id, tier, status
        FROM candidates WHERE chapter_id = ? AND status IN ('pending','later') AND tier = 'primary'
+         AND revision_id = (SELECT current_revision_id FROM chapters WHERE id = ?)
        ORDER BY confidence DESC`
     )
-    .all(id)
+    .all(id, id)
     .map((c) => {
       // The reader only underlines mention spans; the id is enough for triage to
       // fetch the full contexts from /api/candidates/:id.
@@ -634,6 +640,7 @@ app.put('/api/chapters/:id', (req, res) => {
   const chapter = chapterRow(id);
   if (!chapter) return res.status(404).json({ error: 'not found' });
   const { text, number, title } = req.body ?? {};
+  const deferScan = req.query.scan === '0' || req.query.scan === 'false';
   if (number !== undefined || title !== undefined) {
     db.prepare('UPDATE chapters SET number = COALESCE(?, number), title = COALESCE(?, title) WHERE id = ?').run(
       number === undefined ? null : String(number),
@@ -650,9 +657,25 @@ app.put('/api/chapters/:id', (req, res) => {
       wordCount(text),
       id
     );
+    if (deferScan) {
+      // The text is durable now. Clear the old revision's derived rows so Review
+      // cannot show stale names while the client starts the scan.
+      db.prepare('DELETE FROM mentions WHERE chapter_id = ?').run(id);
+      db.prepare("DELETE FROM candidates WHERE chapter_id = ? AND status IN ('pending','later')").run(id);
+      return res.json({ chapter: chapterRow(id), scan: null, scan_pending: true });
+    }
     scan = runScan(id, revisionId, text);
   }
   reconcileGuns();
+  res.json({ chapter: chapterRow(id), scan });
+});
+
+app.post('/api/chapters/:id/scan', (req, res) => {
+  const id = Number(req.params.id);
+  const chapter = chapterRow(id);
+  if (!chapter) return res.status(404).json({ error: 'not found' });
+  if (!chapter.current_revision_id) return res.json({ chapter, scan: null });
+  const scan = runScan(id, chapter.current_revision_id, chapterText(id));
   res.json({ chapter: chapterRow(id), scan });
 });
 
@@ -1781,6 +1804,174 @@ app.post('/api/questions/candidates/:id/resolve', (req, res) => {
   }
 
   res.status(400).json({ error: 'action must be "accept" or "reject"' });
+});
+
+// ---------- Story timeline ----------
+//
+// Events are explicitly written by the author. A chapter is only the manuscript
+// anchor; story_order is the chronology, so a flashback can sit before the
+// chapter it appears in, and a planned event can have no chapter at all.
+
+const TIMELINE_KINDS = new Set(['event', 'birth', 'death', 'battle', 'reveal', 'travel', 'other']);
+const TIMELINE_ROLES = new Set(['participant', 'location', 'item']);
+
+function allTimelineEvents() {
+  const rows = db
+    .prepare(
+      `SELECT e.*, c.number AS chapter_number, c.title AS chapter_title
+       FROM timeline_events e
+       LEFT JOIN chapters c ON c.id = e.chapter_id
+       ORDER BY e.story_order, e.id`
+    )
+    .all();
+  const links = db
+    .prepare(
+      `SELECT l.event_id, l.entity_id, l.role, en.name, en.trashed_at,
+              t.name AS type_name, t.color AS type_color
+       FROM timeline_event_entities l
+       JOIN entities en ON en.id = l.entity_id
+       LEFT JOIN types t ON t.id = en.type_id
+       ORDER BY l.event_id, l.role, en.name`
+    )
+    .all();
+  const byId = new Map(rows.map((row) => [row.id, { ...row, entities: [] }]));
+  for (const link of links) {
+    byId.get(link.event_id)?.entities.push({
+      entity_id: link.entity_id,
+      role: link.role,
+      name: link.name,
+      trashed_at: link.trashed_at,
+      type_name: link.type_name,
+      type_color: link.type_color,
+    });
+  }
+  return rows.map((row) => byId.get(row.id));
+}
+
+function readTimelineInput(body, current = null) {
+  const title = body.title !== undefined ? String(body.title).trim() : current?.title ?? '';
+  if (!title) return { error: 'title required' };
+
+  let chapterId = current?.chapter_id ?? null;
+  if (body.chapterId !== undefined) {
+    if (body.chapterId === null || body.chapterId === '') {
+      chapterId = null;
+    } else {
+      chapterId = Number(body.chapterId);
+      if (!Number.isInteger(chapterId) || !chapterRow(chapterId)) {
+        return { error: 'chapter not found' };
+      }
+    }
+  }
+
+  const kind = body.kind !== undefined ? String(body.kind) : current?.kind ?? 'event';
+  if (!TIMELINE_KINDS.has(kind)) return { error: 'invalid kind' };
+
+  let storyOrder = current?.story_order ?? null;
+  if (body.storyOrder !== undefined) {
+    storyOrder = Number(body.storyOrder);
+    if (!Number.isInteger(storyOrder)) return { error: 'storyOrder must be an integer' };
+  }
+  if (storyOrder == null) {
+    const max = db.prepare('SELECT COALESCE(MAX(story_order), -1) AS n FROM timeline_events').get().n;
+    storyOrder = max + 1;
+  }
+
+  let links = null;
+  if (body.entities !== undefined) {
+    if (!Array.isArray(body.entities)) return { error: 'entities must be an array' };
+    links = [];
+    const seen = new Set();
+    const live = db.prepare('SELECT 1 FROM entities WHERE id = ? AND trashed_at IS NULL');
+    for (const raw of body.entities) {
+      const entityId = Number(raw?.entityId ?? raw?.id);
+      if (!Number.isInteger(entityId) || entityId <= 0) return { error: 'invalid entity' };
+      const role = String(raw?.role ?? 'participant');
+      if (!TIMELINE_ROLES.has(role)) return { error: 'invalid role' };
+      if (!live.get(entityId)) return { error: `entity not found: ${entityId}` };
+      const key = `${entityId}:${role}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      links.push({ entityId, role });
+    }
+  }
+
+  return {
+    title,
+    summary: body.summary !== undefined ? String(body.summary) : current?.summary ?? '',
+    chapterId,
+    storyTime: body.storyTime !== undefined ? String(body.storyTime) : current?.story_time ?? '',
+    storyOrder,
+    kind,
+    links,
+  };
+}
+
+function replaceTimelineLinks(eventId, links) {
+  db.prepare('DELETE FROM timeline_event_entities WHERE event_id = ?').run(eventId);
+  const insert = db.prepare(
+    'INSERT INTO timeline_event_entities (event_id, entity_id, role) VALUES (?, ?, ?)'
+  );
+  for (const link of links) insert.run(eventId, link.entityId, link.role);
+}
+
+app.get('/api/timeline/events', (_req, res) => {
+  res.json(allTimelineEvents());
+});
+
+app.post('/api/timeline/events', (req, res) => {
+  const input = readTimelineInput(req.body ?? {});
+  if (input.error) return res.status(400).json({ error: input.error });
+  const info = db
+    .prepare(
+      `INSERT INTO timeline_events (title, summary, chapter_id, story_time, story_order, kind)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(input.title, input.summary, input.chapterId, input.storyTime, input.storyOrder, input.kind);
+  const id = Number(info.lastInsertRowid);
+  replaceTimelineLinks(id, input.links ?? []);
+  res.json({ id });
+});
+
+// Reorder takes the complete, ordered id list. The client sends it after a
+// move; one transaction assigns consecutive story_order values.
+app.put('/api/timeline/events/reorder', (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number) : [];
+  const existing = db.prepare('SELECT id FROM timeline_events ORDER BY story_order, id').all().map((row) => row.id);
+  if (ids.length === 0 && existing.length === 0) return res.json({ ok: true });
+  if (
+    ids.length === 0 ||
+    ids.some((id) => !Number.isInteger(id) || id <= 0) ||
+    new Set(ids).size !== ids.length ||
+    ids.length !== existing.length ||
+    existing.some((id) => !ids.includes(id))
+  ) {
+    return res.status(400).json({ error: 'ids must list every event exactly once' });
+  }
+  const setOrder = db.prepare('UPDATE timeline_events SET story_order = ? WHERE id = ?');
+  ids.forEach((id, index) => setOrder.run(index, id));
+  res.json({ ok: true });
+});
+
+app.put('/api/timeline/events/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const current = db.prepare('SELECT * FROM timeline_events WHERE id = ?').get(id);
+  if (!current) return res.status(404).json({ error: 'not found' });
+  const input = readTimelineInput(req.body ?? {}, current);
+  if (input.error) return res.status(400).json({ error: input.error });
+  db.prepare(
+    `UPDATE timeline_events
+     SET title = ?, summary = ?, chapter_id = ?, story_time = ?, story_order = ?, kind = ?,
+         updated_at = datetime('now')
+     WHERE id = ?`
+  ).run(input.title, input.summary, input.chapterId, input.storyTime, input.storyOrder, input.kind, id);
+  if (input.links) replaceTimelineLinks(id, input.links);
+  res.json({ ok: true });
+});
+
+app.delete('/api/timeline/events/:id', (req, res) => {
+  db.prepare('DELETE FROM timeline_events WHERE id = ?').run(Number(req.params.id));
+  res.json({ ok: true });
 });
 
 // ---------- static (production build, if present) ----------
