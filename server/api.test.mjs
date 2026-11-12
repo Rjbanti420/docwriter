@@ -258,6 +258,85 @@ test('timeline events keep explicit order, links, and unanchor cleanly', async (
   assert.equal(badOrder.status, 400);
 });
 
+test('explicit relationships are directional, editable, and merge with their cards', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const aria = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Aria' } });
+  const arya = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Arya' } });
+  const blade = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'The Blade' } });
+
+  const parent = await call(srv.base, '/api/relationships', {
+    method: 'POST',
+    body: { sourceId: aria.id, targetId: arya.id, label: 'parent of', notes: 'Raised her alone.' },
+  });
+  const wielded = await call(srv.base, '/api/relationships', {
+    method: 'POST',
+    body: { sourceId: arya.id, targetId: blade.id, label: 'wields' },
+  });
+
+  let rows = await call(srv.base, `/api/entities/${aria.id}/relationships`);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, parent.id);
+  assert.equal(rows[0].source_id, aria.id);
+  assert.equal(rows[0].target_id, arya.id);
+  assert.equal(rows[0].source_name, 'Aria');
+  assert.equal(rows[0].target_name, 'Arya');
+  assert.equal(rows[0].notes, 'Raised her alone.');
+
+  rows = await call(srv.base, `/api/entities/${arya.id}/relationships`);
+  assert.deepEqual(rows.map((r) => r.id).sort(), [parent.id, wielded.id].sort());
+
+  const duplicate = await callError(srv.base, '/api/relationships', {
+    method: 'POST',
+    body: { sourceId: aria.id, targetId: arya.id, label: 'parent of' },
+  });
+  assert.equal(duplicate.status, 409);
+  const self = await callError(srv.base, '/api/relationships', {
+    method: 'POST',
+    body: { sourceId: aria.id, targetId: aria.id, label: 'self' },
+  });
+  assert.equal(self.status, 400);
+  const blank = await callError(srv.base, '/api/relationships', {
+    method: 'POST',
+    body: { sourceId: aria.id, targetId: arya.id, label: '  ' },
+  });
+  assert.equal(blank.status, 400);
+
+  await call(srv.base, `/api/relationships/${parent.id}`, {
+    method: 'PUT',
+    body: { label: 'owes', notes: 'A debt neither names.' },
+  });
+  rows = await call(srv.base, `/api/entities/${arya.id}/relationships`);
+  assert.equal(rows.find((r) => r.id === parent.id)?.label, 'owes');
+
+  const event = await call(srv.base, '/api/timeline/events', {
+    method: 'POST',
+    body: {
+      title: 'Arya takes the blade',
+      entities: [{ entityId: arya.id, role: 'participant' }],
+    },
+  });
+
+  // Arya is absorbed into Aria: her relationship to the blade repoints to Aria,
+  // while Aria --owes--> Arya collapses to a self-relation and is dropped.
+  await call(srv.base, `/api/entities/${aria.id}/merge`, {
+    method: 'POST',
+    body: { absorbedId: arya.id },
+  });
+  rows = await call(srv.base, `/api/entities/${aria.id}/relationships`);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].source_id, aria.id);
+  assert.equal(rows[0].target_id, blade.id);
+  assert.equal(rows[0].label, 'wields');
+
+  const events = await call(srv.base, '/api/timeline/events');
+  assert.equal(events.find((e) => e.id === event.id)?.entities[0]?.entity_id, aria.id);
+
+  await call(srv.base, `/api/entities/${blade.id}`, { method: 'DELETE' });
+  assert.deepEqual(await call(srv.base, `/api/entities/${aria.id}/relationships`), []);
+});
+
 test('GET /api/backup returns a whole, valid database', async (t) => {
   const srv = await startServer();
   t.after(srv.stop);

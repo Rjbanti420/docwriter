@@ -1051,6 +1051,128 @@ app.delete('/api/entities/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Explicit relationships ----------
+// source --label--> target. Both ends are shown on either card; the arrow tells
+// the reader which way the label runs. Nothing is inferred from mentions.
+
+function relationshipRowsFor(entityId) {
+  return db
+    .prepare(
+      `SELECT r.*,
+              s.name AS source_name, s.trashed_at AS source_trashed_at,
+              st.icon AS source_type_icon,
+              t.name AS target_name, t.trashed_at AS target_trashed_at,
+              tt.icon AS target_type_icon
+       FROM relationships r
+       JOIN entities s ON s.id = r.source_id
+       JOIN entities t ON t.id = r.target_id
+       LEFT JOIN types st ON st.id = s.type_id
+       LEFT JOIN types tt ON tt.id = t.type_id
+       WHERE r.source_id = ? OR r.target_id = ?
+       ORDER BY CASE WHEN r.source_id = ? THEN 0 ELSE 1 END, r.label, s.name, t.name`
+    )
+    .all(entityId, entityId, entityId);
+}
+
+function readRelationshipInput(body, current = null) {
+  const sourceId = current ? current.source_id : Number(body?.sourceId);
+  const targetId = current ? current.target_id : Number(body?.targetId);
+  const label = body?.label !== undefined ? String(body.label).trim() : current?.label ?? '';
+  if (!Number.isInteger(sourceId) || sourceId <= 0 || !Number.isInteger(targetId) || targetId <= 0) {
+    return { error: 'sourceId and targetId are required' };
+  }
+  if (sourceId === targetId) return { error: 'a card cannot relate to itself' };
+  if (!label) return { error: 'label required' };
+  // A new edge may only join live cards; an existing edge can still be relabelled
+  // if one of its cards was later moved to Trash.
+  if (!current) {
+    const live = db.prepare('SELECT 1 FROM entities WHERE id = ? AND trashed_at IS NULL');
+    if (!live.get(sourceId) || !live.get(targetId)) return { error: 'entity not found' };
+  }
+  return {
+    sourceId,
+    targetId,
+    label,
+    notes: body?.notes !== undefined ? String(body.notes) : current?.notes ?? '',
+  };
+}
+
+function duplicateRelationshipId(sourceId, targetId, label, exceptId = 0) {
+  return db
+    .prepare('SELECT id FROM relationships WHERE source_id = ? AND target_id = ? AND label = ? AND id != ?')
+    .get(sourceId, targetId, label, exceptId)?.id;
+}
+
+function mergeRelationships(survivorId, absorbedId) {
+  const rows = db
+    .prepare('SELECT id, source_id, target_id, label FROM relationships WHERE source_id = ? OR target_id = ?')
+    .all(absorbedId, absorbedId);
+  const remove = db.prepare('DELETE FROM relationships WHERE id = ?');
+  const update = db.prepare(
+    "UPDATE relationships SET source_id = ?, target_id = ?, updated_at = datetime('now') WHERE id = ?"
+  );
+  for (const row of rows) {
+    const sourceId = row.source_id === absorbedId ? survivorId : row.source_id;
+    const targetId = row.target_id === absorbedId ? survivorId : row.target_id;
+    // A↔B becomes A↔A: drop it. If A already has the same edge to the other end,
+    // keep that one and drop the absorbed duplicate.
+    if (sourceId === targetId || duplicateRelationshipId(sourceId, targetId, row.label, row.id)) {
+      remove.run(row.id);
+    } else {
+      update.run(sourceId, targetId, row.id);
+    }
+  }
+}
+
+// Timeline links use (event, entity, role) as their key, so a merge must drop
+// an absorbed duplicate before repointing the rest.
+function mergeTimelineEntityLinks(survivorId, absorbedId) {
+  db.prepare(
+    `DELETE FROM timeline_event_entities
+     WHERE entity_id = ?
+       AND EXISTS (
+         SELECT 1 FROM timeline_event_entities keep
+         WHERE keep.entity_id = ? AND keep.event_id = timeline_event_entities.event_id
+           AND keep.role = timeline_event_entities.role
+       )`
+  ).run(absorbedId, survivorId);
+  db.prepare('UPDATE timeline_event_entities SET entity_id = ? WHERE entity_id = ?').run(survivorId, absorbedId);
+}
+
+app.get('/api/entities/:id/relationships', (req, res) => {
+  res.json(relationshipRowsFor(Number(req.params.id)));
+});
+
+app.post('/api/relationships', (req, res) => {
+  const input = readRelationshipInput(req.body ?? {});
+  if (input.error) return res.status(400).json({ error: input.error });
+  const duplicate = duplicateRelationshipId(input.sourceId, input.targetId, input.label);
+  if (duplicate) return res.status(409).json({ error: 'relationship already exists', id: duplicate });
+  const info = db
+    .prepare('INSERT INTO relationships (source_id, target_id, label, notes) VALUES (?, ?, ?, ?)')
+    .run(input.sourceId, input.targetId, input.label, input.notes);
+  res.json({ id: Number(info.lastInsertRowid) });
+});
+
+app.put('/api/relationships/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const current = db.prepare('SELECT * FROM relationships WHERE id = ?').get(id);
+  if (!current) return res.status(404).json({ error: 'not found' });
+  const input = readRelationshipInput(req.body ?? {}, current);
+  if (input.error) return res.status(400).json({ error: input.error });
+  const duplicate = duplicateRelationshipId(input.sourceId, input.targetId, input.label, id);
+  if (duplicate) return res.status(409).json({ error: 'relationship already exists', id: duplicate });
+  db.prepare(
+    "UPDATE relationships SET label = ?, notes = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(input.label, input.notes, id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/relationships/:id', (req, res) => {
+  db.prepare('DELETE FROM relationships WHERE id = ?').run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
 // Soft delete: move one or more entities to Trash (recoverable), like the orphan
 // sweep. Mentions are kept so a restore re-highlights without a re-scan.
 app.post('/api/entities/trash', (req, res) => {
@@ -1165,6 +1287,8 @@ app.post('/api/entities/:id/merge', (req, res) => {
     ownersRepointed += repointed.ownersRepointed;
     if (repointed.touched) setFields.run(JSON.stringify(repointed.fields), row.id);
   }
+  mergeRelationships(id, absorbedId);
+  mergeTimelineEntityLinks(id, absorbedId);
 
   // 6. Review candidates keep pointing at the survivor.
   db.prepare('UPDATE candidates SET entity_id = ? WHERE entity_id = ?').run(id, absorbedId);

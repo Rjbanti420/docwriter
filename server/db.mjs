@@ -267,6 +267,23 @@ CREATE TABLE IF NOT EXISTS timeline_event_entities (
   PRIMARY KEY (event_id, entity_id, role)
 );
 
+-- Explicit relationships are directional: source --label--> target. They are
+-- authored, never inferred from co-occurrence. The label is free text so the
+-- writer can say "parent of", "owes", "hunts", or anything else the book needs.
+CREATE TABLE IF NOT EXISTS relationships (
+  id INTEGER PRIMARY KEY,
+  source_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  target_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE (source_id, target_id, label)
+);
+
+CREATE INDEX IF NOT EXISTS idx_relationships_source ON relationships(source_id);
+CREATE INDEX IF NOT EXISTS idx_relationships_target ON relationships(target_id);
+
 CREATE INDEX IF NOT EXISTS idx_timeline_order ON timeline_events(story_order, id);
 CREATE INDEX IF NOT EXISTS idx_timeline_chapter ON timeline_events(chapter_id, story_order);
 CREATE INDEX IF NOT EXISTS idx_timeline_links_entity ON timeline_event_entities(entity_id);

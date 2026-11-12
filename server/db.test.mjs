@@ -29,6 +29,8 @@ test('migrate is idempotent and adds duels without disturbing existing rows', as
     'idx_timeline_order',
     'idx_timeline_chapter',
     'idx_timeline_links_entity',
+    'idx_relationships_source',
+    'idx_relationships_target',
   ]) {
     assert.ok(indexes.includes(name), `missing index ${name}`);
   }

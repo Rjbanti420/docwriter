@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, CSSProperties, ReactNode } from 'react';
-import { api } from '../api';
+import { api, ApiError } from '../api';
 import { createEntityWithConflictPrompt } from '../nameConflict';
 import { fileToDataUrl, getEntityImage, parseFields } from '../entityMedia';
 import type { EntityFields } from '../entityMedia';
 import { getDeath, getLeaderId, getMemberIds, getOperatesInId, getOwnerIds } from '../entityRelations';
 import { chapterLabel, chapterNumber } from '../chapters';
-import type { Chapter, Entity, EntityDetail, PowerLevel, Type } from '../types';
+import type { Chapter, Entity, EntityDetail, EntityRelationship, PowerLevel, Type } from '../types';
 
 // Every entity type may hold an Item, except an Item itself: a possession is
 // something a person, place, nation or guild has, never another item.
@@ -19,6 +19,26 @@ const PLACE_TYPES = ['Location', 'Country'];
 
 /** Types sharing the Organisation editor: leader · members · operates in · purpose · accomplishments. */
 const ORG_TYPES = ['Organisation', 'Location', 'Country'];
+
+/** Suggestions only: a relationship label is free text, never a closed enum. */
+const RELATION_LABELS = [
+  'parent of',
+  'child of',
+  'sibling of',
+  'spouse of',
+  'ally of',
+  'rival of',
+  'mentor of',
+  'student of',
+  'member of',
+  'leads',
+  'serves',
+  'protects',
+  'hunts',
+  'owns',
+  'wields',
+  'owes',
+];
 
 /**
  * Item rank ladder, from the mundane to the singular.
@@ -161,6 +181,7 @@ export default function EntityPanel({
   onOpenEntity: (id: number) => void;
 }) {
   const [detail, setDetail] = useState<EntityDetail | null>(null);
+  const [relationships, setRelationships] = useState<EntityRelationship[]>([]);
   const [name, setName] = useState('');
   const [typeId, setTypeId] = useState<number | null>(null);
   const [summary, setSummary] = useState('');
@@ -201,8 +222,12 @@ export default function EntityPanel({
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
-    const d: EntityDetail = await api.entity(entityId);
+    const [d, relationshipRows]: [EntityDetail, EntityRelationship[]] = await Promise.all([
+      api.entity(entityId),
+      api.relationships(entityId),
+    ]);
     setDetail(d);
+    setRelationships(relationshipRows);
     setName(d.entity.name);
     setTypeId(d.entity.type_id);
     setSummary(d.entity.summary);
@@ -254,6 +279,10 @@ export default function EntityPanel({
         accomplishments: nextAccomp,
       });
     }
+  }
+
+  async function loadRelationships() {
+    setRelationships(await api.relationships(entityId));
   }
 
   async function loadLevels() {
@@ -976,6 +1005,15 @@ export default function EntityPanel({
                   )}
                 </div>
               )}
+
+            <Relationships
+              key={entityId}
+              entityId={entityId}
+              entities={entities}
+              relationships={relationships}
+              onReload={loadRelationships}
+              onOpenEntity={onOpenEntity}
+            />
           </div>
 
           <aside className="dw-ie__aside">
@@ -1184,6 +1222,248 @@ export default function EntityPanel({
           </button>
         </footer>
       </div>
+    </div>
+  );
+}
+
+/** Authored edges only: no graph is inferred from mentions or chapter order. */
+function Relationships({
+  entityId,
+  entities,
+  relationships,
+  onReload,
+  onOpenEntity,
+}: {
+  entityId: number;
+  entities: Entity[];
+  relationships: EntityRelationship[];
+  onReload: () => Promise<void>;
+  onOpenEntity: (id: number) => void;
+}) {
+  const [targetId, setTargetId] = useState<number | null>(null);
+  const [label, setLabel] = useState('');
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editLabel, setEditLabel] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const target = entities.find((e) => e.id === targetId) ?? null;
+  const candidates = entities.filter((e) => e.id !== entityId);
+
+  async function add() {
+    const text = label.trim();
+    if (!targetId || !text || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.addRelationship({
+        sourceId: entityId,
+        targetId,
+        label: text,
+        notes: notes.trim(),
+      });
+      setTargetId(null);
+      setLabel('');
+      setNotes('');
+      await onReload();
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 409
+          ? 'That relationship already exists.'
+          : 'Could not save relationship.'
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startEdit(rel: EntityRelationship) {
+    setEditingId(rel.id);
+    setEditLabel(rel.label);
+    setEditNotes(rel.notes);
+    setError('');
+  }
+
+  async function saveEdit(id: number) {
+    const text = editLabel.trim();
+    if (!text || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.updateRelationship(id, { label: text, notes: editNotes.trim() });
+      setEditingId(null);
+      await onReload();
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 409
+          ? 'That relationship already exists.'
+          : 'Could not save relationship.'
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: number) {
+    if (!confirm('Delete this relationship?')) return;
+    setError('');
+    try {
+      await api.deleteRelationship(id);
+      await onReload();
+    } catch {
+      setError('Could not delete relationship.');
+    }
+  }
+
+  return (
+    <div className="dw-ie__field">
+      <div className="dw-ie__label-row">
+        <span className="dw-ie__label">Relationships</span>
+        <span className="dw-ie__count">{relationships.length || ''}</span>
+      </div>
+
+      {relationships.length === 0 ? (
+        <span className="dw-ie__empty">No explicit relationships yet.</span>
+      ) : (
+        <div className="dw-ie__rel-list" role="list" aria-label="Relationships">
+          {relationships.map((rel) => {
+            const outgoing = rel.source_id === entityId;
+            const otherId = outgoing ? rel.target_id : rel.source_id;
+            const otherName = outgoing ? rel.target_name : rel.source_name;
+            const otherIcon = outgoing ? rel.target_type_icon : rel.source_type_icon;
+            const otherTrashed = outgoing ? rel.target_trashed_at : rel.source_trashed_at;
+            if (editingId === rel.id) {
+              return (
+                <div className="dw-ie__rel dw-ie__rel--editing" role="listitem" key={rel.id}>
+                  <span className="dw-ie__rel-dir" aria-hidden="true">
+                    {outgoing ? '→' : '←'}
+                  </span>
+                  <span className="dw-ie__rel-other">
+                    {otherIcon} {otherName}
+                  </span>
+                  <input
+                    className="dw-ie__input dw-ie__input--surface"
+                    value={editLabel}
+                    onChange={(ev) => setEditLabel(ev.target.value)}
+                    aria-label="Relationship label"
+                    autoFocus
+                  />
+                  <input
+                    className="dw-ie__input dw-ie__input--surface"
+                    value={editNotes}
+                    onChange={(ev) => setEditNotes(ev.target.value)}
+                    aria-label="Relationship note"
+                    placeholder="note"
+                  />
+                  <button
+                    type="button"
+                    className="dw-ie__btn"
+                    disabled={!editLabel.trim() || busy}
+                    onClick={() => saveEdit(rel.id)}
+                  >
+                    Save
+                  </button>
+                  <button type="button" className="ghost" onClick={() => setEditingId(null)}>
+                    Cancel
+                  </button>
+                </div>
+              );
+            }
+            return (
+              <div
+                className="dw-ie__rel"
+                role="listitem"
+                key={rel.id}
+                title={`${rel.source_name} — ${rel.label} → ${rel.target_name}`}
+              >
+                <span className="dw-ie__rel-dir" aria-hidden="true">
+                  {outgoing ? '→' : '←'}
+                </span>
+                <button
+                  type="button"
+                  className="dw-ie__alias-link"
+                  onClick={() => onOpenEntity(otherId)}
+                >
+                  {otherIcon} {otherName}
+                </button>
+                <span className="dw-ie__rel-label">{rel.label}</span>
+                {rel.notes && <span className="dw-ie__rel-notes">{rel.notes}</span>}
+                {otherTrashed && <span className="dw-ie__rel-trashed">trashed</span>}
+                <button
+                  type="button"
+                  className="dw-ie__rel-x"
+                  title="Edit relationship"
+                  aria-label="Edit relationship"
+                  onClick={() => startEdit(rel)}
+                >
+                  ✎
+                </button>
+                <button
+                  type="button"
+                  className="dw-ie__rel-x"
+                  title="Delete relationship"
+                  aria-label="Delete relationship"
+                  onClick={() => remove(rel.id)}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="dw-ie__rel-add">
+        <EntitySelect
+          value={target}
+          candidates={candidates}
+          onPick={setTargetId}
+          onOpenEntity={onOpenEntity}
+          label="Relationship target"
+          placeholder="Choose a card…"
+          clearLabel="None"
+        />
+        <input
+          className="dw-ie__input dw-ie__input--surface"
+          list="dw-relationship-labels"
+          value={label}
+          onChange={(ev) => setLabel(ev.target.value)}
+          placeholder="relationship, e.g. parent of"
+          aria-label="Relationship label"
+          onKeyDown={(ev) => {
+            if (ev.key === 'Enter') {
+              ev.preventDefault();
+              add();
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="dw-ie__btn"
+          disabled={!targetId || !label.trim() || busy}
+          onClick={add}
+        >
+          {busy ? 'Saving…' : 'Add'}
+        </button>
+      </div>
+      <input
+        className="dw-ie__input dw-ie__input--surface dw-ie__rel-note"
+        value={notes}
+        onChange={(ev) => setNotes(ev.target.value)}
+        placeholder="Optional note"
+        aria-label="Relationship note"
+      />
+      <datalist id="dw-relationship-labels">
+        {RELATION_LABELS.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+      {error && (
+        <span className="dw-ie__rel-error" role="alert">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

@@ -1,4 +1,11 @@
-import type { Chapter, Duel, DuelCreatePayload, TimelineEvent, TimelineEventInput } from './types';
+import type {
+  Chapter,
+  Duel,
+  DuelCreatePayload,
+  EntityRelationship,
+  TimelineEvent,
+  TimelineEventInput,
+} from './types';
 
 // Keeps the old message and exposes the status plus the parsed body, so callers
 // can act on a 409 (a name already belongs to a live card) without string parsing.
@@ -162,6 +169,13 @@ export const api = {
   createEntity: (body: Record<string, unknown>) =>
     req('/entities', { method: 'POST', body: JSON.stringify(body) }),
   entity: (id: number) => req(`/entities/${id}`),
+  relationships: (entityId: number) => req<EntityRelationship[]>(`/entities/${entityId}/relationships`),
+  addRelationship: (body: { sourceId: number; targetId: number; label: string; notes?: string }) =>
+    req<{ id: number }>('/relationships', { method: 'POST', body: JSON.stringify(body) }),
+  updateRelationship: (id: number, body: { label: string; notes?: string }) =>
+    req(`/relationships/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteRelationship: (id: number) =>
+    req(`/relationships/${id}`, { method: 'DELETE' }),
   updateEntity: (id: number, body: Record<string, unknown>) =>
     req(`/entities/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteEntity: (id: number) => req(`/entities/${id}`, { method: 'DELETE' }),

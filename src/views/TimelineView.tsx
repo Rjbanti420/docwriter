@@ -497,6 +497,21 @@ export default function TimelineView({
     return map;
   }, [guns, questions, entities, onOpenGun, onOpenEntity]);
 
+  // Read-only lane: markers stay in manuscript order and are never given a
+  // story position. The Story list above remains the author's explicit order.
+  const markerGroups = useMemo(() => {
+    const groups: Array<{ chapter: Chapter; markers: MapMarker[] }> = [];
+    for (const chapter of chapters) {
+      const markers = markersByChapter.get(chapter.id);
+      if (markers?.length) groups.push({ chapter, markers });
+    }
+    return groups;
+  }, [chapters, markersByChapter]);
+  const markerCount = useMemo(
+    () => markerGroups.reduce((sum, group) => sum + group.markers.length, 0),
+    [markerGroups]
+  );
+
   const totalWords = useMemo(() => chapters.reduce((sum, chapter) => sum + (chapter.word_count || 0), 0), [chapters]);
   const maxWords = useMemo(
     () => Math.max(1, ...chapters.map((chapter) => chapter.word_count || 0)),
@@ -771,6 +786,61 @@ export default function TimelineView({
               })}
             </ul>
           )}
+
+          <section className="tl-marker-lane" aria-labelledby="tl-marker-lane-title">
+            <div className="tl-marker-lane__head">
+              <h2 id="tl-marker-lane-title">Manuscript markers</h2>
+              {markerCount > 0 && (
+                <span className="tl-marker-lane__count">
+                  {markerCount} marker{markerCount === 1 ? '' : 's'}
+                </span>
+              )}
+            </div>
+            <p className="progress timeline-note">
+              Guns, questions and deaths stay in chapter order here. They are not story events and are not placed
+              in story order.
+            </p>
+            {markerGroups.length === 0 ? (
+              <div className="dw-empty">No manuscript markers yet.</div>
+            ) : (
+              <div className="tl-marker-groups">
+                {markerGroups.map(({ chapter, markers }) => (
+                  <div className="tl-marker-group" key={chapter.id}>
+                    <button
+                      type="button"
+                      className="tl-marker-group__chapter"
+                      onClick={() => onOpenChapter(chapter.id)}
+                    >
+                      {chapterLabel(chapter)}
+                    </button>
+                    <div className="tl-marker-group__items">
+                      {markers.map((marker) =>
+                        marker.action ? (
+                          <button
+                            type="button"
+                            className={`tl-marker tl-marker--${marker.kind}`}
+                            key={marker.key}
+                            title={marker.title}
+                            onClick={marker.action}
+                          >
+                            {marker.title}
+                          </button>
+                        ) : (
+                          <span
+                            className={`tl-marker tl-marker--${marker.kind}`}
+                            key={marker.key}
+                            title={marker.title}
+                          >
+                            {marker.title}
+                          </span>
+                        )
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </>
       )}
 

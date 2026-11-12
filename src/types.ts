@@ -113,6 +113,23 @@ export interface Alias {
   alias: string;
 }
 
+/** An authored, directional link between two cards: source —label→ target. */
+export interface EntityRelationship {
+  id: number;
+  source_id: number;
+  target_id: number;
+  label: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  source_name: string;
+  source_trashed_at: string | null;
+  source_type_icon: string | null;
+  target_name: string;
+  target_trashed_at: string | null;
+  target_type_icon: string | null;
+}
+
 export interface EntityDetail {
   entity: Entity;
   aliases: Alias[];
