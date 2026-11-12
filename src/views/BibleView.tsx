@@ -4,6 +4,7 @@ import { api } from '../api';
 import { createEntityWithConflictPrompt } from '../nameConflict';
 import { getDeath } from '../entityRelations';
 import { chapterNumber } from '../chapters';
+import RelationshipOverview from '../components/RelationshipOverview';
 import type { Chapter, Entity, Type } from '../types';
 
 export default function BibleView({
@@ -26,6 +27,7 @@ export default function BibleView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState<string>('all');
+  const [mode, setMode] = useState<'cards' | 'relationships'>('cards');
 
   function exitSelect() {
     setSelectMode(false);
@@ -71,31 +73,62 @@ export default function BibleView({
         <div className="reader-head__titles">
           <h1>The Bible</h1>
           <p className="reader-head__sub">
-            {entities.length} {entities.length === 1 ? 'entity' : 'entities'} · {typeCount}{' '}
-            {typeCount === 1 ? 'type' : 'types'}
+            {mode === 'cards' ? (
+              <>
+                {entities.length} {entities.length === 1 ? 'entity' : 'entities'} · {typeCount}{' '}
+                {typeCount === 1 ? 'type' : 'types'}
+              </>
+            ) : (
+              'Explicit relationships only · nothing inferred'
+            )}
           </p>
         </div>
-        <div className="reader-head__actions">
-          {selectMode ? (
-            <>
-              <button className="btn-secondary" onClick={() => setSelected(new Set(entities.map((x) => x.id)))}>
-                Select all
-              </button>
-              <button className="btn-secondary" onClick={exitSelect}>
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="btn-secondary" onClick={() => setSelectMode(true)} disabled={entities.length === 0}>
-                Select
-              </button>
-              <button className="btn-primary" onClick={() => setShowNew((v) => !v)}>＋ New entity</button>
-            </>
-          )}
-        </div>
+        {mode === 'cards' && (
+          <div className="reader-head__actions">
+            {selectMode ? (
+              <>
+                <button className="btn-secondary" onClick={() => setSelected(new Set(entities.map((x) => x.id)))}>
+                  Select all
+                </button>
+                <button className="btn-secondary" onClick={exitSelect}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="btn-secondary" onClick={() => setSelectMode(true)} disabled={entities.length === 0}>
+                  Select
+                </button>
+                <button className="btn-primary" onClick={() => setShowNew((v) => !v)}>＋ New entity</button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
+      <div className="tabs" role="tablist" aria-label="Bible views">
+        <button
+          role="tab"
+          aria-selected={mode === 'cards'}
+          className={mode === 'cards' ? 'active' : ''}
+          onClick={() => setMode('cards')}
+        >
+          Cards
+        </button>
+        <button
+          role="tab"
+          aria-selected={mode === 'relationships'}
+          className={mode === 'relationships' ? 'active' : ''}
+          onClick={() => setMode('relationships')}
+        >
+          Relationships
+        </button>
+      </div>
+
+      {mode === 'relationships' ? (
+        <RelationshipOverview onOpenEntity={onOpenEntity} />
+      ) : (
+        <>
       {selectMode && (
         <div className="select-bar">
           <span className="progress">{selected.size} selected</span>
@@ -228,6 +261,8 @@ export default function BibleView({
               </div>
             </div>
           ))}
+        </>
+      )}
         </>
       )}
     </div>

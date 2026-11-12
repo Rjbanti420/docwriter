@@ -170,6 +170,7 @@ export const api = {
     req('/entities', { method: 'POST', body: JSON.stringify(body) }),
   entity: (id: number) => req(`/entities/${id}`),
   relationships: (entityId: number) => req<EntityRelationship[]>(`/entities/${entityId}/relationships`),
+  allRelationships: () => req<EntityRelationship[]>('/relationships'),
   addRelationship: (body: { sourceId: number; targetId: number; label: string; notes?: string }) =>
     req<{ id: number }>('/relationships', { method: 'POST', body: JSON.stringify(body) }),
   updateRelationship: (id: number, body: { label: string; notes?: string }) =>

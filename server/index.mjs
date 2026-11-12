@@ -1139,6 +1139,28 @@ function mergeTimelineEntityLinks(survivorId, absorbedId) {
   db.prepare('UPDATE timeline_event_entities SET entity_id = ? WHERE entity_id = ?').run(survivorId, absorbedId);
 }
 
+// Read-only overview: every explicit edge, including edges whose card is in
+// Trash, so the list can explain a missing end instead of silently losing it.
+app.get('/api/relationships', (_req, res) => {
+  res.json(
+    db
+      .prepare(
+        `SELECT r.*,
+                s.name AS source_name, s.trashed_at AS source_trashed_at,
+                st.icon AS source_type_icon,
+                t.name AS target_name, t.trashed_at AS target_trashed_at,
+                tt.icon AS target_type_icon
+         FROM relationships r
+         JOIN entities s ON s.id = r.source_id
+         JOIN entities t ON t.id = r.target_id
+         LEFT JOIN types st ON st.id = s.type_id
+         LEFT JOIN types tt ON tt.id = t.type_id
+         ORDER BY r.label, s.name, t.name`
+      )
+      .all()
+  );
+});
+
 app.get('/api/entities/:id/relationships', (req, res) => {
   res.json(relationshipRowsFor(Number(req.params.id)));
 });

@@ -287,6 +287,12 @@ test('explicit relationships are directional, editable, and merge with their car
   rows = await call(srv.base, `/api/entities/${arya.id}/relationships`);
   assert.deepEqual(rows.map((r) => r.id).sort(), [parent.id, wielded.id].sort());
 
+  rows = await call(srv.base, '/api/relationships');
+  assert.deepEqual(rows.map((r) => r.id).sort(), [parent.id, wielded.id].sort());
+  assert.equal(rows.find((r) => r.id === parent.id)?.source_name, 'Aria');
+  assert.equal(rows.find((r) => r.id === parent.id)?.target_name, 'Arya');
+  assert.equal(rows.find((r) => r.id === parent.id)?.target_trashed_at, null);
+
   const duplicate = await callError(srv.base, '/api/relationships', {
     method: 'POST',
     body: { sourceId: aria.id, targetId: arya.id, label: 'parent of' },
