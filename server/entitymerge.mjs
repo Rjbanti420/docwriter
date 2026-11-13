@@ -30,10 +30,6 @@ export function mergeFields(survivorRaw, absorbedRaw) {
   return { ...parse(absorbedRaw), ...parse(survivorRaw) };
 }
 
-/** True when the blob parses to a non-empty object (i.e. the card "has" a field). */
-export function hasFields(raw) {
-  return Object.keys(parse(raw)).length > 0;
-}
 
 /**
  * Repoint every reference that names the absorbed entity at the survivor.

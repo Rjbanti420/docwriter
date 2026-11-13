@@ -136,6 +136,8 @@ export default function ReviewView({
   onUnignore,
   onRestore,
   onDeleteForever,
+  onRestoreMany,
+  onDeleteMany,
 }: {
   review: ReviewData;
   types: Type[];
@@ -151,6 +153,8 @@ export default function ReviewView({
   onUnignore: (id: number) => void;
   onRestore: (id: number) => void;
   onDeleteForever: (id: number) => void;
+  onRestoreMany: (ids: number[]) => Promise<void>;
+  onDeleteMany: (ids: number[]) => Promise<void>;
 }) {
   const [tab, setTab] = useState<'names' | 'alerts' | 'rejected' | 'trash'>('names');
   const [showMore, setShowMore] = useState(false);
@@ -170,14 +174,14 @@ export default function ReviewView({
   const restoreSelected = async () => {
     const ids = selectedTrash;
     clearTrashSelection();
-    for (const id of ids) await onRestore(id);
+    await onRestoreMany(ids);
   };
   const deleteSelected = () => {
     if (selectedTrash.length === 0) return;
     if (confirm(`Permanently delete ${selectedTrash.length} card(s)? This cannot be undone.`)) {
       const ids = selectedTrash;
       clearTrashSelection();
-      for (const id of ids) onDeleteForever(id);
+      void onDeleteMany(ids);
     }
   };
 

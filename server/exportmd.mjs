@@ -137,6 +137,39 @@ function cardMarkdown(card) {
   return out.join('\n');
 }
 
+function eventBlocks(events) {
+  const blocks = [];
+  let previousDay = null;
+  for (const event of events) {
+    const day = Number.isInteger(event.storyDay) ? event.storyDay : null;
+    let gap = '';
+    if (day != null && previousDay != null) {
+      const delta = day - previousDay;
+      gap = ` (${delta >= 0 ? '+' : ''}${delta} ${Math.abs(delta) === 1 ? 'day' : 'days'})`;
+    }
+    if (day != null) previousDay = day;
+
+    const dayPart = day != null ? `Day ${day}${gap} · ` : '';
+    const rawKind = inline(event.kind);
+    const kind = rawKind ? rawKind[0].toUpperCase() + rawKind.slice(1) : '';
+    const lines = ['', `- **${dayPart}${inline(event.title) || 'Untitled event'}**${kind ? ` — ${kind}` : ''}`];
+    const chapter = inline(event.chapter);
+    lines.push(chapter ? `  - Chapter: ${chapter}` : '  - Unplaced');
+    if (inline(event.storyTime)) lines.push(`  - Story time: ${inline(event.storyTime)}`);
+    const links = (Array.isArray(event.links) ? event.links : [])
+      .map((link) => {
+        const name = inline(link?.name);
+        const role = inline(link?.role);
+        return name ? `${name}${role ? ` (${role})` : ''}` : '';
+      })
+      .filter(Boolean);
+    if (links.length) lines.push(`  - Cards: ${links.join(', ')}`);
+    if (inline(event.summary)) lines.push(`  - Summary: ${inline(event.summary)}`);
+    blocks.push(lines.join('\n'));
+  }
+  return blocks;
+}
+
 export function* renderBookMarkdownChunks(data) {
   const {
     exportedAt = '',
@@ -144,6 +177,8 @@ export function* renderBookMarkdownChunks(data) {
     groups = [],
     guns = [],
     questions = [],
+    events = [],
+    relationships = [],
     duels = [],
     powerLevels = [],
     types = [],
@@ -187,6 +222,22 @@ export function* renderBookMarkdownChunks(data) {
     }
   }
 
+  // Explicit links are authored data, so the file keeps them with both names
+  // spelled out. Edges to Trash never reach the route.
+  const relationshipSection = ['', '### Relationships'];
+  if (relationships.length === 0) {
+    relationshipSection.push('', '_No relationships yet._');
+  } else {
+    for (const relation of relationships) {
+      relationshipSection.push(
+        '',
+        `- **${inline(relation.source)}** → ${inline(relation.label)} → **${inline(relation.target)}**`
+      );
+      if (inline(relation.notes)) relationshipSection.push(`  - Note: ${inline(relation.notes)}`);
+    }
+  }
+  yield relationshipSection;
+
   if (guns.length === 0) {
     yield ['', '## Planning', '', "### Chekhov's Guns", '', '_No guns yet._'];
   } else {
@@ -212,6 +263,14 @@ export function* renderBookMarkdownChunks(data) {
   if (duels.length > 0) {
     yield ['', '### Duels'];
     for (const duel of duels) yield ['', duelMarkdown(duel)];
+  }
+
+  yield ['', '## Story'];
+  if (events.length === 0) {
+    yield ['', '_No story events yet._'];
+  } else {
+    yield ['', '### Events'];
+    for (const block of eventBlocks(events)) yield block.split('\n');
   }
 
   yield [

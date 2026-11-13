@@ -16,6 +16,8 @@ export default function ReadView({
   onSave,
   onDelete,
   onDirtyChange,
+  onReadingSizeChange,
+  readingSize,
   onOpenEntity,
   onOpenCandidate,
   onAdd,
@@ -28,6 +30,8 @@ export default function ReadView({
   onSave: (text: string) => Promise<void>;
   onDelete: (renumber: boolean) => Promise<void>;
   onDirtyChange: (dirty: boolean) => void;
+  onReadingSizeChange: (size: number) => void;
+  readingSize: number | null;
   onOpenEntity: (id: number) => void;
   onOpenCandidate: (id: number) => void;
   onAdd: () => void;
@@ -57,6 +61,11 @@ export default function ReadView({
   useEffect(() => {
     onDirtyChange(dirty);
   }, [dirty, onDirtyChange]);
+
+  const changeReadingSize = (next: number) => {
+    setFontSize(next);
+    onReadingSizeChange(next);
+  };
 
   const startEdit = () => {
     setDraft(detail?.text ?? '');
@@ -124,6 +133,13 @@ export default function ReadView({
     } catch {}
   }, [fontSize]);
 
+  // The book's saved size arrives after the first render; adopt it unless the
+  // writer has already picked another.
+  useEffect(() => {
+    if (readingSize == null || readingSize < MIN_READ || readingSize > MAX_READ) return;
+    setFontSize((current) => (current === DEFAULT_READ ? readingSize : current));
+  }, [readingSize]);
+
   if (chapters.length === 0) {
     return (
       <div className="main-inner">
@@ -169,7 +185,7 @@ export default function ReadView({
               title="Smaller text"
               aria-label="Decrease text size"
               disabled={fontSize <= MIN_READ}
-              onClick={() => setFontSize((s) => Math.max(MIN_READ, s - 1))}
+              onClick={() => changeReadingSize(Math.max(MIN_READ, fontSize - 1))}
             >
               A−
             </button>
@@ -178,7 +194,7 @@ export default function ReadView({
               title="Larger text"
               aria-label="Increase text size"
               disabled={fontSize >= MAX_READ}
-              onClick={() => setFontSize((s) => Math.min(MAX_READ, s + 1))}
+              onClick={() => changeReadingSize(Math.min(MAX_READ, fontSize + 1))}
             >
               A+
             </button>
@@ -264,7 +280,8 @@ export default function ReadView({
             <div className="modal-body">
               <p>
                 This removes the chapter, its text, and every mention, scan and alert that came from it.
-                Character cards are kept; a card with no remaining appearances gets flagged in Review.
+                Character cards are kept; a card with no remaining appearances moves to Review → Trash,
+                where you can restore it.
               </p>
               <div className="field">
                 <label>Numbering</label>

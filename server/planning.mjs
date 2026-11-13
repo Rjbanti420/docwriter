@@ -58,13 +58,6 @@ export function isGunReady(gun, chapters = []) {
   return resolvePlanned(gun, chapters) != null;
 }
 
-// True when this specific chapter is the one the gun was waiting on. A gun
-// whose payoff already happened (Used) or that was fired stays quiet.
-export function plannedMatchesChapter(gun, chapter) {
-  if (isGunSettled(gun)) return false;
-  const planned = String(gun?.planned_number ?? '').trim();
-  return planned !== '' && planned === effectiveNumber(chapter);
-}
 
 // Numeric successor of a chapter number ("14" -> "15"); non-numeric is left
 // alone so the author can type the next value.
@@ -110,7 +103,7 @@ export function gunDecide(gun, decision, newNumber = '', chapter = null) {
 
 // Undo a Used decision: the payoff record is revisitable, so the gun goes back
 // in play (and will notify again if its planned chapter is still due). Firing
-// is the permanent one; it has its own `unfire` reversal.
+// is the permanent one — the UI confirms before it, and there is no reversal.
 // Returns the next gun row plus the history row describing the reopen.
 export function gunReopen(gun) {
   return {

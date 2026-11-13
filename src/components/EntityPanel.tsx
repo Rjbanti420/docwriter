@@ -217,6 +217,7 @@ export default function EntityPanel({
   const [newItemName, setNewItemName] = useState('');
   const [deathDraft, setDeathDraft] = useState('');
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [image, setImage] = useState<string | null>(null);
   const [full, setFull] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -298,18 +299,6 @@ export default function EntityPanel({
     load();
   }, [entityId]);
 
-  useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => {
-      if (ev.key !== 'Escape') return;
-      // An open dropdown consumes the first Escape; only then close the panel.
-      // (Section disclosures also carry aria-expanded, so match the dropdowns.)
-      if (document.querySelector('.dw-ie [aria-haspopup="listbox"][aria-expanded="true"]')) return;
-      onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   const isItemType = detail?.entity.type_name === 'Item';
   const isCharacterType = detail?.entity.type_name === 'Character';
   const isOrgLike = ORG_TYPES.includes(detail?.entity.type_name ?? '');
@@ -339,8 +328,36 @@ export default function EntityPanel({
             : tracking !== (detail.entity.tracking || 'off') ||
               threshold !== (detail.entity.gap_threshold != null ? String(detail.entity.gap_threshold) : '')));
 
+  // Every way out of the panel warns once if it would throw away edits.
+  function leave() {
+    if (dirty && !confirm('Discard your unsaved changes to this card?')) return false;
+    return true;
+  }
+  function requestClose() {
+    if (leave()) onClose();
+  }
+  function requestOpenEntity(id: number) {
+    if (leave()) onOpenEntity(id);
+  }
+  function requestOpenChapter(id: number) {
+    if (leave()) onOpenChapter(id);
+  }
+
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape') return;
+      // An open dropdown consumes the first Escape; only then close the panel.
+      // (Section disclosures also carry aria-expanded, so match the dropdowns.)
+      if (document.querySelector('.dw-ie [aria-haspopup="listbox"][aria-expanded="true"]')) return;
+      if (leave()) onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [dirty, onClose]);
+
   async function save() {
     if (!thresholdValid) return;
+    setSaveError('');
     const payload: Record<string, unknown> = {
       name,
       typeId,
@@ -396,7 +413,15 @@ export default function EntityPanel({
       else fields.accomplishments = acc;
       payload.fields = fields;
     }
-    await api.updateEntity(entityId, payload);
+    try {
+      await api.updateEntity(entityId, payload);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setSaveError('Another card already answers to that name. Pick a different name, or merge the two cards.');
+        return;
+      }
+      throw err;
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
     await load();
@@ -406,7 +431,21 @@ export default function EntityPanel({
   async function addAlias() {
     const a = aliasDraft.trim();
     if (!a) return;
-    await api.addAlias(entityId, a);
+    setSaveError('');
+    try {
+      await api.addAlias(entityId, a);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        const owner = (err.body as { entityId?: number } | null)?.entityId;
+        setSaveError(
+          owner === entityId
+            ? 'This card already answers to that spelling.'
+            : 'Another card already answers to that spelling. Pick a different one, or merge the two cards.'
+        );
+        return;
+      }
+      throw err;
+    }
     setAliasDraft('');
     await load();
   }
@@ -534,7 +573,7 @@ export default function EntityPanel({
 
   if (!detail) {
     return (
-      <div className="dw-ie-backdrop" onClick={onClose}>
+      <div className="dw-ie-backdrop" onClick={requestClose}>
         <div className="dw-ie" onClick={(ev) => ev.stopPropagation()}>
           <div className="dw-ie__body">
             <div className="dw-ie__empty" style={{ padding: 24 }}>
@@ -598,7 +637,7 @@ export default function EntityPanel({
   })();
 
   return (
-    <div className="dw-ie-backdrop" onClick={onClose}>
+    <div className="dw-ie-backdrop" onClick={requestClose}>
       <div
         className={`dw-ie${full ? ' is-expanded' : ''}`}
         style={{ ['--ie-tone']: e.type_color } as CSSProperties}
@@ -647,7 +686,7 @@ export default function EntityPanel({
             >
               {full ? <ExitIcon /> : <ExpandIcon />}
             </button>
-            <button className="dw-ie__icon-btn" onClick={onClose} aria-label="Close">
+            <button className="dw-ie__icon-btn" onClick={requestClose} aria-label="Close">
               ✕
             </button>
           </div>
@@ -855,7 +894,7 @@ export default function EntityPanel({
                       missingId={leader}
                       candidates={entities.filter((x) => PERSON_TYPES.includes(x.type_name ?? ''))}
                       onPick={(id) => setLeader(id)}
-                      onOpenEntity={onOpenEntity}
+                      onOpenEntity={requestOpenEntity}
                       placeholder="No leader"
                       clearLabel="No leader"
                     />
@@ -868,7 +907,7 @@ export default function EntityPanel({
                       value={members}
                       candidates={entities.filter((x) => PERSON_TYPES.includes(x.type_name ?? ''))}
                       onChange={setMembers}
-                      onOpenEntity={onOpenEntity}
+                      onOpenEntity={requestOpenEntity}
                       addLabel="add a member…"
                     />
                   </div>
@@ -881,7 +920,7 @@ export default function EntityPanel({
                       missingId={operatesIn}
                       candidates={entities.filter((x) => PLACE_TYPES.includes(x.type_name ?? '') && x.id !== entityId)}
                       onPick={(id) => setOperatesIn(id)}
-                      onOpenEntity={onOpenEntity}
+                      onOpenEntity={requestOpenEntity}
                       placeholder="Nowhere"
                       clearLabel="Nowhere"
                     />
@@ -1012,7 +1051,7 @@ export default function EntityPanel({
               entities={entities}
               relationships={relationships}
               onReload={loadRelationships}
-              onOpenEntity={onOpenEntity}
+              onOpenEntity={requestOpenEntity}
             />
           </div>
 
@@ -1025,7 +1064,7 @@ export default function EntityPanel({
                   value={holderIds}
                   candidates={holderCandidates}
                   onChange={setOwners}
-                  onOpenEntity={onOpenEntity}
+                  onOpenEntity={requestOpenEntity}
                   addLabel="add a holder…"
                 />
               </div>
@@ -1036,7 +1075,7 @@ export default function EntityPanel({
                 <div className="dw-ie__alias-list">
                   {possessions.map((it) => (
                     <span className="dw-ie__alias" key={it.id}>
-                      <button className="dw-ie__alias-link" onClick={() => onOpenEntity(it.id)} title="Open item">
+                      <button className="dw-ie__alias-link" onClick={() => requestOpenEntity(it.id)} title="Open item">
                         {it.type_icon} {it.name}
                       </button>
                       <button className="dw-ie__x" title="Remove possession" onClick={() => unassignItem(it.id)}>
@@ -1132,7 +1171,7 @@ export default function EntityPanel({
                     {appearances.length} {appearances.length === 1 ? 'chapter' : 'chapters'}
                   </span>
                 </div>
-                <Trail chapters={chapters} seen={seenChapters} onOpenChapter={onOpenChapter} />
+                <Trail chapters={chapters} seen={seenChapters} onOpenChapter={requestOpenChapter} />
                 {appearances.length === 0 && <span className="dw-ie__empty">Not seen yet</span>}
               </div>
 
@@ -1212,6 +1251,7 @@ export default function EntityPanel({
             <span>Move to trash</span>
           </button>
           <div style={{ flex: 1 }} />
+          {saveError && <span className="dw-ie__error">{saveError}</span>}
           {saved && <span className="dw-ie__saved">saved ✓</span>}
           <button
             className="dw-ie__btn dw-ie__btn--save"

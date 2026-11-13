@@ -35,6 +35,31 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 migrate();
 
 const app = express();
+
+// No auth, so the API only answers the machine it runs on. Binding to loopback
+// stops other computers, but a DNS-rebinding page in the writer's browser can
+// still make this server look same-origin. Accept only loopback names (port is
+// ignored so the Vite proxy still works) and refuse a cross-site Origin.
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+function loopbackName(host) {
+  return LOOPBACK_HOSTS.has(String(host ?? '').replace(/:\d+$/, '').toLowerCase());
+}
+app.use('/api', (req, res, next) => {
+  if (!loopbackName(req.headers.host)) {
+    return res.status(403).json({ error: 'forbidden host' });
+  }
+  if (req.headers.origin) {
+    let originHost = '';
+    try {
+      originHost = new URL(req.headers.origin).hostname;
+    } catch {
+      /* a malformed Origin is not a loopback one */
+    }
+    if (!loopbackName(originHost)) return res.status(403).json({ error: 'forbidden origin' });
+  }
+  next();
+});
+
 app.use(express.json({ limit: '20mb' }));
 
 // Every write request runs inside one SQLite transaction, so a multi-step write
@@ -97,6 +122,13 @@ function getEntityKeyMap() {
 // card cannot silently shadow one that is already reachable.
 function keyConflict(name) {
   return getEntityKeyMap().get(normalizeKey(String(name ?? '').trim())) ?? null;
+}
+
+// Check a foreign key before the insert so a bad reference reads as a 400, not
+// a database constraint error. Table names are literals from this file.
+function refExists(table, id) {
+  const n = Number(id);
+  return Number.isFinite(n) && !!db.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(n);
 }
 
 function getIgnoredSet() {
@@ -584,6 +616,7 @@ app.get('/api/chapters', (_req, res) => {
 
 app.post('/api/chapters', (req, res) => {
   const { number = '', title = '', text = '', afterChapterId = null } = req.body ?? {};
+  if (typeof text !== 'string') return res.status(400).json({ error: 'text must be a string' });
   let order;
   if (afterChapterId == null || afterChapterId === '') {
     const max = db.prepare('SELECT MAX(sort_order) AS m FROM chapters').get().m;
@@ -884,6 +917,9 @@ app.post('/api/candidates/:id/resolve', (req, res) => {
       return res.status(409).json({ error: `name already in use: ${entityName}`, entityId: existingId });
     }
     const resolvedTypeId = typeId ?? candidate.suggested_type_id ?? null;
+    if (resolvedTypeId != null && !refExists('types', resolvedTypeId)) {
+      return res.status(400).json({ error: 'type not found' });
+    }
     const threshold = tracking === 'off' ? null : gapThreshold ?? null;
     const info = db
       .prepare('INSERT INTO entities (name, type_id, tracking, gap_threshold, updated_at) VALUES (?, ?, ?, ?, datetime(\'now\'))')
@@ -956,7 +992,14 @@ app.get('/api/entities', (_req, res) => {
        ORDER BY t.sort_order, e.name COLLATE NOCASE`
     )
     .all();
-  res.json(attachMentionSpans(rows));
+  // Search matches the spelling the prose actually uses, so each row carries
+  // its aliases. One extra query beats one query per card.
+  const aliases = new Map();
+  for (const row of db.prepare('SELECT entity_id, alias FROM aliases ORDER BY alias').all()) {
+    if (!aliases.has(row.entity_id)) aliases.set(row.entity_id, []);
+    aliases.get(row.entity_id).push(row.alias);
+  }
+  res.json(attachMentionSpans(rows.map((row) => ({ ...row, aliases: aliases.get(row.id) ?? [] }))));
 });
 
 app.get('/api/entities/:id/image', (req, res) => {
@@ -988,6 +1031,7 @@ app.post('/api/entities', (req, res) => {
   if (existingId != null) {
     return res.status(409).json({ error: `name already in use: ${String(name).trim()}`, entityId: existingId });
   }
+  if (typeId != null && !refExists('types', typeId)) return res.status(400).json({ error: 'type not found' });
   const threshold = tracking === 'off' ? null : gapThreshold ?? null;
   if (tracking !== 'off' && !threshold) return res.status(400).json({ error: 'gap threshold required' });
   const info = db
@@ -1022,6 +1066,14 @@ app.put('/api/entities/:id', (req, res) => {
   const entity = db.prepare('SELECT * FROM entities WHERE id = ?').get(id);
   if (!entity) return res.status(404).json({ error: 'not found' });
   const { name, typeId, summary, fields, tracking, gapThreshold } = req.body ?? {};
+  if (name !== undefined) {
+    if (!String(name).trim()) return res.status(400).json({ error: 'name required' });
+    const conflictId = keyConflict(name);
+    if (conflictId != null && conflictId !== id) {
+      return res.status(409).json({ error: `name already in use: ${String(name).trim()}`, entityId: conflictId });
+    }
+  }
+  if (typeId != null && !refExists('types', typeId)) return res.status(400).json({ error: 'type not found' });
   const nextTracking = tracking ?? entity.tracking;
   const nextThreshold = nextTracking === 'off' ? null : gapThreshold ?? entity.gap_threshold ?? null;
   db.prepare(
@@ -1233,6 +1285,12 @@ app.post('/api/entities/:id/aliases', (req, res) => {
   const id = Number(req.params.id);
   const alias = String(req.body?.alias ?? '').trim();
   if (!alias) return res.status(400).json({ error: 'alias required' });
+  const owner = db.prepare('SELECT id FROM entities WHERE id = ? AND trashed_at IS NULL').get(id);
+  if (!owner) return res.status(404).json({ error: 'not found' });
+  const conflictId = keyConflict(alias);
+  if (conflictId != null) {
+    return res.status(409).json({ error: `name already in use: ${alias}`, entityId: conflictId });
+  }
   const info = db.prepare('INSERT INTO aliases (entity_id, alias) VALUES (?, ?)').run(id, alias);
   res.json({ id: Number(info.lastInsertRowid), entity_id: id, alias });
 });
@@ -1362,7 +1420,28 @@ app.get('/api/trash', (_req, res) => {
 });
 
 app.post('/api/entities/:id/restore', (req, res) => {
-  db.prepare('UPDATE entities SET trashed_at = NULL WHERE id = ?').run(Number(req.params.id));
+  const id = Number(req.params.id);
+  const entity = db.prepare('SELECT id, name FROM entities WHERE id = ?').get(id);
+  if (!entity) return res.status(404).json({ error: 'not found' });
+  const spellings = [
+    entity.name,
+    ...db.prepare('SELECT alias FROM aliases WHERE entity_id = ?').all(id).map((a) => a.alias),
+  ];
+  for (const spelling of spellings) {
+    const conflictId = keyConflict(spelling);
+    if (conflictId != null && conflictId !== id) {
+      return res.status(409).json({ error: `name already in use: ${spelling}`, entityId: conflictId });
+    }
+  }
+  db.prepare('UPDATE entities SET trashed_at = NULL WHERE id = ?').run(id);
+  // Trashing resolved this card's alerts. Put them back, or a restored tracked
+  // or dead character stays quiet until some later scan happens to touch it.
+  const restored = db.prepare('SELECT id, tracking, fields FROM entities WHERE id = ?').get(id);
+  if (needsAlertRefresh(restored)) {
+    // All chapters, not just the mentions: an absence alert fires on the quiet
+    // chapters after the last appearance. Restore is rare, so the full pass is fine.
+    generateAlertsFor(db.prepare('SELECT id FROM chapters').all().map((row) => row.id));
+  }
   res.json({ ok: true });
 });
 
@@ -1549,6 +1628,9 @@ app.post('/api/guns', (req, res) => {
   const { title, explanation = '', impact = '', appearanceChapterId = null, plannedNumber = '' } = req.body ?? {};
   const cleanTitle = String(title ?? '').trim();
   if (!cleanTitle) return res.status(400).json({ error: 'title required' });
+  if (appearanceChapterId != null && !refExists('chapters', appearanceChapterId)) {
+    return res.status(400).json({ error: 'chapter not found' });
+  }
   const info = db
     .prepare(
       `INSERT INTO guns (title, explanation, impact, appearance_chapter_id, planned_number, updated_at)
@@ -1572,6 +1654,9 @@ app.put('/api/guns/:id', (req, res) => {
   const { title, explanation, impact, appearanceChapterId, plannedNumber } = req.body ?? {};
   const nextTitle = title !== undefined ? String(title).trim() : gun.title;
   if (!nextTitle) return res.status(400).json({ error: 'title required' });
+  if (appearanceChapterId != null && !refExists('chapters', appearanceChapterId)) {
+    return res.status(400).json({ error: 'chapter not found' });
+  }
   db.prepare(
     `UPDATE guns SET title = ?, explanation = ?, impact = ?, appearance_chapter_id = ?, planned_number = ?, planned_chapter_id = ?, updated_at = datetime('now')
      WHERE id = ?`
@@ -1864,6 +1949,11 @@ app.get('/api/questions', (_req, res) => {
 app.post('/api/questions', (req, res) => {
   const text = String(req.body?.text ?? '').trim();
   if (!text) return res.status(400).json({ error: 'text required' });
+  for (const chapterId of [req.body?.sourceChapterId, req.body?.deliveredChapterId]) {
+    if (chapterId != null && !refExists('chapters', chapterId)) {
+      return res.status(400).json({ error: 'chapter not found' });
+    }
+  }
   const info = db
     .prepare(
       `INSERT INTO questions (text, answer, source_chapter_id, delivered_chapter_id, origin, updated_at)
@@ -1880,6 +1970,11 @@ app.put('/api/questions/:id', (req, res) => {
   const { text, answer, sourceChapterId, deliveredChapterId } = req.body ?? {};
   const nextText = text !== undefined ? String(text).trim() : q.text;
   if (!nextText) return res.status(400).json({ error: 'text required' });
+  for (const chapterId of [sourceChapterId, deliveredChapterId]) {
+    if (chapterId != null && !refExists('chapters', chapterId)) {
+      return res.status(400).json({ error: 'chapter not found' });
+    }
+  }
   db.prepare(
     `UPDATE questions SET text = ?, answer = ?, source_chapter_id = ?, delivered_chapter_id = ?, updated_at = datetime('now')
      WHERE id = ?`
@@ -2210,16 +2305,32 @@ app.get('/api/backup', (_req, res) => {
 // ---------- Markdown export ----------
 //
 // The whole book as one text file: every chapter's current revision, every live
-// entity, every gun and every question. Images stay out (a .md is text), and so
-// does anything the writer threw away — Trash and the Review queue are working
-// state, not the book. Entity ids are resolved to names here, so the file stands
-// on its own with no database to look anything up in.
+// entity, every gun, every question, every authored story event and every
+// explicit relationship. Images stay out (a .md is text), and so does anything
+// the writer threw away — Trash and the Review queue are working state, not the
+// book. Entity ids are resolved to names here, so the file stands on its own
+// with no database to look anything up in.
 
 // Mirrors the Organisation editor in EntityPanel: these three types share the
 // leader · members · operates in · purpose · accomplishments fields.
 const ORG_TYPES = ['Organisation', 'Location', 'Country'];
 
-const META_KEYS = ['export_nudge', 'last_export_at', 'last_nudged_on', 'last_chapter'];
+const META_KEYS = [
+  'export_nudge',
+  'last_export_at',
+  'last_nudged_on',
+  'last_chapter',
+  // Appearance and profile live here too: the packaged app serves each run from
+  // a fresh port, so its origin — and localStorage — resets on every launch.
+  'theme',
+  'density',
+  'font_ui',
+  'font_reading',
+  'reading_size',
+  'profile_name',
+  'profile_email',
+  'library_path',
+];
 
 function metaRows() {
   const out = {};
@@ -2251,6 +2362,14 @@ function metaState() {
     lastNudgedOn,
     today,
     last_chapter: lastChapter,
+    theme: rows.theme ?? '',
+    density: rows.density ?? '',
+    fontUi: rows.font_ui ?? '',
+    fontReading: rows.font_reading ?? '',
+    readingSize: /^\d+$/.test(rows.reading_size ?? '') ? Number(rows.reading_size) : null,
+    profileName: rows.profile_name ?? '',
+    profileEmail: rows.profile_email ?? '',
+    libraryPath: rows.library_path ?? '',
     due: hasWork && isNudgeDue({ nudge, lastExportAt, lastNudgedOn, today }),
   };
 }
@@ -2414,6 +2533,40 @@ function exportQuestions(chapterById) {
   }));
 }
 
+// Story events in authored order, with names resolved. Culled links to trashed
+// cards are dropped, because Trash is not part of the exported book.
+function exportEvents() {
+  return allTimelineEvents().map((event) => {
+    const number = String(event.chapter_number ?? '').trim();
+    const title = String(event.chapter_title ?? '').trim();
+    return {
+      title: event.title,
+      kind: event.kind,
+      summary: event.summary,
+      storyTime: event.story_time,
+      storyDay: Number.isInteger(event.story_day) ? event.story_day : null,
+      chapter: number || title ? `${number ? `Ch ${number}` : 'Chapter'}${title ? ` — ${title}` : ''}` : '',
+      links: event.entities
+        .filter((link) => !link.trashed_at)
+        .map((link) => ({ name: link.name, role: link.role })),
+    };
+  });
+}
+
+function exportRelationships() {
+  return db
+    .prepare(
+      `SELECT r.label, r.notes, s.name AS source_name, t.name AS target_name
+       FROM relationships r
+       JOIN entities s ON s.id = r.source_id
+       JOIN entities t ON t.id = r.target_id
+       WHERE s.trashed_at IS NULL AND t.trashed_at IS NULL
+       ORDER BY r.label, s.name, t.name`
+    )
+    .all()
+    .map((r) => ({ source: r.source_name, target: r.target_name, label: r.label, notes: r.notes }));
+}
+
 app.get('/api/export', (_req, res) => {
   try {
     const chapterById = new Map(chapterList().map((c) => [c.id, c]));
@@ -2435,6 +2588,8 @@ app.get('/api/export', (_req, res) => {
       groups: exportEntities(nameById, chapterNumberById, levelById),
       guns: exportGuns(chapterById),
       questions: exportQuestions(chapterById),
+      events: exportEvents(),
+      relationships: exportRelationships(),
       duels: allDuels(),
       powerLevels: db.prepare('SELECT name FROM power_levels ORDER BY sort_order, name').all().map((l) => l.name),
       types: db.prepare('SELECT name FROM types ORDER BY sort_order, name').all().map((t) => t.name),
@@ -2482,7 +2637,10 @@ app.put('/api/meta', (req, res) => {
     if (key === 'last_chapter' && value !== '' && !/^\d+$/.test(value)) {
       return res.status(400).json({ error: `bad chapter id for ${key}: ${value}` });
     }
-    if (key !== 'export_nudge' && key !== 'last_chapter' && value !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    if (key === 'reading_size' && value !== '' && !/^(1[5-9]|2[0-6])$/.test(value)) {
+      return res.status(400).json({ error: `bad reading size: ${value}` });
+    }
+    if ((key === 'last_export_at' || key === 'last_nudged_on') && value !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
       return res.status(400).json({ error: `bad date for ${key}: ${value}` });
     }
     patch.push([key, value]);
@@ -2492,6 +2650,14 @@ app.put('/api/meta', (req, res) => {
   );
   for (const [key, value] of patch) upsert.run(key, value);
   res.json(metaState());
+});
+
+// Last resort for a route that throws before its own answer: API clients always
+// get JSON, never Express's HTML error page. Logged for the terminal.
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  if (res.headersSent) return res.end();
+  res.status(500).json({ error: 'internal error' });
 });
 
 const PORT = Number(process.env.PORT ?? 5178);

@@ -67,6 +67,34 @@ test('the API listens on loopback only', async (t) => {
   assert.match(srv.base, /^http:\/\/127\.0\.0\.1:\d+$/);
 });
 
+test('a forged Host or a cross-site Origin is refused', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const { request } = await import('node:http');
+  const ask = (headers) =>
+    new Promise((resolve, reject) => {
+      const req = request(`${srv.base}/api/types`, { headers }, (res) => {
+        let body = '';
+        res.on('data', (chunk) => (body += chunk));
+        res.on('end', () => resolve({ status: res.statusCode, body }));
+      });
+      req.on('error', reject);
+      req.end();
+    });
+
+  const rebound = await ask({ Host: 'evil.example' });
+  assert.equal(rebound.status, 403);
+  assert.equal(JSON.parse(rebound.body).error, 'forbidden host');
+
+  const crossSite = await ask({ Origin: 'https://evil.example' });
+  assert.equal(crossSite.status, 403);
+  assert.equal(JSON.parse(crossSite.body).error, 'forbidden origin');
+
+  const local = await ask({ Origin: 'http://localhost:5173' });
+  assert.equal(local.status, 200);
+});
+
 test('saving a chapter keeps only the newest history rows', async (t) => {
   const srv = await startServer();
   t.after(srv.stop);
@@ -590,6 +618,194 @@ test('a trashed card no longer owns its name or aliases', async (t) => {
   assert.equal((await call(srv.base, `/api/entities/${born.id}`)).mentions.length, 1, 'the live card owns the name');
 });
 
+test('renaming onto a live name is refused and leaves one owner', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const aria = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Aria' } });
+  const other = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Kael' } });
+
+  const conflict = await callError(srv.base, `/api/entities/${other.id}`, {
+    method: 'PUT',
+    body: { name: ' aria ' },
+  });
+  assert.equal(conflict.status, 409);
+  assert.equal(conflict.body.entityId, aria.id);
+  assert.equal((await call(srv.base, `/api/entities/${other.id}`)).entity.name, 'Kael', 'the rename did not land');
+
+  const blank = await callError(srv.base, `/api/entities/${other.id}`, { method: 'PUT', body: { name: '   ' } });
+  assert.equal(blank.status, 400);
+
+  const same = await call(srv.base, `/api/entities/${aria.id}`, { method: 'PUT', body: { name: 'Aria' } });
+  assert.equal(same.ok, true, 'renaming a card to its own name is not a conflict');
+
+  const live = (await call(srv.base, '/api/entities')).filter((e) => e.name.toLowerCase() === 'aria');
+  assert.equal(live.length, 1);
+});
+
+test('a new alias cannot shadow another live card', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const aria = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Aria' } });
+  const kael = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Kael' } });
+
+  const stolen = await callError(srv.base, `/api/entities/${aria.id}/aliases`, {
+    method: 'POST',
+    body: { alias: 'Kael' },
+  });
+  assert.equal(stolen.status, 409);
+  assert.equal(stolen.body.entityId, kael.id);
+  assert.equal((await call(srv.base, `/api/entities/${aria.id}`)).aliases.length, 0, 'the alias was not stored');
+
+  // The same spelling on the card that already owns it is just noise, not a second owner.
+  const own = await callError(srv.base, `/api/entities/${kael.id}/aliases`, {
+    method: 'POST',
+    body: { alias: 'kael' },
+  });
+  assert.equal(own.status, 409);
+  assert.equal(own.body.entityId, kael.id);
+
+  await call(srv.base, `/api/entities/${kael.id}/aliases`, { method: 'POST', body: { alias: 'Mara' } });
+  const again = await callError(srv.base, `/api/entities/${kael.id}/aliases`, {
+    method: 'POST',
+    body: { alias: 'mara' },
+  });
+  assert.equal(again.status, 409);
+  assert.equal(again.body.entityId, kael.id);
+
+  // Quick-open searches the spelling in the prose, so the list carries aliases.
+  const listed = (await call(srv.base, '/api/entities')).find((e) => e.id === kael.id);
+  assert.deepEqual(listed.aliases, ['Mara']);
+});
+
+test('restoring a trashed card is refused while its name or alias is live', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const old = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Aria' } });
+  await call(srv.base, `/api/entities/${old.id}/aliases`, { method: 'POST', body: { alias: 'Arya' } });
+  await call(srv.base, '/api/entities/trash', { method: 'POST', body: { ids: [old.id] } });
+
+  const live = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Aria' } });
+  const byName = await callError(srv.base, `/api/entities/${old.id}/restore`, { method: 'POST' });
+  assert.equal(byName.status, 409);
+  assert.equal(byName.body.entityId, live.id);
+  assert.equal((await call(srv.base, '/api/trash')).length, 1, 'the card stayed in Trash');
+
+  await call(srv.base, `/api/entities/${live.id}`, { method: 'PUT', body: { name: 'Aria Two' } });
+  await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Arya' } });
+  const byAlias = await callError(srv.base, `/api/entities/${old.id}/restore`, { method: 'POST' });
+  assert.equal(byAlias.status, 409, 'an alias the restored card would claim also blocks it');
+  assert.equal(byAlias.body.entityId !== old.id, true);
+
+  const missing = await callError(srv.base, '/api/entities/9999/restore', { method: 'POST' });
+  assert.equal(missing.status, 404);
+
+  await call(srv.base, `/api/entities/${byAlias.body.entityId}`, { method: 'PUT', body: { name: 'Arya Two' } });
+  const ok = await call(srv.base, `/api/entities/${old.id}/restore`, { method: 'POST' });
+  assert.equal(ok.ok, true);
+  assert.equal((await call(srv.base, '/api/trash')).length, 0);
+});
+
+test('restoring a tracked card puts its alerts back', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const mara = await call(srv.base, '/api/entities', {
+    method: 'POST',
+    body: { name: 'Mara Voss', tracking: 'absence', gapThreshold: 2 },
+  });
+  for (let i = 1; i <= 3; i += 1) {
+    const text = i === 1 ? 'Mara Voss waited by the gate.' : 'The gate stayed shut.';
+    await call(srv.base, '/api/chapters', { method: 'POST', body: { number: String(i), text } });
+  }
+  const before = (await call(srv.base, '/api/review')).alerts.filter((a) => a.entity_id === mara.id);
+  assert.equal(before.length, 1);
+  assert.equal(before[0].kind, 'dormant');
+
+  await call(srv.base, '/api/entities/trash', { method: 'POST', body: { ids: [mara.id] } });
+  assert.equal(
+    (await call(srv.base, '/api/review')).alerts.filter((a) => a.entity_id === mara.id).length,
+    0,
+    'trashing resolves the alert'
+  );
+
+  await call(srv.base, `/api/entities/${mara.id}/restore`, { method: 'POST' });
+  const after = (await call(srv.base, '/api/review')).alerts.filter((a) => a.entity_id === mara.id);
+  assert.equal(after.length, 1, 'restoring rebuilds it');
+  assert.equal(after[0].kind, 'dormant');
+});
+
+test('bad references and payloads are refused as JSON, not database errors', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const notText = await callError(srv.base, '/api/chapters', { method: 'POST', body: { text: 5 } });
+  assert.equal(notText.status, 400);
+  assert.match(notText.body.error, /text must be a string/);
+
+  const badType = await callError(srv.base, '/api/entities', {
+    method: 'POST',
+    body: { name: 'Aria', typeId: 9999 },
+  });
+  assert.equal(badType.status, 400);
+  assert.equal(badType.body.error, 'type not found');
+
+  const aria = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Aria' } });
+  const badTypePut = await callError(srv.base, `/api/entities/${aria.id}`, {
+    method: 'PUT',
+    body: { typeId: 9999 },
+  });
+  assert.equal(badTypePut.status, 400);
+
+  const chapter = await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '1', title: 'One', text: 'Mara Voss drew the blade.' },
+  });
+  const candidate = (await call(srv.base, '/api/review')).pending.find((c) => c.surface_text === 'Mara Voss');
+  const badCandidateType = await callError(srv.base, `/api/candidates/${candidate.id}/resolve`, {
+    method: 'POST',
+    body: { action: 'accept', typeId: 9999 },
+  });
+  assert.equal(badCandidateType.status, 400);
+  assert.ok(!(await call(srv.base, '/api/entities')).some((e) => e.name === 'Mara Voss'));
+
+  const badGun = await callError(srv.base, '/api/guns', {
+    method: 'POST',
+    body: { title: 'The blade', appearanceChapterId: 9999 },
+  });
+  assert.equal(badGun.status, 400);
+  assert.equal(badGun.body.error, 'chapter not found');
+
+  const gun = await call(srv.base, '/api/guns', { method: 'POST', body: { title: 'The blade' } });
+  const badGunPut = await callError(srv.base, `/api/guns/${gun.id}`, {
+    method: 'PUT',
+    body: { appearanceChapterId: 9999 },
+  });
+  assert.equal(badGunPut.status, 400);
+
+  const badQuestion = await callError(srv.base, '/api/questions', {
+    method: 'POST',
+    body: { text: 'Who took it?', sourceChapterId: 9999 },
+  });
+  assert.equal(badQuestion.status, 400);
+
+  const question = await call(srv.base, '/api/questions', { method: 'POST', body: { text: 'Who took it?' } });
+  const badQuestionPut = await callError(srv.base, `/api/questions/${question.id}`, {
+    method: 'PUT',
+    body: { deliveredChapterId: 9999 },
+  });
+  assert.equal(badQuestionPut.status, 400);
+
+  // The same references work once they point at real rows.
+  const goodGun = await call(srv.base, `/api/guns/${gun.id}`, {
+    method: 'PUT',
+    body: { appearanceChapterId: chapter.chapter.id },
+  });
+  assert.equal(goodGun.ok, true);
+});
+
 test('a duplicate name is refused with the existing card id', async (t) => {
   const srv = await startServer();
   t.after(srv.stop);
@@ -640,7 +856,7 @@ test('GET /api/export renders the whole book and leaves Trash out', async (t) =>
   const srv = await startServer();
   t.after(srv.stop);
 
-  await call(srv.base, '/api/chapters', {
+  const chapter = await call(srv.base, '/api/chapters', {
     method: 'POST',
     body: { number: '1', title: 'Ash', text: 'Kael drew the blade.' },
   });
@@ -655,10 +871,32 @@ test('GET /api/export renders the whole book and leaves Trash out', async (t) =>
     method: 'PUT',
     body: { fields: { history: { origin: 'A foundling.' } } },
   });
+  const aria = await call(srv.base, '/api/entities', {
+    method: 'POST',
+    body: { name: 'Aria', typeId: characterType },
+  });
+  await call(srv.base, '/api/relationships', {
+    method: 'POST',
+    body: { sourceId: kael.id, targetId: aria.id, label: 'mentor of', notes: 'Since the winter.' },
+  });
 
   const gone = await call(srv.base, '/api/entities', {
     method: 'POST',
     body: { name: 'Deleted One', typeId: characterType },
+  });
+  await call(srv.base, '/api/relationships', {
+    method: 'POST',
+    body: { sourceId: kael.id, targetId: gone.id, label: 'haunts' },
+  });
+  await call(srv.base, '/api/timeline/events', {
+    method: 'POST',
+    body: {
+      title: 'The siege ends',
+      kind: 'battle',
+      storyDay: 3,
+      chapterId: chapter.chapter.id,
+      entities: [{ entityId: kael.id, role: 'participant' }],
+    },
   });
   await call(srv.base, '/api/entities/trash', { method: 'POST', body: { ids: [gone.id] } });
 
@@ -675,7 +913,15 @@ test('GET /api/export renders the whole book and leaves Trash out', async (t) =>
   assert.ok(md.includes('Kael drew the blade.'), 'the chapter text is in the file');
   assert.match(md, /^#### Kael$/m);
   assert.match(md, /^- \*\*Origin\*\* — A foundling\.$/m);
+  assert.match(md, /^### Relationships$/m);
+  assert.match(md, /^- \*\*Kael\*\* → mentor of → \*\*Aria\*\*$/m);
+  assert.match(md, /^ {2}- Note: Since the winter\.$/m);
+  assert.match(md, /^## Story$/m);
+  assert.match(md, /^- \*\*Day 3 · The siege ends\*\* — Battle$/m);
+  assert.match(md, /^ {2}- Chapter: Ch 1 — Ash$/m);
+  assert.match(md, /^ {2}- Cards: Kael \(participant\)$/m);
   assert.ok(!md.includes('Deleted One'), 'a trashed card is not exported');
+  assert.ok(!md.includes('haunts'), 'a relationship to a trashed card is not exported');
 });
 
 test('the last opened chapter id round-trips through meta', async (t) => {
@@ -701,6 +947,44 @@ test('the last opened chapter id round-trips through meta', async (t) => {
     body: JSON.stringify({ last_chapter: 'two' }),
   });
   assert.equal(bad.status, 400, 'a non-numeric chapter id is rejected');
+});
+
+test('appearance and profile persist in the book, not just the browser', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const saved = await call(srv.base, '/api/meta', {
+    method: 'PUT',
+    body: {
+      theme: 'sepia',
+      density: 'compact',
+      font_ui: 'Inter',
+      font_reading: 'Literata',
+      reading_size: '21',
+      profile_name: 'Robin',
+      profile_email: 'robin@example.com',
+      library_path: '~/Books',
+    },
+  });
+  assert.equal(saved.theme, 'sepia');
+  assert.equal(saved.density, 'compact');
+  assert.equal(saved.fontUi, 'Inter');
+  assert.equal(saved.fontReading, 'Literata');
+  assert.equal(saved.readingSize, 21);
+  assert.equal(saved.profileName, 'Robin');
+  assert.equal(saved.libraryPath, '~/Books');
+
+  const reopened = await call(srv.base, '/api/meta');
+  assert.equal(reopened.theme, 'sepia');
+  assert.equal(reopened.readingSize, 21);
+
+  // The old date guard must not swallow these new string keys.
+  const badSize = await fetch(`${srv.base}/api/meta`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reading_size: '99' }),
+  });
+  assert.equal(badSize.status, 400);
 });
 
 test('a chapter can be inserted after another and later chapters shift', async (t) => {

@@ -12,8 +12,10 @@ test('an empty book still renders every section, with a placeholder', () => {
   assert.match(md, /^# DocWriter export\n/);
   assert.match(md, /^## Manuscript\n\n_No chapters yet\._$/m);
   assert.match(md, /^## Bible\n\n_No entities yet\._$/m);
+  assert.match(md, /^### Relationships\n\n_No relationships yet\._$/m);
   assert.match(md, /^### Chekhov's Guns\n\n_No guns yet\._$/m);
   assert.match(md, /^### Questions\n\n_No questions yet\._$/m);
+  assert.match(md, /^## Story\n\n_No story events yet\._$/m);
   assert.match(md, /^## Appendix$/m);
   assert.match(md, /^_0 chapters · 0 words · 0 entities · 0 guns · 0 questions · exported 2026-10-18_$/m);
 });
@@ -92,6 +94,50 @@ test('questions show their derived status and sub-bullets', () => {
   assert.match(md, /^- \*\*\[open\]\*\* Who killed the king\?$/m);
   assert.match(md, /^ {2}- Raised in Ch 3 — Ash$/m);
   assert.match(md, /^ {2}- \*\*Answer:\*\* It was never locked\.$/m);
+});
+
+test('story events keep days, gaps, chapter anchors, links and summaries', () => {
+  const md = renderBookMarkdown({
+    events: [
+      {
+        title: 'The siege ends',
+        kind: 'Battle',
+        storyTime: 'In 1204',
+        storyDay: 3,
+        chapter: 'Ch 2 — Ash',
+        links: [
+          { name: 'Kael', role: 'participant' },
+          { name: 'Grey Harbour', role: 'location' },
+        ],
+        summary: 'The gate falls.',
+      },
+      { title: 'A quiet year', kind: '', storyTime: '', storyDay: 12, chapter: '', links: [], summary: '' },
+      { title: 'Undated', kind: '', storyTime: '', storyDay: null, chapter: '', links: [], summary: '' },
+    ],
+  });
+  assert.match(md, /^## Story$/m);
+  assert.match(md, /^### Events$/m);
+  assert.match(md, /^- \*\*Day 3 · The siege ends\*\* — Battle$/m);
+  assert.match(md, /^ {2}- Chapter: Ch 2 — Ash$/m);
+  assert.match(md, /^ {2}- Story time: In 1204$/m);
+  assert.match(md, /^ {2}- Cards: Kael \(participant\), Grey Harbour \(location\)$/m);
+  assert.match(md, /^ {2}- Summary: The gate falls\.$/m);
+  assert.match(md, /^- \*\*Day 12 \(\+9 days\) · A quiet year\*\*$/m);
+  assert.match(md, /^ {2}- Unplaced$/m);
+  assert.match(md, /^- \*\*Undated\*\*$/m);
+});
+
+test('explicit relationships keep their direction, label and note', () => {
+  const md = renderBookMarkdown({
+    relationships: [
+      { source: 'Aria', target: 'Kael', label: 'mentor of', notes: 'Since the winter.' },
+      { source: 'Kael', target: 'Aria', label: 'owes', notes: '' },
+    ],
+  });
+  assert.match(md, /^### Relationships$/m);
+  assert.match(md, /^- \*\*Aria\*\* → mentor of → \*\*Kael\*\*$/m);
+  assert.match(md, /^ {2}- Note: Since the winter\.$/m);
+  assert.match(md, /^- \*\*Kael\*\* → owes → \*\*Aria\*\*$/m);
 });
 
 const duelSides = {

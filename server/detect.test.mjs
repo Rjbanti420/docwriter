@@ -25,6 +25,31 @@ test('detect: a name the book already knows becomes a mention, not a candidate',
   assert.deepEqual([...new Set(mentions.map((m) => m.key))], ['kael']);
 });
 
+test('detect: an all-caps card the book knows still gets its mentions', () => {
+  const { candidates, mentions } = run('ICA arrived at the gate. Later, ICA left.', {
+    keys: new Map([['ica', 4]]),
+  });
+  assert.equal(candidates.length, 0);
+  assert.equal(mentions.length, 2);
+  assert.ok(mentions.every((m) => m.key === 'ica'));
+});
+
+test('detect: an unknown all-caps acronym is offered as a candidate', () => {
+  const { candidates } = run('The ICA arrived. The ICA left.');
+  const ica = candidates.find((c) => c.key === 'ica');
+  assert.ok(ica, 'ICA should be detected');
+  assert.equal(ica.display, 'ICA');
+  assert.equal(ica.occurrences, 2);
+});
+
+test('detect: shouted all-caps prose is not treated as names', () => {
+  // The real scanner loads the English dictionary; supply the one short word.
+  const { candidates } = run('EVERYONE STOPPED AND STARED AT THE WALL.', {
+    dict: new Set(['wall']),
+  });
+  assert.deepEqual(candidates, []);
+});
+
 test('detect: an ignored name never comes back', () => {
   const { candidates, mentions } = run('Brightwood Hall stood empty. Brightwood Hall again.', {
     ignored: new Set(['brightwood hall']),

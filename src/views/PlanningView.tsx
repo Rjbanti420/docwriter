@@ -612,6 +612,7 @@ export default function PlanningView({
   focusGunId,
   onClearFocus,
   onOpenEntity,
+  onDirtyChange,
 }: {
   chapters: Chapter[];
   entities: Entity[];
@@ -620,6 +621,7 @@ export default function PlanningView({
   focusGunId: number | null;
   onClearFocus: () => void;
   onOpenEntity: (id: number) => void;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const [tab, setTab] = useState<Tab>('guns');
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -638,6 +640,13 @@ export default function PlanningView({
   const [notice, setNotice] = useState('');
   const [loaded, setLoaded] = useState(false);
   const prompted = useRef(false);
+
+  // App's sidebar guard cannot see the builder, so report its dirty flag up.
+  useEffect(() => {
+    onDirtyChange(builderDirty);
+  }, [builderDirty, onDirtyChange]);
+
+  useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
 
   // Reload when the chapter list changes (a gun may become "ready").
   const chapterSig = chapters.map((c) => `${c.id}:${c.number}:${c.sort_order}`).join('|');
@@ -696,6 +705,7 @@ export default function PlanningView({
     await after();
   }
   async function fire(gun: Gun) {
+    if (!confirm(`Close "${gun.title}" as fired? Firing cannot be undone.`)) return;
     await api.fireGun(gun.id);
     await after();
   }

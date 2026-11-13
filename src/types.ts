@@ -100,6 +100,8 @@ export interface Entity {
   type_name?: string;
   type_color?: string;
   type_icon?: string;
+  /** Alternate spellings the scanner also matches; used by quick-open search. */
+  aliases?: string[];
   mention_count?: number;
   first_chapter?: string;
   last_chapter?: string;
@@ -310,6 +312,15 @@ export interface ExportMeta {
   today: string;
   /** The last opened chapter id, or null. Stored server-side because Electron clears localStorage. */
   last_chapter: number | null;
+  /** Appearance and profile, also stored in the book so a relaunch keeps them. */
+  theme: string;
+  density: string;
+  fontUi: string;
+  fontReading: string;
+  readingSize: number | null;
+  profileName: string;
+  profileEmail: string;
+  libraryPath: string;
   due: boolean;
 }
 

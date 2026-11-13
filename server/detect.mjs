@@ -115,10 +115,6 @@ const ADVERBS = new Set([
   'finally', 'suddenly', 'carefully', 'bluntly', 'dryly', 'grimly',
 ]);
 
-function isCapitalized(w) {
-  return /^\p{Lu}[\p{L}\p{M}'’-]+$/u.test(w) && !/^\p{Lu}+$/u.test(w);
-}
-
 function isConnector(w) {
   return CONNECTORS.has(w.toLowerCase());
 }
@@ -222,6 +218,19 @@ export function normalizeKey(phrase) {
 export function detect(text, entityKeys, ignoredKeys, dictionary = new Set()) {
   const sentences = splitSentences(text);
   const groups = new Map();
+
+  // An all-caps token is a name when the book already knows it ("ICA") or when
+  // it looks like an acronym rather than shouting ("NATO", but not "STOP").
+  // Multi-word names written entirely in caps stay out of scope.
+  const allCapsName = (w) =>
+    /^\p{Lu}[\p{L}\p{M}]{1,4}$/u.test(w) &&
+    !STOPWORDS.has(w.toLowerCase()) &&
+    !commonWord(w.toLowerCase(), dictionary);
+  function isCapitalized(w) {
+    if (!/^\p{Lu}[\p{L}\p{M}'’-]+$/u.test(w)) return false;
+    if (!/^\p{Lu}+$/u.test(w)) return true;
+    return allCapsName(w) || entityKeys.has(normalizeKey(w));
+  }
 
   // Whitespace only between two tokens keeps them in one name; punctuation breaks it.
   const adjacent = (a, b) => !/[^\s]/.test(text.slice(a.offset + a.word.length, b.offset));

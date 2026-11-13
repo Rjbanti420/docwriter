@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from './api';
 import { askNameConflict } from './nameConflict';
+import { applyDensity, applyFontReading, applyFontUi, applyReadingSize, applyTheme } from './appearance';
 import type { Candidate, Chapter, ChapterDetail, Entity, ExportMeta, IgnoredToken, ReviewData, Type, View } from './types';
 import AddChapterModal from './components/AddChapterModal';
 import TriageModal from './components/TriageModal';
@@ -36,6 +37,7 @@ export default function App() {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [detail, setDetail] = useState<ChapterDetail | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [duelDirty, setDuelDirty] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [triage, setTriage] = useState<{ items: Candidate[]; index: number } | null>(null);
   const [entityId, setEntityId] = useState<number | null>(null);
@@ -66,6 +68,25 @@ export default function App() {
     }
   }, [meta]);
 
+  // The book is the durable copy of appearance. Applying it here is what makes
+  // a packaged relaunch look the same after its origin and localStorage reset.
+  useEffect(() => {
+    if (!meta) return;
+    const mirror = (key: string, value: string) => {
+      try { localStorage.setItem(key, value); } catch {}
+    };
+    if (meta.theme) { applyTheme(meta.theme); mirror('docwriter.theme', meta.theme); }
+    if (meta.density) { applyDensity(meta.density); mirror('docwriter.density', meta.density); }
+    if (meta.fontUi) { applyFontUi(meta.fontUi); mirror('docwriter.fontUi', meta.fontUi); }
+    if (meta.fontReading) { applyFontReading(meta.fontReading); mirror('docwriter.fontReading', meta.fontReading); }
+    if (meta.readingSize) { applyReadingSize(meta.readingSize); mirror('docwriter.readingSize', String(meta.readingSize)); }
+  }, [meta]);
+
+  // Found by chapter selection and updated by the reader's A− / A+ buttons.
+  const rememberReadingSize = useCallback((size: number) => {
+    api.setMeta({ reading_size: String(size) }).then(setMeta).catch(() => {});
+  }, []);
+
   const exportBook = useCallback(async (): Promise<boolean> => {
     try {
       // api.exportMarkdown stamps the export date itself, but only once the file
@@ -92,27 +113,28 @@ export default function App() {
     }
   }, [meta]);
 
-  // ReadView owns the draft; App only needs to know whether leaving would throw
-  // away typing, so every navigation path asks the same question.
+  // ReadView owns the chapter draft and PlanningView owns the duel builder;
+  // App only needs to know whether leaving would throw either away, so every
+  // navigation path asks the same question.
   const confirmDiscard = useCallback(() => {
-    if (!dirty) return true;
-    if (!confirm('You have unsaved changes. Discard them?')) return false;
+    if (dirty && !confirm('You have unsaved changes. Discard them?')) return false;
+    if (duelDirty && !confirm('Leave the duel builder? Nothing is saved.')) return false;
     setDirty(false);
     return true;
-  }, [dirty]);
+  }, [dirty, duelDirty]);
 
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty && !duelDirty) return;
     const warn = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = '';
     };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  }, [dirty, duelDirty]);
 
   const go = (v: View) => {
-    if (v !== 'read' && !confirmDiscard()) return;
+    if (!confirmDiscard()) return;
     setView(v);
     setSettingsOpen(false);
     setMenuOpen(false);
@@ -423,17 +445,58 @@ export default function App() {
     [refresh]
   );
 
+  const restoreOne = useCallback(async (id: number): Promise<string> => {
+    try {
+      await api.restore(id);
+      return '';
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        return (err.body as { error?: string } | null)?.error ?? 'That name is already in use.';
+      }
+      throw err;
+    }
+  }, []);
+
   const restore = useCallback(
     async (id: number) => {
-      await api.restore(id);
+      const problem = await restoreOne(id);
+      if (problem) {
+        alert(`Restore skipped: ${problem}. Rename the other card first.`);
+        return;
+      }
       await refresh();
     },
-    [refresh]
+    [restoreOne, refresh]
+  );
+
+  // Bulk actions refresh once at the end: per-card refreshes turned restoring 20
+  // cards into ~100 serial calls.
+  const restoreMany = useCallback(
+    async (ids: number[]) => {
+      const problems: string[] = [];
+      for (const id of ids) {
+        const problem = await restoreOne(id);
+        if (problem) problems.push(problem);
+      }
+      await refresh();
+      if (problems.length) {
+        alert(`Restore skipped: ${problems.join('; ')}. Rename the other card first.`);
+      }
+    },
+    [restoreOne, refresh]
   );
 
   const deleteForever = useCallback(
     async (id: number) => {
       await api.deleteEntity(id);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const deleteMany = useCallback(
+    async (ids: number[]) => {
+      for (const id of ids) await api.deleteEntity(id);
       await refresh();
     },
     [refresh]
@@ -479,10 +542,7 @@ export default function App() {
           setMenuOpen(false);
           return;
         }
-        if (entityId != null) {
-          ev.stopImmediatePropagation();
-          setEntityId(null);
-        }
+        // The open card closes itself, so it can ask before dropping edits.
         return;
       }
 
@@ -704,6 +764,8 @@ export default function App() {
               onSave={saveChapter}
               onDelete={deleteChapter}
               onDirtyChange={setDirty}
+              onReadingSizeChange={rememberReadingSize}
+              readingSize={meta?.readingSize ?? null}
               onOpenEntity={(id) => setEntityId(id)}
               onOpenCandidate={openCandidate}
               onAdd={() => setAddOpen(true)}
@@ -731,6 +793,8 @@ export default function App() {
             onUnignore={unignore}
             onRestore={restore}
             onDeleteForever={deleteForever}
+            onRestoreMany={restoreMany}
+            onDeleteMany={deleteMany}
           />
         )}
 
@@ -743,6 +807,7 @@ export default function App() {
             focusGunId={planningFocus}
             onClearFocus={() => setPlanningFocus(null)}
             onOpenEntity={(id) => setEntityId(id)}
+            onDirtyChange={setDuelDirty}
           />
         )}
 

@@ -9,7 +9,6 @@ import {
   resolvePlanned,
   isGunSettled,
   isGunReady,
-  plannedMatchesChapter,
   incrementNumber,
   gunDecide,
   gunReopen,
@@ -47,15 +46,6 @@ test('isGunReady fires only when the planned chapter exists', () => {
   assert.equal(isGunReady({ ...gun, planned_number: '9' }, chapters), false);
   assert.equal(isGunReady({ ...gun, planned_number: '' }, chapters), false);
   assert.equal(isGunReady({ ...gun, status: 'fired' }, chapters), false);
-});
-
-test('plannedMatchesChapter targets only the awaited chapter', () => {
-  const gun = { id: 1, planned_number: '2', status: 'active' };
-  assert.equal(plannedMatchesChapter(gun, ch(2, '2', 1)), true);
-  assert.equal(plannedMatchesChapter(gun, ch(3, '3', 2)), false);
-  // blank-number fallback participates in matching
-  assert.equal(plannedMatchesChapter({ ...gun, planned_number: '5' }, ch(9, '', 4)), true);
-  assert.equal(plannedMatchesChapter({ ...gun, status: 'fired' }, ch(2, '2', 1)), false);
 });
 
 test('resolvePlanned returns the chapter row or null', () => {

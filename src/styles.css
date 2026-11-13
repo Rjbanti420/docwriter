@@ -3841,6 +3841,10 @@ textarea:focus {
   font-size: 12.5px;
   color: var(--color-positive);
 }
+.dw-ie__error {
+  font-size: 12.5px;
+  color: var(--color-warn-text);
+}
 .dw-ie__btn {
   height: 38px;
   display: inline-flex;

@@ -43,6 +43,7 @@ export default function SearchBox({
             .filter(
               (e) =>
                 e.name.toLowerCase().includes(query) ||
+                (e.aliases ?? []).some((alias) => alias.toLowerCase().includes(query)) ||
                 (e.type_name || '').toLowerCase().includes(query)
             )
             .slice(0, MAX_HITS)

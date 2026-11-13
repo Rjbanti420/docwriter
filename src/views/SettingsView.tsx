@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { ExportMeta } from '../types';
+import { applyDensity, applyFontReading, applyFontUi, applyTheme } from '../appearance';
 
 const THEME_KEY = 'docwriter.theme';
 const DENSITY_KEY = 'docwriter.density';
@@ -46,10 +47,19 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
   const [meta, setMeta] = useState<ExportMeta | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  // The reminder state lives in the book, so Settings reads it from the API
-  // rather than from localStorage — which the packaged app loses every launch.
+  // The reminder and appearance live in the book, so Settings reads them from
+  // the API rather than localStorage — which the packaged app loses every launch.
   useEffect(() => {
-    api.meta().then(setMeta).catch(() => {});
+    api.meta().then((m) => {
+      setMeta(m);
+      if (m.theme) setTheme(m.theme);
+      if (m.density) setDensity(m.density);
+      if (m.fontUi) setFontUi(m.fontUi);
+      if (m.fontReading) setFontReading(m.fontReading);
+      if (m.profileName) setName(m.profileName);
+      if (m.profileEmail) setEmail(m.profileEmail);
+      if (m.libraryPath) setLibraryPath(m.libraryPath);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -62,46 +72,46 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
     try { setLibraryPath(localStorage.getItem('docwriter.libraryPath') || '~/Documents/DocWriter'); } catch {}
   }, []);
 
-  function applyTheme(t: string) {
+  // The meta write is best-effort; the visible change must not wait for it.
+  const remember = (patch: Record<string, string>) => {
+    api.setMeta(patch).then(setMeta).catch(() => {});
+  };
+
+  function applyThemeChoice(t: string) {
     setTheme(t);
-    try { localStorage.setItem(THEME_KEY, t); document.documentElement.setAttribute('data-theme', t); } catch {}
+    try { localStorage.setItem(THEME_KEY, t); } catch {}
+    applyTheme(t);
+    remember({ theme: t });
   }
 
-  function applyDensity(d: string) {
+  function applyDensityChoice(d: string) {
     setDensity(d);
-    try { localStorage.setItem(DENSITY_KEY, d); document.documentElement.setAttribute('data-density', d); } catch {}
+    try { localStorage.setItem(DENSITY_KEY, d); } catch {}
+    applyDensity(d);
+    remember({ density: d });
   }
 
-  function applyFontUi(f: string) {
+  function applyFontUiChoice(f: string) {
     setFontUi(f);
-    try {
-      localStorage.setItem(FONT_UI_KEY, f);
-      const stacks: Record<string, string> = {
-        'Hanken Grotesk': "'Hanken Grotesk', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-        'Inter': "'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-        'system-ui': 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
-      };
-      document.documentElement.style.setProperty('--font-ui', stacks[f] || stacks['Hanken Grotesk']);
-    } catch {}
+    try { localStorage.setItem(FONT_UI_KEY, f); } catch {}
+    applyFontUi(f);
+    remember({ font_ui: f });
   }
 
-  function applyFontReading(f: string) {
+  function applyFontReadingChoice(f: string) {
     setFontReading(f);
-    try {
-      localStorage.setItem(FONT_READING_KEY, f);
-      const stacks: Record<string, string> = {
-        'Spectral': "'Spectral', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif",
-        'Literata': "'Literata', Georgia, 'Source Serif 4', serif",
-        'Georgia': "'Georgia', serif",
-        'Source Serif 4': "'Source Serif 4', Georgia, serif",
-        'serif': 'serif',
-      };
-      document.documentElement.style.setProperty('--font-reading', stacks[f] || stacks['Spectral']);
-    } catch {}
+    try { localStorage.setItem(FONT_READING_KEY, f); } catch {}
+    applyFontReading(f);
+    remember({ font_reading: f });
   }
 
   function saveProfile() {
-    try { localStorage.setItem('docwriter.profile.name', name); localStorage.setItem('docwriter.profile.email', email); localStorage.setItem('docwriter.libraryPath', libraryPath); } catch {}
+    try {
+      localStorage.setItem('docwriter.profile.name', name);
+      localStorage.setItem('docwriter.profile.email', email);
+      localStorage.setItem('docwriter.libraryPath', libraryPath);
+    } catch {}
+    remember({ profile_name: name, profile_email: email, library_path: libraryPath });
   }
 
   async function exportBook() {
@@ -194,26 +204,26 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
         <div className="field">
           <label>Theme</label>
           <div className="type-row">
-            {THEMES.map(t => <button key={t.id} className={theme===t.id?'type-btn sel':'type-btn'} onClick={()=>applyTheme(t.id)}>{t.label}</button>)}
+            {THEMES.map(t => <button key={t.id} className={theme===t.id?'type-btn sel':'type-btn'} onClick={()=>applyThemeChoice(t.id)}>{t.label}</button>)}
           </div>
         </div>
         <div className="field">
           <label>Density</label>
           <div className="segmented">
-            <button aria-pressed={density==='comfortable'} className={density==='comfortable'?'active':''} onClick={()=>applyDensity('comfortable')}>Comfortable</button>
-            <button aria-pressed={density==='compact'} className={density==='compact'?'active':''} onClick={()=>applyDensity('compact')}>Compact</button>
+            <button aria-pressed={density==='comfortable'} className={density==='comfortable'?'active':''} onClick={()=>applyDensityChoice('comfortable')}>Comfortable</button>
+            <button aria-pressed={density==='compact'} className={density==='compact'?'active':''} onClick={()=>applyDensityChoice('compact')}>Compact</button>
           </div>
         </div>
         <div className="row">
           <div className="field">
             <label>UI font</label>
-            <select value={fontUi} onChange={(e)=>applyFontUi(e.target.value)}>
+            <select value={fontUi} onChange={(e)=>applyFontUiChoice(e.target.value)}>
               {UI_FONTS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </div>
           <div className="field">
             <label>Reading font</label>
-            <select value={fontReading} onChange={(e)=>applyFontReading(e.target.value)}>
+            <select value={fontReading} onChange={(e)=>applyFontReadingChoice(e.target.value)}>
               {READING_FONTS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </div>
