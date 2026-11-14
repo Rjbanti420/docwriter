@@ -310,9 +310,21 @@ test('explicit relationships are directional, editable, and merge with their car
   const srv = await startServer();
   t.after(srv.stop);
 
-  const aria = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Aria' } });
-  const arya = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'Arya' } });
-  const blade = await call(srv.base, '/api/entities', { method: 'POST', body: { name: 'The Blade' } });
+  const types = await call(srv.base, '/api/types');
+  const characterType = types.find((x) => x.name === 'Character').id;
+  const itemType = types.find((x) => x.name === 'Item').id;
+  const aria = await call(srv.base, '/api/entities', {
+    method: 'POST',
+    body: { name: 'Aria', typeId: characterType },
+  });
+  const arya = await call(srv.base, '/api/entities', {
+    method: 'POST',
+    body: { name: 'Arya', typeId: characterType },
+  });
+  const blade = await call(srv.base, '/api/entities', {
+    method: 'POST',
+    body: { name: 'The Blade', typeId: itemType },
+  });
 
   const parent = await call(srv.base, '/api/relationships', {
     method: 'POST',
@@ -340,6 +352,13 @@ test('explicit relationships are directional, editable, and merge with their car
   assert.equal(rows.find((r) => r.id === parent.id)?.source_name, 'Aria');
   assert.equal(rows.find((r) => r.id === parent.id)?.target_name, 'Arya');
   assert.equal(rows.find((r) => r.id === parent.id)?.target_trashed_at, null);
+  // The graph filters cards by type name, so the overview carries the type
+  // alongside the icon on both ends.
+  const wields = rows.find((r) => r.id === wielded.id);
+  assert.equal(wields?.source_type_name, 'Character');
+  assert.equal(wields?.target_type_name, 'Item');
+  assert.equal(typeof wields?.source_type_color, 'string');
+  assert.notEqual(wields?.source_type_color, wields?.target_type_color);
 
   const duplicate = await callError(srv.base, '/api/relationships', {
     method: 'POST',

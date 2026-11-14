@@ -1,0 +1,688 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-14T14:04:30.643Z",
+  "title": "Design System: DocWriter",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Lamp Glow",
+        "canonical": "#7fd6b8",
+        "purpose": "Dark-theme accent; the active thing, nothing else.",
+        "tonalRamp": [
+          "#001c13",
+          "#003828",
+          "#005c46",
+          "#278369",
+          "#59aa8f",
+          "#8fcdb6",
+          "#c3e8d9",
+          "#e6f6f0"
+        ]
+      },
+      "accent-ink": {
+        "role": "primary",
+        "displayName": "Lamp Ink",
+        "canonical": "#08221b",
+        "purpose": "Text and icons on the lamp accent.",
+        "tonalRamp": [
+          "#0f1815",
+          "#21322c",
+          "#3b534b",
+          "#5d796f",
+          "#849f96",
+          "#aec4bc",
+          "#d4e2dd",
+          "#edf3f1"
+        ]
+      },
+      "accent-verdigris": {
+        "role": "primary",
+        "displayName": "Verdigris Lamp",
+        "canonical": "#1f7a6d",
+        "purpose": "Fog (light) accent.",
+        "tonalRamp": [
+          "#001b17",
+          "#003730",
+          "#005a4f",
+          "#298274",
+          "#5aa99b",
+          "#90ccc0",
+          "#c4e7df",
+          "#e6f6f2"
+        ]
+      },
+      "accent-harbor-blue": {
+        "role": "primary",
+        "displayName": "Harbor Blue",
+        "canonical": "#35597e",
+        "purpose": "Driftwood (reading) accent.",
+        "tonalRamp": [
+          "#0a1725",
+          "#182f47",
+          "#304f70",
+          "#50759b",
+          "#789cc3",
+          "#a4c1e1",
+          "#cee0f4",
+          "#ebf3fc"
+        ]
+      },
+      "fog-base": {
+        "role": "neutral",
+        "displayName": "Fog Glass",
+        "canonical": "#edf1f0",
+        "purpose": "Fog page base.",
+        "tonalRamp": [
+          "#151616",
+          "#2c2e2e",
+          "#4b4e4d",
+          "#6f7271",
+          "#969998",
+          "#bbbebe",
+          "#dddede",
+          "#f1f2f2"
+        ]
+      },
+      "fog-surface": {
+        "role": "neutral",
+        "displayName": "Fog Surface",
+        "canonical": "#f8fbfa",
+        "purpose": "Fog raised surface.",
+        "tonalRamp": [
+          "#151616",
+          "#2d2e2e",
+          "#4b4e4d",
+          "#707271",
+          "#969998",
+          "#bcbebd",
+          "#dddede",
+          "#f1f2f2"
+        ]
+      },
+      "fog-paper": {
+        "role": "neutral",
+        "displayName": "Fog Paper",
+        "canonical": "#fdfefc",
+        "purpose": "Fog manuscript paper.",
+        "tonalRamp": [
+          "#161615",
+          "#2d2e2d",
+          "#4d4d4c",
+          "#717270",
+          "#989897",
+          "#bdbebc",
+          "#dededd",
+          "#f2f2f1"
+        ]
+      },
+      "night-base": {
+        "role": "neutral",
+        "displayName": "Night Water",
+        "canonical": "#0b1315",
+        "purpose": "Harbor night page base.",
+        "tonalRamp": [
+          "#131718",
+          "#292f31",
+          "#464f51",
+          "#6a7476",
+          "#909a9d",
+          "#b7bfc1",
+          "#dadfe0",
+          "#f0f2f3"
+        ]
+      },
+      "night-surface": {
+        "role": "neutral",
+        "displayName": "Harbor Surface",
+        "canonical": "#162428",
+        "purpose": "Harbor night raised surface.",
+        "tonalRamp": [
+          "#111719",
+          "#263033",
+          "#425054",
+          "#65757a",
+          "#8b9ca0",
+          "#b3c0c4",
+          "#d8e0e2",
+          "#eff2f4"
+        ]
+      },
+      "night-paper": {
+        "role": "neutral",
+        "displayName": "Lamplight Paper",
+        "canonical": "#111e22",
+        "purpose": "Harbor night manuscript paper.",
+        "tonalRamp": [
+          "#121719",
+          "#263033",
+          "#435054",
+          "#657579",
+          "#8c9ba0",
+          "#b4c0c4",
+          "#d8dfe2",
+          "#eff2f3"
+        ]
+      },
+      "driftwood-base": {
+        "role": "neutral",
+        "displayName": "Driftwood",
+        "canonical": "#e8e4db",
+        "purpose": "Driftwood page base.",
+        "tonalRamp": [
+          "#171613",
+          "#302e29",
+          "#504d46",
+          "#757169",
+          "#9b9890",
+          "#c0bdb7",
+          "#e0deda",
+          "#f2f2f0"
+        ]
+      },
+      "driftwood-surface": {
+        "role": "neutral",
+        "displayName": "Driftwood Surface",
+        "canonical": "#f3f0e8",
+        "purpose": "Driftwood raised surface.",
+        "tonalRamp": [
+          "#171613",
+          "#2f2e29",
+          "#4f4d47",
+          "#74716a",
+          "#9b9891",
+          "#c0bdb8",
+          "#dfdeda",
+          "#f2f2f0"
+        ]
+      },
+      "driftwood-paper": {
+        "role": "neutral",
+        "displayName": "Driftwood Paper",
+        "canonical": "#f6f3ec",
+        "purpose": "Driftwood manuscript paper.",
+        "tonalRamp": [
+          "#171614",
+          "#2f2e2a",
+          "#4f4d48",
+          "#74716b",
+          "#9b9892",
+          "#c0bdb8",
+          "#dfdedb",
+          "#f2f2f0"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#e3ece9",
+        "purpose": "Primary text at night.",
+        "tonalRamp": [
+          "#141716",
+          "#2a2f2d",
+          "#484f4d",
+          "#6c7471",
+          "#929a98",
+          "#b9bfbd",
+          "#dbdfde",
+          "#f0f2f2"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Ink Muted",
+        "canonical": "#9ab0ad",
+        "purpose": "Secondary text, labels, placeholders.",
+        "tonalRamp": [
+          "#101817",
+          "#24312f",
+          "#40514f",
+          "#627774",
+          "#899d9a",
+          "#b1c2bf",
+          "#d6e0df",
+          "#eef3f2"
+        ]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Ink Faint",
+        "canonical": "#6b8280",
+        "purpose": "Decorative only; fails AA for functional text.",
+        "tonalRamp": [
+          "#101817",
+          "#233130",
+          "#3e5150",
+          "#607775",
+          "#879e9c",
+          "#b0c2c0",
+          "#d6e1e0",
+          "#eef3f2"
+        ]
+      },
+      "ink-fog": {
+        "role": "neutral",
+        "displayName": "Fog Ink",
+        "canonical": "#16262b",
+        "purpose": "Primary text in Fog.",
+        "tonalRamp": [
+          "#111719",
+          "#253034",
+          "#415055",
+          "#63757b",
+          "#8a9ca2",
+          "#b2c1c5",
+          "#d7e0e3",
+          "#eef3f4"
+        ]
+      },
+      "ink-driftwood": {
+        "role": "neutral",
+        "displayName": "Driftwood Ink",
+        "canonical": "#2b2923",
+        "purpose": "Primary text in Driftwood.",
+        "tonalRamp": [
+          "#171614",
+          "#2f2e29",
+          "#4f4d47",
+          "#74716a",
+          "#9a9891",
+          "#bfbeb8",
+          "#dfdeda",
+          "#f2f2f0"
+        ]
+      },
+      "border-night": {
+        "role": "neutral",
+        "displayName": "Tarnished Brass",
+        "canonical": "#213539",
+        "purpose": "The 1px border at night.",
+        "tonalRamp": [
+          "#101819",
+          "#233133",
+          "#3e5155",
+          "#60767b",
+          "#879da1",
+          "#b0c1c5",
+          "#d6e0e2",
+          "#eef3f4"
+        ]
+      },
+      "border-fog": {
+        "role": "neutral",
+        "displayName": "Fog Brass",
+        "canonical": "#d2dcdb",
+        "purpose": "The 1px border in Fog.",
+        "tonalRamp": [
+          "#141716",
+          "#2a2f2f",
+          "#474f4e",
+          "#6b7473",
+          "#919a9a",
+          "#b8bfbf",
+          "#dadfdf",
+          "#f0f2f2"
+        ]
+      },
+      "border-driftwood": {
+        "role": "neutral",
+        "displayName": "Driftwood Brass",
+        "canonical": "#d0cabb",
+        "purpose": "The 1px border in Driftwood.",
+        "tonalRamp": [
+          "#181611",
+          "#312e25",
+          "#514d41",
+          "#777164",
+          "#9d988a",
+          "#c2bdb2",
+          "#e0ded7",
+          "#f3f2ef"
+        ]
+      },
+      "type-character": {
+        "role": "secondary",
+        "displayName": "Ember Character",
+        "canonical": "#d97706",
+        "purpose": "Character type hue, sourced from the types table.",
+        "tonalRamp": [
+          "#2c0a00",
+          "#541700",
+          "#823100",
+          "#b25300",
+          "#db7d24",
+          "#f7aa6e",
+          "#ffd3b0",
+          "#ffedde"
+        ]
+      },
+      "type-country": {
+        "role": "secondary",
+        "displayName": "Kelp Country",
+        "canonical": "#059669",
+        "purpose": "Country type hue.",
+        "tonalRamp": [
+          "#001e0e",
+          "#003b20",
+          "#005f3b",
+          "#00885c",
+          "#41af83",
+          "#81d1ac",
+          "#bcebd3",
+          "#e3f8ed"
+        ]
+      },
+      "type-organisation": {
+        "role": "secondary",
+        "displayName": "Violet Organisation",
+        "canonical": "#7c3aed",
+        "purpose": "Organisation type hue.",
+        "tonalRamp": [
+          "#180d33",
+          "#321c61",
+          "#533793",
+          "#775ac5",
+          "#9d84ed",
+          "#c1afff",
+          "#dfd6ff",
+          "#f2eeff"
+        ]
+      },
+      "type-location": {
+        "role": "secondary",
+        "displayName": "Chart Location",
+        "canonical": "#0284c7",
+        "purpose": "Location type hue.",
+        "tonalRamp": [
+          "#00182f",
+          "#00315b",
+          "#00528a",
+          "#0078bb",
+          "#3fa1e2",
+          "#7fc6fb",
+          "#bae4ff",
+          "#e2f5ff"
+        ]
+      },
+      "type-item": {
+        "role": "secondary",
+        "displayName": "Rose Item",
+        "canonical": "#db2777",
+        "purpose": "Item type hue.",
+        "tonalRamp": [
+          "#2e0314",
+          "#57052b",
+          "#861d49",
+          "#b83f6d",
+          "#e16b93",
+          "#fd9cba",
+          "#ffcbdb",
+          "#ffe9f1"
+        ]
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Signal Red",
+        "canonical": "#f0897a",
+        "purpose": "Destructive actions and errors at night.",
+        "tonalRamp": [
+          "#2b0906",
+          "#53150f",
+          "#802e25",
+          "#b05043",
+          "#d9796b",
+          "#f6a69a",
+          "#ffd0c8",
+          "#ffece8"
+        ]
+      },
+      "positive": {
+        "role": "semantic",
+        "displayName": "Kelp Green",
+        "canonical": "#7fd6a0",
+        "purpose": "Saved / success state at night.",
+        "tonalRamp": [
+          "#001d0b",
+          "#00391b",
+          "#005d33",
+          "#2a8554",
+          "#5bac7b",
+          "#90cfa6",
+          "#c4e9d0",
+          "#e6f7eb"
+        ]
+      },
+      "caution": {
+        "role": "semantic",
+        "displayName": "Amber Wick",
+        "canonical": "#e3b25e",
+        "purpose": "Tracking and warning at night.",
+        "tonalRamp": [
+          "#221200",
+          "#442700",
+          "#6b4400",
+          "#956800",
+          "#bd9040",
+          "#dcb87c",
+          "#f1dbb8",
+          "#faf0e1"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Screen titles such as \"The Bible\". One per screen."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Entity panel title — the name of the thing being edited."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Entity card and candidate names."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Controls, forms, navigation, metadata."
+      },
+      "reading": {
+        "displayName": "Reading",
+        "purpose": "Manuscript prose in the 660px reading column."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Group heads, section labels, count badges."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card",
+        "value": "inset 0 1px 0 color-mix(in srgb, #fff 42%, transparent), 0 1px 1px color-mix(in srgb, var(--color-text) 6%, transparent), 0 10px 24px -16px color-mix(in srgb, var(--color-text) 38%, transparent), 0 28px 48px -28px color-mix(in srgb, var(--color-text) 28%, transparent)",
+        "purpose": "Default rest state for cards, panels, search fields and grouped lists."
+      },
+      {
+        "name": "lift",
+        "value": "inset 0 1px 0 color-mix(in srgb, #fff 50%, transparent), 0 2px 4px color-mix(in srgb, var(--color-text) 8%, transparent), 0 18px 36px -16px color-mix(in srgb, var(--color-text) 32%, transparent), 0 36px 60px -28px color-mix(in srgb, var(--color-accent) 28%, transparent)",
+        "purpose": "Hover or emphasis on a card; adds an accent-tinted bloom."
+      },
+      {
+        "name": "drawer",
+        "value": "18px 0 48px -8px rgba(6, 16, 18, 0.32), 4px 0 12px rgba(6, 16, 18, 0.12), inset -1px 0 0 color-mix(in srgb, #fff 14%, transparent)",
+        "purpose": "The left sidebar and edge-anchored panels."
+      },
+      {
+        "name": "modal",
+        "value": "inset 0 1px 0 color-mix(in srgb, #fff 36%, transparent), 0 2px 6px rgba(6, 16, 18, 0.16), 0 24px 48px -16px rgba(6, 16, 18, 0.38), 0 48px 100px -28px rgba(6, 16, 18, 0.45)",
+        "purpose": "The entity panel and confirmation dialogs — the only deep shadow."
+      }
+    ],
+    "motion": [
+      {
+        "name": "house-ease",
+        "value": "cubic-bezier(0.22, 0.8, 0.24, 1)",
+        "purpose": "Entrances and panel movement."
+      },
+      {
+        "name": "fast",
+        "value": "0.14s ease",
+        "purpose": "Hover and colour state changes on buttons, chips and cards."
+      },
+      {
+        "name": "panel",
+        "value": "220ms ease",
+        "purpose": "Entity panel resize between normal and full screen."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "760px"
+      },
+      {
+        "name": "small",
+        "value": "640px"
+      },
+      {
+        "name": "narrow",
+        "value": "480px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single strongest action on a screen; accent fill with a top light.",
+      "html": "<button class=\"ds-btn-primary\">＋ New entity</button>",
+      "css": ".ds-btn-primary{height:40px;padding:0 16px 0 12px;display:inline-flex;align-items:center;gap:8px;border-radius:12px;border:1px solid var(--color-accent);background:var(--color-accent);color:var(--color-accent-ink);font-family:var(--font-ui);font-size:13px;font-weight:600;line-height:1;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.2),0 10px 20px -12px var(--color-accent);transition:background .14s ease,border-color .14s ease}.ds-btn-primary:hover{background:var(--color-accent-hover);border-color:var(--color-accent-hover)}.ds-btn-primary:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "The quiet companion action; surface fill, 1px border, no accent.",
+      "html": "<button class=\"ds-btn-secondary\">Select</button>",
+      "css": ".ds-btn-secondary{height:40px;padding:0 16px;display:inline-flex;align-items:center;gap:8px;border-radius:12px;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);font-family:var(--font-ui);font-size:13px;font-weight:500;line-height:1;cursor:pointer;box-shadow:0 1px 1px color-mix(in srgb,var(--color-text) 5%,transparent);transition:background .14s ease,border-color .14s ease}.ds-btn-secondary:hover{background:var(--color-hover)}.ds-btn-secondary:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Type filters. A chip filters a view; it never navigates.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip is-on\">All · 133</button><button class=\"ds-chip\"><i class=\"ds-dot\" style=\"--e:#d97706\"></i>Character · 53</button><button class=\"ds-chip\"><i class=\"ds-dot\" style=\"--e:#7c3aed\"></i>Organisation · 17</button></div>",
+      "css": ".ds-chips{display:flex;flex-wrap:wrap;gap:8px}.ds-chip{height:34px;padding:0 15px;display:inline-flex;align-items:center;gap:7px;border-radius:999px;border:1px solid var(--color-border);background:transparent;color:var(--color-text-secondary);font-family:var(--font-ui);font-size:12.5px;font-weight:500;line-height:1;cursor:pointer;transition:background .12s ease,border-color .12s ease,color .12s ease}.ds-chip:hover{background:var(--color-hover);color:var(--color-text)}.ds-chip.is-on{background:var(--color-accent);border-color:var(--color-accent);color:var(--color-accent-ink);font-weight:600}.ds-chip:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}.ds-dot{width:7px;height:7px;border-radius:50%;background:var(--e)}"
+    },
+    {
+      "name": "Entity Card",
+      "kind": "card",
+      "refersTo": "entity-card",
+      "description": "The Bible card: type medallion, serif name, one metadata line, lifted on hover.",
+      "html": "<article class=\"ds-card\" style=\"--e:#d97706\"><span class=\"ds-card-icon\">👤</span><h3 class=\"ds-card-name\">Alder Ash</h3><p class=\"ds-card-meta\">0 mentions</p></article>",
+      "css": ".ds-card{width:301px;display:flex;flex-direction:column;gap:14px;padding:18px;border-radius:20px;border:1px solid var(--color-border);background:var(--color-surface);box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 42%,transparent),0 1px 1px color-mix(in srgb,var(--color-text) 6%,transparent),0 10px 24px -16px color-mix(in srgb,var(--color-text) 38%,transparent),0 28px 48px -28px color-mix(in srgb,var(--color-text) 28%,transparent);transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease}.ds-card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--e) 55%,var(--color-border));box-shadow:0 22px 36px -22px color-mix(in srgb,var(--e) 60%,transparent),0 1px 2px color-mix(in srgb,var(--color-text) 8%,transparent)}.ds-card-icon{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:20px;background:linear-gradient(150deg,color-mix(in srgb,var(--e) 26%,transparent),color-mix(in srgb,var(--e) 9%,transparent))}.ds-card-name{margin:0;font-family:var(--font-reading);font-size:23px;font-weight:500;line-height:1.2;color:var(--color-text)}.ds-card-meta{margin:0;font-family:var(--font-ui);font-size:12px;line-height:1.3;letter-spacing:.02em;color:var(--color-text-secondary)}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Entity-panel field: 44px, paper fill, strong border, accent focus ring.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Name</span><input class=\"ds-input\" value=\"Alder Ash\" /></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:8px;width:360px}.ds-field-label{font-family:var(--font-ui);font-size:13px;font-weight:600;line-height:1.4;color:var(--color-text-secondary)}.ds-input{height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--color-border-strong);background:var(--color-paper);color:var(--color-text);font-family:var(--font-ui);font-size:15px;line-height:1;box-shadow:inset 0 1px 2px rgba(0,0,0,.05),inset 0 1px 0 rgba(255,255,255,.04)}.ds-input::placeholder{color:var(--color-text-secondary)}.ds-input:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "description": "38px item with a line icon; the active item is the only accent wash in the sidebar.",
+      "html": "<nav class=\"ds-nav\"><button class=\"ds-nav-item is-active\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z\"/><path d=\"M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z\"/></svg><span>Read</span></button><button class=\"ds-nav-item\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"8\" y=\"2\" width=\"8\" height=\"4\" rx=\"1\"/><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"/></svg><span>Review</span></button></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:2px;width:264px;padding:8px}.ds-nav-item{height:38px;padding:0 12px;display:flex;align-items:center;gap:10px;border:0;border-radius:11px;background:transparent;color:var(--color-text-secondary);font-family:var(--font-ui);font-size:14px;font-weight:600;line-height:1;cursor:pointer}.ds-nav-item:hover{background:var(--color-hover-soft);color:var(--color-text)}.ds-nav-item.is-active{background:color-mix(in srgb,var(--color-accent) 15%,transparent);color:var(--color-text);box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 28%,transparent),0 8px 16px -12px color-mix(in srgb,var(--color-accent) 55%,transparent)}.ds-nav-item svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.ds-nav-item.is-active svg{color:var(--color-accent)}"
+    },
+    {
+      "name": "Panel Tabs",
+      "kind": "nav",
+      "description": "Entity-panel tabs: 48px row, 10px top corners, 3px accent underline that grows in.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab is-on\">Overview</button><button class=\"ds-tab\">Abilities</button><button class=\"ds-tab\">Mentions</button></div>",
+      "css": ".ds-tabs{display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--color-border);background:var(--color-surface)}.ds-tab{position:relative;height:48px;padding:0 14px;border:0;border-radius:10px 10px 0 0;background:none;color:var(--color-text-secondary);font-family:var(--font-ui);font-size:14.5px;font-weight:500;line-height:1;cursor:pointer;transition:color .15s ease,background .15s ease}.ds-tab:hover{color:var(--color-text);background:color-mix(in srgb,var(--color-text) 6%,transparent)}.ds-tab.is-on{color:var(--color-text);font-weight:600}.ds-tab.is-on::after{content:\"\";position:absolute;left:10px;right:10px;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--color-accent);box-shadow:0 -2px 10px color-mix(in srgb,var(--color-accent) 60%,transparent)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Harbor & Lamplight",
+    "overview": "DocWriter is a harbour at night lit by one lamp. Fog by day, lamplight after dark: sea-glass neutrals, a single verdigris accent, and a serif that belongs to the manuscript rather than the software. The system is quiet, salt-worn and lamplit — it never decorates, it only holds light on the thing being worked on. The visual language splits the labour: Spectral carries everything the writer named, Hanken Grotesk carries the apparatus, and DM Mono labels the small print. Three light conditions are first-class: Fog, Harbor night and Driftwood.",
+    "keyCharacteristics": [
+      "Sea-glass neutrals with one verdigris accent per screen.",
+      "Spectral for names and prose, Hanken Grotesk for controls, DM Mono for labels and counts.",
+      "Softly tactile surfaces: 20px cards, 1px top light, layered downward shadows.",
+      "Colour as data: five type hues identify entity kinds, never decoration.",
+      "Density is a multiplier (--density), not a second layout."
+    ],
+    "rules": [
+      {
+        "name": "The One Lamp Rule",
+        "body": "The accent marks the active or primary thing and nothing else. On any screen it covers well under a tenth of the pixels; its scarcity is what makes it read as light.",
+        "section": "colors"
+      },
+      {
+        "name": "The Type-Is-Data Rule",
+        "body": "Entity hues come from the types table. Never hard-code a type colour in a component, and never reassign a hue for decoration — the reader learns the five colours as a key.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three Lights Rule",
+        "body": "A surface is finished only when it is legible in Fog, Harbor night and Driftwood. Never ship a component with a hard-coded background or text hex; bind it to a --color-* token.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Voices Rule",
+        "body": "Spectral is for what the writer named or reads; Hanken is for what the software does. A button never uses the serif, and a chapter title never uses the grotesk.",
+        "section": "typography"
+      },
+      {
+        "name": "The 11px Floor Rule",
+        "body": "Functional text never goes below 11px. DM Mono labels sit at 10.5px today as the one known exception; raising them to 11–12px is the correction, never the precedent.",
+        "section": "typography"
+      },
+      {
+        "name": "The Measure Rule",
+        "body": "Prose never exceeds 660px. The 1000px Bible column is for scanning cards, not for reading sentences.",
+        "section": "layout"
+      },
+      {
+        "name": "The One Multiplier Rule",
+        "body": "New spacing uses calc(Npx * var(--density)). A fixed height that ignores the multiplier breaks compact mode.",
+        "section": "layout"
+      },
+      {
+        "name": "The Top-Light Rule",
+        "body": "If a surface is raised, it carries an inset top highlight. A shadow without the inset light reads as a sticker.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Four Shadows Rule",
+        "body": "Depth uses these four tokens only. A new component composes them; it does not invent a fifth.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Soft Corner Rule",
+        "body": "Radius scales with the size of the thing. A 20px radius on a 34px chip looks like a mistake; a 9px radius on a panel looks unfinished.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do use the accent for one thing per screen: the active chip, the primary button, the focus ring.",
+      "Do bind entity colour through the inline --e property sourced from the type row.",
+      "Do check every screen in Fog, Harbor night and Driftwood before calling it done.",
+      "Do keep raised surfaces on the four shadow tokens with the 1px inset highlight.",
+      "Do multiply spacing by --density so compact mode keeps working.",
+      "Do use --color-text-secondary for placeholders and empty text; it clears AA on every theme."
+    ],
+    "donts": [
+      "Don't add a second accent hue, a gradient hero, or a metric-tile row. The rejected reference is the generic SaaS dashboard.",
+      "Don't hard-code type or theme hex values inside a component.",
+      "Don't use --color-text-faint for functional text — it measures 3.9:1 at night.",
+      "Don't set functional text below 11px; the 10.5px group labels are a defect to fix, not the standard.",
+      "Don't use DM Mono for anything longer than a label.",
+      "Don't use pure-black shadows or a fifth elevation.",
+      "Don't fix a card or control height that ignores the density multiplier."
+    ]
+  }
+}

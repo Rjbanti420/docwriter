@@ -23,6 +23,7 @@ export default function ReaderText({
   mentions,
   candidates,
   entities,
+  focusEntityId,
   onMention,
   onUnknown,
 }: {
@@ -30,6 +31,8 @@ export default function ReaderText({
   mentions: Mention[];
   candidates: Candidate[];
   entities: Entity[];
+  /** When set, this card's mentions are pulsed and the first is scrolled to. */
+  focusEntityId?: number | null;
   onMention: (entityId: number) => void;
   onUnknown: (candidateId: number) => void;
 }) {
@@ -119,6 +122,7 @@ export default function ReaderText({
           key={`m${i}`}
           className={cls}
           style={style}
+          data-entity={mk.kind === 'known' ? mk.entityId : undefined}
           title={mk.kind === 'unknown' ? mk.title : undefined}
           onMouseEnter={(ev) => {
             if (mk.kind !== 'known' || !mk.entityId || document.querySelector('.highlights-off')) return;
@@ -138,6 +142,25 @@ export default function ReaderText({
     if (pos < text.length) out.push(text.slice(pos));
     return { nodes: out };
   }, [text, mentions, candidates, entityById, onMention, onUnknown]);
+
+  // Arriving from an entity's mentions timeline: bring its first mention into
+  // view and pulse them, so the writer can see why the chapter opened.
+  useEffect(() => {
+    if (!focusEntityId) return;
+    const marks = Array.from(
+      document.querySelectorAll<HTMLElement>(`.reader-text .mention[data-entity="${focusEntityId}"]`)
+    );
+    if (marks.length === 0) return;
+    marks.forEach((el) => el.classList.add('is-focused-mention'));
+    marks[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const timer = window.setTimeout(() => {
+      marks.forEach((el) => el.classList.remove('is-focused-mention'));
+    }, 2600);
+    return () => {
+      window.clearTimeout(timer);
+      marks.forEach((el) => el.classList.remove('is-focused-mention'));
+    };
+  }, [focusEntityId, text]);
 
   const cardWidth = hover ? Math.min(300, window.innerWidth - 24) : 0;
   const cardLeft = hover

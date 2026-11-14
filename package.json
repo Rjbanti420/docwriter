@@ -8,6 +8,8 @@
   "author": "DocWriter",
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "dev:demo": "DOCWRITER_DB=data/demo.db node scripts/dev.mjs",
+    "seed:demo": "DOCWRITER_DB=data/demo.db node server/seed-demo.mjs",
     "test": "node --test server/*.test.mjs",
     "bench": "node scripts/bench.mjs",
     "dev:server": "node --watch server/index.mjs",

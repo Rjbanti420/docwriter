@@ -35,6 +35,9 @@ export default function App() {
   const [trash, setTrash] = useState<Entity[]>([]);
   const [view, setView] = useState<View>('read');
   const [activeId, setActiveId] = useState<number | null>(null);
+  // Set when a chapter is opened from an entity's mentions, so the reader can
+  // pulse that card's mentions instead of leaving the writer to hunt for them.
+  const [focusEntityId, setFocusEntityId] = useState<number | null>(null);
   const [detail, setDetail] = useState<ChapterDetail | null>(null);
   const [dirty, setDirty] = useState(false);
   const [duelDirty, setDuelDirty] = useState(false);
@@ -221,10 +224,11 @@ export default function App() {
   }, [loadChapters, loadEntities, loadReview, loadIgnored, loadTrash]);
 
   const selectChapter = useCallback(
-    async (id: number) => {
+    async (id: number, focusEntity: number | null = null) => {
       if (id !== activeId && !confirmDiscard()) return;
       setView('read');
       setActiveId(id);
+      setFocusEntityId(focusEntity);
       rememberChapter(id);
       await loadChapter(id);
     },
@@ -766,6 +770,7 @@ export default function App() {
               onDirtyChange={setDirty}
               onReadingSizeChange={rememberReadingSize}
               readingSize={meta?.readingSize ?? null}
+              focusEntity={focusEntityId}
               onOpenEntity={(id) => setEntityId(id)}
               onOpenCandidate={openCandidate}
               onAdd={() => setAddOpen(true)}
@@ -849,8 +854,9 @@ export default function App() {
           onClose={() => setEntityId(null)}
           onChanged={refresh}
           onOpenChapter={(cid) => {
+            const from = entityId;
             setEntityId(null);
-            selectChapter(cid);
+            selectChapter(cid, from);
           }}
           onOpenEntity={(id) => setEntityId(id)}
         />

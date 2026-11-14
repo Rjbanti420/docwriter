@@ -18,6 +18,7 @@ export default function ReadView({
   onDirtyChange,
   onReadingSizeChange,
   readingSize,
+  focusEntity,
   onOpenEntity,
   onOpenCandidate,
   onAdd,
@@ -32,6 +33,8 @@ export default function ReadView({
   onDirtyChange: (dirty: boolean) => void;
   onReadingSizeChange: (size: number) => void;
   readingSize: number | null;
+  /** Entity whose mentions should be highlighted when the chapter opens. */
+  focusEntity?: number | null;
   onOpenEntity: (id: number) => void;
   onOpenCandidate: (id: number) => void;
   onAdd: () => void;
@@ -262,6 +265,7 @@ export default function ReadView({
                   mentions={detail!.mentions}
                   candidates={detail!.candidates}
                   entities={entities}
+                  focusEntityId={focusEntity}
                   onMention={onOpenEntity}
                   onUnknown={onOpenCandidate}
                 />

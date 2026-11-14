@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ChangeEvent, CSSProperties, ReactNode } from 'react';
+import type {
+  ChangeEvent,
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from 'react';
 import { api, ApiError } from '../api';
 import { createEntityWithConflictPrompt } from '../nameConflict';
 import { fileToDataUrl, getEntityImage, parseFields } from '../entityMedia';
 import type { EntityFields } from '../entityMedia';
 import { getDeath, getLeaderId, getMemberIds, getOperatesInId, getOwnerIds } from '../entityRelations';
 import { chapterLabel, chapterNumber } from '../chapters';
-import type { Chapter, Entity, EntityDetail, EntityRelationship, PowerLevel, Type } from '../types';
+import type { Chapter, Entity, EntityDetail, PowerLevel, Type } from '../types';
 
 // Every entity type may hold an Item, except an Item itself: a possession is
 // something a person, place, nation or guild has, never another item.
@@ -19,26 +25,6 @@ const PLACE_TYPES = ['Location', 'Country'];
 
 /** Types sharing the Organisation editor: leader · members · operates in · purpose · accomplishments. */
 const ORG_TYPES = ['Organisation', 'Location', 'Country'];
-
-/** Suggestions only: a relationship label is free text, never a closed enum. */
-const RELATION_LABELS = [
-  'parent of',
-  'child of',
-  'sibling of',
-  'spouse of',
-  'ally of',
-  'rival of',
-  'mentor of',
-  'student of',
-  'member of',
-  'leads',
-  'serves',
-  'protects',
-  'hunts',
-  'owns',
-  'wields',
-  'owes',
-];
 
 /**
  * Item rank ladder, from the mundane to the singular.
@@ -84,6 +70,25 @@ interface Section {
 function uid(): string {
   const c = globalThis.crypto;
   return c && 'randomUUID' in c ? c.randomUUID() : Math.random().toString(36).slice(2);
+}
+
+/** "40% 30%" → [40, 30]; a missing or broken value falls back to centre. */
+function parsePosition(pos: string): [number, number] {
+  const [x, y] = pos.split(/\s+/).map((v) => Number.parseFloat(v));
+  return [Number.isFinite(x) ? x : 50, Number.isFinite(y) ? y : 50];
+}
+
+function clampPercent(v: number): number {
+  return Math.min(100, Math.max(0, v));
+}
+
+/** Move one row to another index. Out-of-range indexes are left untouched. */
+function moveRow<T>(rows: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= rows.length || to >= rows.length) return rows;
+  const next = rows.slice();
+  const [row] = next.splice(from, 1);
+  next.splice(to, 0, row);
+  return next;
 }
 
 function asString(v: unknown): string {
@@ -181,7 +186,6 @@ export default function EntityPanel({
   onOpenEntity: (id: number) => void;
 }) {
   const [detail, setDetail] = useState<EntityDetail | null>(null);
-  const [relationships, setRelationships] = useState<EntityRelationship[]>([]);
   const [name, setName] = useState('');
   const [typeId, setTypeId] = useState<number | null>(null);
   const [summary, setSummary] = useState('');
@@ -219,16 +223,22 @@ export default function EntityPanel({
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [image, setImage] = useState<string | null>(null);
+  /** Focal point for the portrait crop, as CSS `object-position` ("50% 35%"). */
+  const [imagePosition, setImagePosition] = useState('50% 50%');
+  // Pointer-up can arrive before React re-renders the last move, so commit the
+  // drag from a ref rather than from the render's `imagePosition`.
+  const imagePositionRef = useRef('50% 50%');
   const [full, setFull] = useState(false);
+  const [tab, setTab] = useState('overview');
+  const [mod, setMod] = useState(false);
+  const [hot, setHot] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Latest save, so the one Ctrl+S listener never reads a stale render.
+  const saveRef = useRef<() => void>(() => {});
 
   async function load() {
-    const [d, relationshipRows]: [EntityDetail, EntityRelationship[]] = await Promise.all([
-      api.entity(entityId),
-      api.relationships(entityId),
-    ]);
+    const d = await api.entity(entityId);
     setDetail(d);
-    setRelationships(relationshipRows);
     setName(d.entity.name);
     setTypeId(d.entity.type_id);
     setSummary(d.entity.summary);
@@ -236,6 +246,9 @@ export default function EntityPanel({
     setThreshold(d.entity.gap_threshold != null ? String(d.entity.gap_threshold) : '');
     setImage(getEntityImage(d.entity.fields));
     const fields = parseFields(d.entity.fields);
+    const crop = typeof fields.imagePosition === 'string' ? fields.imagePosition : '50% 50%';
+    imagePositionRef.current = crop;
+    setImagePosition(crop);
     setDescription(typeof fields.description === 'string' ? fields.description : '');
     setRank(typeof fields.rank === 'string' ? fields.rank : '');
     setRole(typeof fields.role === 'string' ? fields.role : '');
@@ -282,10 +295,6 @@ export default function EntityPanel({
     }
   }
 
-  async function loadRelationships() {
-    setRelationships(await api.relationships(entityId));
-  }
-
   async function loadLevels() {
     const levels = await api.powerLevels();
     setPowerLevels(levels as PowerLevel[]);
@@ -293,6 +302,8 @@ export default function EntityPanel({
 
   useEffect(() => {
     setFull(false);
+    setTab('overview');
+    setHot(null);
     setMergeOpen(false);
     setMergeQuery('');
     setMergeTarget(null);
@@ -365,6 +376,11 @@ export default function EntityPanel({
       tracking,
       gapThreshold: tracking === 'off' ? null : Number(threshold),
     };
+    // The portrait crop lives on the same `fields` blob; keep it on every save.
+    const keepCrop = (fields: EntityFields) => {
+      if (imagePosition === '50% 50%') delete fields.imagePosition;
+      else fields.imagePosition = imagePosition;
+    };
     if (isItemType && detail) {
       // Item meta lives in the `fields` bag; merge into a fresh copy so the
       // owner/image values (saved immediately elsewhere) are never clobbered.
@@ -379,6 +395,7 @@ export default function EntityPanel({
       put('boon', boon);
       put('curse', curse);
       put('evolvable', evolvable);
+      keepCrop(fields);
       payload.fields = fields;
     } else if (isCharacterType && detail) {
       // Character lore lives in the `fields` bag too; merge into a fresh copy so
@@ -395,6 +412,7 @@ export default function EntityPanel({
       const historyOut = buildSection(history);
       if (Object.keys(historyOut).length > 0) fields.history = historyOut;
       else delete fields.history;
+      keepCrop(fields);
       payload.fields = fields;
     } else if (isOrgLike && detail) {
       const fields = parseFields(detail.entity.fields);
@@ -411,6 +429,7 @@ export default function EntityPanel({
       const acc = buildEntries(accomplishments);
       if (acc.length === 0) delete fields.accomplishments;
       else fields.accomplishments = acc;
+      keepCrop(fields);
       payload.fields = fields;
     }
     try {
@@ -427,6 +446,49 @@ export default function EntityPanel({
     await load();
     onChanged();
   }
+
+  // Ctrl/Cmd+S saves the card, matching the footer hint.
+  useEffect(() => {
+    saveRef.current = () => {
+      if (dirty && thresholdValid) void save();
+    };
+  });
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') {
+        ev.preventDefault();
+        saveRef.current();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Hold Alt to reveal the tab number chips; Alt+1…9 jumps to that tab.
+  useEffect(() => {
+    const down = (ev: KeyboardEvent) => {
+      if (ev.key === 'Alt') setMod(true);
+      if (ev.altKey && /^[1-9]$/.test(ev.key)) {
+        const button = document.querySelectorAll<HTMLButtonElement>('.dw-ie__tab')[Number(ev.key) - 1];
+        if (button) {
+          ev.preventDefault();
+          button.click();
+        }
+      }
+    };
+    const up = (ev: KeyboardEvent) => {
+      if (ev.key === 'Alt') setMod(false);
+    };
+    const blur = () => setMod(false);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', blur);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', blur);
+    };
+  }, []);
 
   async function addAlias() {
     const a = aliasDraft.trim();
@@ -470,10 +532,56 @@ export default function EntityPanel({
     if (!detail) return;
     const fields = parseFields(detail.entity.fields);
     if (next) fields.image = next;
-    else delete fields.image;
+    else {
+      delete fields.image;
+      delete fields.imagePosition;
+      imagePositionRef.current = '50% 50%';
+      setImagePosition('50% 50%');
+    }
     await api.updateEntity(entityId, { fields });
     await load();
     onChanged();
+  }
+
+  /** Save a new portrait crop. Small enough to write on drag-end, no reload. */
+  async function commitImagePosition(next: string) {
+    if (!detail) return;
+    imagePositionRef.current = next;
+    const fields = parseFields(detail.entity.fields);
+    if (next === '50% 50%') delete fields.imagePosition;
+    else fields.imagePosition = next;
+    setDetail({ ...detail, entity: { ...detail.entity, fields: JSON.stringify(fields) } });
+    await api.updateEntity(entityId, { fields });
+    onChanged();
+  }
+
+  const portraitDrag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
+
+  function startPortraitDrag(ev: ReactPointerEvent<HTMLImageElement>) {
+    const [px, py] = parsePosition(imagePositionRef.current);
+    portraitDrag.current = { x: ev.clientX, y: ev.clientY, px, py };
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+  }
+
+  function dragPortrait(ev: ReactPointerEvent<HTMLImageElement>) {
+    const start = portraitDrag.current;
+    if (!start) return;
+    const rect = ev.currentTarget.getBoundingClientRect();
+    // Dragging the picture right reveals its left edge, so the percentage falls.
+    const px = clampPercent(start.px - ((ev.clientX - start.x) / rect.width) * 100);
+    const py = clampPercent(start.py - ((ev.clientY - start.y) / rect.height) * 100);
+    const next = `${Math.round(px)}% ${Math.round(py)}%`;
+    imagePositionRef.current = next;
+    setImagePosition(next);
+  }
+
+  function endPortraitDrag(ev: ReactPointerEvent<HTMLImageElement>) {
+    if (!portraitDrag.current) return;
+    portraitDrag.current = null;
+    if (ev.currentTarget.hasPointerCapture(ev.pointerId)) {
+      ev.currentTarget.releasePointerCapture(ev.pointerId);
+    }
+    void commitImagePosition(imagePositionRef.current);
   }
 
   async function onPickImage(ev: ChangeEvent<HTMLInputElement>) {
@@ -596,6 +704,10 @@ export default function EntityPanel({
   // An item may be held by several entities at once; every type but Item can hold.
   const holderIds = getOwnerIds(e.fields);
   const possessions = entities.filter((x) => x.type_name === 'Item' && getOwnerIds(x.fields).includes(e.id));
+  // Read-only reverse view: organisations that list this card as a member.
+  const memberships = entities.filter(
+    (x) => ORG_TYPES.includes(x.type_name ?? '') && getMemberIds(x.fields).includes(e.id)
+  );
   const addableItems = entities.filter((x) => x.type_name === 'Item' && !getOwnerIds(x.fields).includes(e.id));
   const holderCandidates = entities.filter((x) => x.type_name !== 'Item' && x.id !== e.id);
 
@@ -620,8 +732,39 @@ export default function EntityPanel({
     return [...byChapter.values()].sort((a, b) => a.order - b.order);
   })();
 
-  /** Chapter ids the entity is mentioned in — used to light the appearance trail. */
-  const seenChapters = new Set(appearances.map((a) => a.id));
+  /** Chapter ids the entity is mentioned in, with how often. */
+  const mentionsByChapter = new Map(appearances.map((a) => [a.id, a.count]));
+  const firstSeen = appearances[0];
+  const lastSeen = appearances[appearances.length - 1];
+  const peak = appearances.reduce<(typeof appearances)[number] | null>(
+    (best, a) => (!best || a.count > best.count ? a : best),
+    null
+  );
+
+  // One section on screen at a time, like the supplied editor. Character-only
+  // lore gets its own tabs; every type keeps Mentions.
+  const tabs = [
+    { id: 'overview', label: 'Overview' },
+    ...(isCharacter
+      ? [
+          { id: 'abilities', label: 'Abilities', count: abilities.length || undefined },
+          { id: 'system', label: 'System', count: filledCount(system) || undefined },
+          { id: 'history', label: 'History' },
+        ]
+      : []),
+    { id: 'mentions', label: 'Mentions', count: detail.mentions.length || undefined },
+  ];
+  // Changing type can retire the current tab; fall back without extra state.
+  const activeTab = tabs.some((t) => t.id === tab) ? tab : 'overview';
+
+  function onTabKey(ev: ReactKeyboardEvent<HTMLDivElement>) {
+    if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+    ev.preventDefault();
+    const i = tabs.findIndex((t) => t.id === activeTab);
+    const next = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    setTab(next.id);
+    document.getElementById(`ie-tab-${next.id}`)?.focus();
+  }
 
   // Cards the merge picker can offer: every other live card (the survivor
   // itself is excluded), narrowed by name or type as the search is typed.
@@ -639,26 +782,45 @@ export default function EntityPanel({
   return (
     <div className="dw-ie-backdrop" onClick={requestClose}>
       <div
-        className={`dw-ie${full ? ' is-expanded' : ''}`}
+        className={`dw-ie${full ? ' is-expanded' : ''}${mod ? ' is-mod' : ''}${death ? ' is-dead' : ''}`}
         style={{ ['--ie-tone']: e.type_color } as CSSProperties}
         onClick={(ev) => ev.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={`${e.name} details`}
       >
-        <header className="dw-ie__head">
-          <span className="dw-ie__tile" aria-hidden="true">
-            {image ? <img src={image} alt="" /> : e.type_icon}
-          </span>
+        <header className={`dw-ie__head${image ? ' has-portrait' : ''}`}>
+          {image && (
+            <div
+              className="dw-ie__bg"
+              style={{ backgroundImage: `url("${image}")`, backgroundPosition: imagePosition }}
+              aria-hidden="true"
+            />
+          )}
+          {image ? (
+            <img
+              className="dw-ie__portrait"
+              src={image}
+              alt=""
+              draggable={false}
+              style={{ objectPosition: imagePosition }}
+              title="Drag to reposition the crop"
+              onPointerDown={startPortraitDrag}
+              onPointerMove={dragPortrait}
+              onPointerUp={endPortraitDrag}
+              onPointerCancel={endPortraitDrag}
+            />
+          ) : (
+            <span className="dw-ie__tile" aria-hidden="true">
+              {e.type_icon}
+            </span>
+          )}
           <div className="dw-ie__titles">
-            <h1 className="dw-ie__title">{e.name}</h1>
+            <div className="dw-ie__namerow">
+              <h1 className="dw-ie__title">{e.name}</h1>
+            </div>
             <div className="dw-ie__meta">
               <span className="dw-ie__tag">{e.type_name || 'Uncategorised'}</span>
-              {death && (
-                <span className="dw-ie__died">
-                  ☠ Died{deathChapter ? ` · ch.${chapterNumber(deathChapter)}` : ''}
-                </span>
-              )}
               <button className="dw-ie__link" onClick={() => fileRef.current?.click()}>
                 <ImageIcon />
                 <span>{image ? 'Replace image' : 'Add image'}</span>
@@ -676,6 +838,9 @@ export default function EntityPanel({
                 onChange={onPickImage}
               />
             </div>
+            {detail.aliases.length > 0 && (
+              <div className="dw-ie__also">also: {detail.aliases.map((a) => a.alias).join(', ')}</div>
+            )}
           </div>
           <div className="dw-ie__actions">
             <button
@@ -692,9 +857,45 @@ export default function EntityPanel({
           </div>
         </header>
 
+        {death && (
+          <div className="dw-ie__dead-banner">
+            <span aria-hidden="true">☠</span>
+            <span>{deathChapter ? `Died in ${chapterLabel(deathChapter)}` : 'Deceased'}</span>
+          </div>
+        )}
+
+        <div className="dw-ie__tabs" role="tablist" aria-label="Entity sections" onKeyDown={onTabKey}>
+          {tabs.map((t, i) => (
+            <button
+              key={t.id}
+              id={`ie-tab-${t.id}`}
+              type="button"
+              role="tab"
+              className="dw-ie__tab"
+              aria-selected={activeTab === t.id}
+              aria-controls="ie-panel"
+              tabIndex={activeTab === t.id ? 0 : -1}
+              onClick={() => setTab(t.id)}
+            >
+              <span>{t.label}</span>
+              {t.count != null && <span className="dw-ie__tab-count">{t.count}</span>}
+              <span className="dw-ie__tab-key" aria-hidden="true">
+                {i + 1}
+              </span>
+            </button>
+          ))}
+        </div>
+
         <div className="dw-ie__body">
-          <div className="dw-ie__main">
-            <div className="dw-ie__row">
+          <div
+            className="dw-ie__main"
+            id="ie-panel"
+            role="tabpanel"
+            aria-labelledby={`ie-tab-${activeTab}`}
+          >
+            {activeTab === 'overview' && (
+              <>
+                <div className="dw-ie__row">
               <div className="dw-ie__field dw-ie__grow">
                 <label className="dw-ie__label" htmlFor="ie-name">
                   Name
@@ -726,6 +927,18 @@ export default function EntityPanel({
                   <Chevron />
                 </div>
               </div>
+            </div>
+
+            <div className="dw-ie__stats">
+              <span>
+                First seen <b>{firstSeen ? `ch. ${firstSeen.number || firstSeen.title}` : '—'}</b>
+              </span>
+              <span>
+                Last seen <b>{lastSeen ? `ch. ${lastSeen.number || lastSeen.title}` : '—'}</b>
+              </span>
+              <span>
+                Mentions <b>{detail.mentions.length}</b>
+              </span>
             </div>
 
               {isItem ? (
@@ -828,36 +1041,6 @@ export default function EntityPanel({
                       onChanged={onChanged}
                     />
                   </div>
-
-                  <SectionCard title="System" count={filledCount(system) || undefined}>
-                    <SubsectionList
-                      keys={SYSTEM_KEYS}
-                      section={system}
-                      onChange={setSystem}
-                      addLabel="Add subsection"
-                      bodyPlaceholder="Details"
-                    />
-                  </SectionCard>
-
-                  <SectionCard title="Abilities" count={abilities.length || undefined}>
-                    <EntryList
-                      entries={abilities}
-                      onChange={setAbilities}
-                      namePlaceholder="Ability name"
-                      bodyPlaceholder="Description"
-                      addLabel="Add ability"
-                    />
-                  </SectionCard>
-
-                  <SectionCard title="History" count={filledCount(history) || undefined}>
-                    <SubsectionList
-                      keys={HISTORY_KEYS}
-                      section={history}
-                      onChange={setHistory}
-                      addLabel="Add subsection"
-                      bodyPlaceholder="Details"
-                    />
-                  </SectionCard>
                 </>
               ) : isOrgLike ? (
                 <>
@@ -1045,195 +1228,288 @@ export default function EntityPanel({
                 </div>
               )}
 
-            <Relationships
-              key={entityId}
-              entityId={entityId}
-              entities={entities}
-              relationships={relationships}
-              onReload={loadRelationships}
-              onOpenEntity={requestOpenEntity}
-            />
-          </div>
+                <div className="dw-ie__field">
+                  <span className="dw-ie__label">Aliases</span>
+                  {detail.aliases.length === 0 ? (
+                    <span className="dw-ie__empty">None yet</span>
+                  ) : (
+                    <div className="dw-ie__alias-list">
+                      {detail.aliases.map((a) => (
+                        <span className="dw-ie__alias" key={a.id}>
+                          {a.alias}
+                          <button
+                            className="dw-ie__x"
+                            title="Remove alias"
+                            onClick={async () => {
+                              await api.removeAlias(entityId, a.id);
+                              await load();
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="dw-ie__alias-row">
+                    <input
+                      className="dw-ie__input dw-ie__input--surface"
+                      value={aliasDraft}
+                      onChange={(ev) => setAliasDraft(ev.target.value)}
+                      placeholder="Add a spelling variant"
+                      onKeyDown={(ev) => ev.key === 'Enter' && addAlias()}
+                    />
+                    <button className="dw-ie__btn" onClick={addAlias}>
+                      Add
+                    </button>
+                  </div>
+                </div>
 
-          <aside className="dw-ie__aside">
-            {isItem ? (
-              <div className="dw-ie__field">
-                <span className="dw-ie__label">Possessed by</span>
-                <EntityMultiSelect
-                  entities={entities}
-                  value={holderIds}
-                  candidates={holderCandidates}
-                  onChange={setOwners}
-                  onOpenEntity={requestOpenEntity}
-                  addLabel="add a holder…"
-                />
-              </div>
-            ) : (
-              <div className="dw-ie__field">
-                <span className="dw-ie__label">Possessions</span>
-                {possessions.length === 0 && <span className="dw-ie__empty">None yet</span>}
-                <div className="dw-ie__alias-list">
-                  {possessions.map((it) => (
-                    <span className="dw-ie__alias" key={it.id}>
-                      <button className="dw-ie__alias-link" onClick={() => requestOpenEntity(it.id)} title="Open item">
-                        {it.type_icon} {it.name}
+                {isItem ? (
+                  <div className="dw-ie__field">
+                    <span className="dw-ie__label">Possessed by</span>
+                    <EntityMultiSelect
+                      entities={entities}
+                      value={holderIds}
+                      candidates={holderCandidates}
+                      onChange={setOwners}
+                      onOpenEntity={requestOpenEntity}
+                      addLabel="add a holder…"
+                    />
+                  </div>
+                ) : (
+                  <div className="dw-ie__field">
+                    <span className="dw-ie__label">Possessions</span>
+                    {possessions.length === 0 && <span className="dw-ie__empty">None yet</span>}
+                    <div className="dw-ie__alias-list">
+                      {possessions.map((it) => (
+                        <span className="dw-ie__alias" key={it.id}>
+                          <button className="dw-ie__alias-link" onClick={() => requestOpenEntity(it.id)} title="Open item">
+                            {it.type_icon} {it.name}
+                          </button>
+                          <button className="dw-ie__x" title="Remove possession" onClick={() => unassignItem(it.id)}>
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="dw-ie__select-wrap">
+                      <select
+                        className="dw-ie__select"
+                        value=""
+                        onChange={(ev) => {
+                          if (ev.target.value) assignItem(Number(ev.target.value));
+                        }}
+                        disabled={addableItems.length === 0}
+                      >
+                        <option value="">{addableItems.length === 0 ? 'no items to add' : 'add an item…'}</option>
+                        {addableItems.map((it) => {
+                          const holders = getOwnerIds(it.fields)
+                            .map((hid) => entities.find((x) => x.id === hid))
+                            .filter((x): x is Entity => !!x);
+                          return (
+                            <option key={it.id} value={it.id}>
+                              {it.name}
+                              {holders.length > 0 ? ` · held by ${holders.map((h) => h.name).join(', ')}` : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <Chevron />
+                    </div>
+                    <div className="dw-ie__alias-row">
+                      <input
+                        className="dw-ie__input dw-ie__input--surface"
+                        value={newItemName}
+                        onChange={(ev) => setNewItemName(ev.target.value)}
+                        placeholder="create a new item"
+                        onKeyDown={(ev) => ev.key === 'Enter' && createItem()}
+                      />
+                      <button
+                        className="dw-ie__btn"
+                        onClick={createItem}
+                        disabled={!newItemName.trim() || itemTypeId == null}
+                      >
+                        Create
                       </button>
-                      <button className="dw-ie__x" title="Remove possession" onClick={() => unassignItem(it.id)}>
-                        ✕
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="dw-ie__select-wrap">
-                  <select
-                    className="dw-ie__select"
-                    value=""
-                    onChange={(ev) => {
-                      if (ev.target.value) assignItem(Number(ev.target.value));
-                    }}
-                    disabled={addableItems.length === 0}
-                  >
-                    <option value="">{addableItems.length === 0 ? 'no items to add' : 'add an item…'}</option>
-                    {addableItems.map((it) => {
-                      const holders = getOwnerIds(it.fields)
-                        .map((hid) => entities.find((x) => x.id === hid))
-                        .filter((x): x is Entity => !!x);
-                      return (
-                        <option key={it.id} value={it.id}>
-                          {it.name}
-                          {holders.length > 0 ? ` · held by ${holders.map((h) => h.name).join(', ')}` : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <Chevron />
-                </div>
-                <div className="dw-ie__alias-row">
-                  <input
-                    className="dw-ie__input dw-ie__input--surface"
-                    value={newItemName}
-                    onChange={(ev) => setNewItemName(ev.target.value)}
-                    placeholder="create a new item"
-                    onKeyDown={(ev) => ev.key === 'Enter' && createItem()}
+                    </div>
+                  </div>
+                )}
+
+                {memberships.length > 0 && (
+                  <div className="dw-ie__field">
+                    <span className="dw-ie__label">Member of</span>
+                    <div className="dw-ie__alias-list">
+                      {memberships.map((group) => (
+                        <span className="dw-ie__alias" key={group.id}>
+                          <button
+                            className="dw-ie__alias-link"
+                            onClick={() => requestOpenEntity(group.id)}
+                            title={`Open ${group.name}`}
+                          >
+                            {group.type_icon} {group.name}
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <button className="dw-ie__merge" onClick={() => setMergeOpen((v) => !v)}>
+                  <MergeIcon />
+                  <span>{mergeOpen ? 'Close merge' : 'Merge another entity'}</span>
+                </button>
+
+                {mergeOpen && (
+                  <div className="merge-picker">
+                    <input
+                      autoFocus
+                      value={mergeQuery}
+                      onChange={(ev) => {
+                        setMergeQuery(ev.target.value);
+                        setMergeTarget(null);
+                      }}
+                      placeholder="search for the duplicate card by name…"
+                    />
+                    <div className="merge-list">
+                      {mergeMatches.length === 0 ? (
+                        <span className="progress">no other card matches</span>
+                      ) : (
+                        mergeMatches.map((x) => (
+                          <button
+                            key={x.id}
+                            className={`chapter-item${mergeTarget?.id === x.id ? ' sel' : ''}`}
+                            onClick={() => setMergeTarget(x)}
+                          >
+                            <span className="ct">
+                              {x.type_icon} {x.name}
+                            </span>
+                            <span className="cand-meta">
+                              {x.type_name || 'Uncategorised'} · {x.mention_count ?? 0} mention
+                              {(x.mention_count ?? 0) === 1 ? '' : 's'}
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                    {mergeTarget && (
+                      <div className="merge-confirm">
+                        <div>
+                          <strong>{mergeTarget.name}</strong> is absorbed into{' '}
+                          <strong>{e.name}</strong> — its name becomes an alias, and its{' '}
+                          {mergeTarget.mention_count ?? 0} mention
+                          {(mergeTarget.mention_count ?? 0) === 1 ? '' : 's'}, aliases, items and
+                          linked review items move over. Then its card goes to Trash.
+                        </div>
+                        <div className="actions">
+                          <button className="btn-danger" disabled={merging} onClick={doMerge}>
+                            {merging ? 'Merging…' : 'Merge & move card to Trash'}
+                          </button>
+                          <button className="ghost" onClick={() => setMergeTarget(null)}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeTab === 'abilities' && (
+              <EntryList
+                entries={abilities}
+                onChange={setAbilities}
+                namePlaceholder="Ability name"
+                bodyPlaceholder="Description"
+                addLabel="Add ability"
+              />
+            )}
+
+            {activeTab === 'system' && (
+              <SubsectionList
+                keys={SYSTEM_KEYS}
+                section={system}
+                onChange={setSystem}
+                addLabel="Add subsection"
+                bodyPlaceholder="Details"
+              />
+            )}
+
+            {activeTab === 'history' && (
+              <SubsectionList
+                keys={HISTORY_KEYS}
+                section={history}
+                onChange={setHistory}
+                addLabel="Add subsection"
+                bodyPlaceholder="Details"
+              />
+            )}
+
+
+            {activeTab === 'mentions' && (
+              <div className="dw-ie__field">
+                {appearances.length === 0 ? (
+                  <EmptyState
+                    icon="🕯"
+                    title="Not mentioned yet"
+                    sub="Once a chapter names this card, its appearances show up here."
                   />
-                  <button
-                    className="dw-ie__btn"
-                    onClick={createItem}
-                    disabled={!newItemName.trim() || itemTypeId == null}
-                  >
-                    Create
-                  </button>
-                </div>
+                ) : (
+                  <>
+                    <div className="dw-ie__peak-line">
+                      <span className="dw-ie__star" aria-hidden="true">
+                        ★
+                      </span>
+                      <span>
+                        Appears in <b>{appearances.length}</b>{' '}
+                        {appearances.length === 1 ? 'chapter' : 'chapters'} ·{' '}
+                        <b>{detail.mentions.length}</b> mention
+                        {detail.mentions.length === 1 ? '' : 's'}
+                      </span>
+                      {peak && (
+                        <span>
+                          Peak <b>{peak.number ? `ch. ${peak.number}` : peak.title}</b> · {peak.count}
+                        </span>
+                      )}
+                    </div>
+                    <Trail
+                      chapters={chapters}
+                      counts={mentionsByChapter}
+                      hot={hot}
+                      onHot={setHot}
+                      onOpenChapter={requestOpenChapter}
+                    />
+                    <div className="dw-ie__mention-list">
+                      {appearances.map((a) => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          className={`dw-ie__mention${
+                            peak && a.count === peak.count ? ' is-peak' : ''
+                          }${hot === a.id ? ' is-hot' : ''}`}
+                          onMouseEnter={() => setHot(a.id)}
+                          onMouseLeave={() => setHot(null)}
+                          onFocus={() => setHot(a.id)}
+                          onBlur={() => setHot(null)}
+                          onClick={() => requestOpenChapter(a.id)}
+                        >
+                          <span className="dw-ie__lbl">
+                            {a.number ? `Ch. ${a.number} — ${a.title}` : a.title}
+                            {peak && a.count === peak.count && (
+                              <span className="dw-ie__peak-tag">peak</span>
+                            )}
+                          </span>
+                          <span className="dw-ie__count">×{a.count}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
-              <div className="dw-ie__field">
-                <span className="dw-ie__label">Aliases</span>
-                {detail.aliases.length === 0 ? (
-                  <span className="dw-ie__empty">None yet</span>
-                ) : (
-                  <div className="dw-ie__alias-list">
-                    {detail.aliases.map((a) => (
-                      <span className="dw-ie__alias" key={a.id}>
-                        {a.alias}
-                        <button
-                          className="dw-ie__x"
-                          title="Remove alias"
-                          onClick={async () => {
-                            await api.removeAlias(entityId, a.id);
-                            await load();
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="dw-ie__alias-row">
-                  <input
-                    className="dw-ie__input dw-ie__input--surface"
-                    value={aliasDraft}
-                    onChange={(ev) => setAliasDraft(ev.target.value)}
-                    placeholder="Add a spelling variant"
-                    onKeyDown={(ev) => ev.key === 'Enter' && addAlias()}
-                  />
-                  <button className="dw-ie__btn" onClick={addAlias}>
-                    Add
-                  </button>
-                </div>
-              </div>
-
-              <div className="dw-ie__field">
-                <div className="dw-ie__label-row">
-                  <span className="dw-ie__label">Appearances</span>
-                  <span className="dw-ie__count">
-                    {appearances.length} {appearances.length === 1 ? 'chapter' : 'chapters'}
-                  </span>
-                </div>
-                <Trail chapters={chapters} seen={seenChapters} onOpenChapter={requestOpenChapter} />
-                {appearances.length === 0 && <span className="dw-ie__empty">Not seen yet</span>}
-              </div>
-
-              <button className="dw-ie__merge" onClick={() => setMergeOpen((v) => !v)}>
-                <MergeIcon />
-                <span>{mergeOpen ? 'Close merge' : 'Merge another entity'}</span>
-              </button>
-
-              {mergeOpen && (
-                <div className="merge-picker">
-                  <input
-                    autoFocus
-                    value={mergeQuery}
-                    onChange={(ev) => {
-                      setMergeQuery(ev.target.value);
-                      setMergeTarget(null);
-                    }}
-                    placeholder="search for the duplicate card by name…"
-                  />
-                  <div className="merge-list">
-                    {mergeMatches.length === 0 ? (
-                      <span className="progress">no other card matches</span>
-                    ) : (
-                      mergeMatches.map((x) => (
-                        <button
-                          key={x.id}
-                          className={`chapter-item${mergeTarget?.id === x.id ? ' sel' : ''}`}
-                          onClick={() => setMergeTarget(x)}
-                        >
-                          <span className="ct">
-                            {x.type_icon} {x.name}
-                          </span>
-                          <span className="cand-meta">
-                            {x.type_name || 'Uncategorised'} · {x.mention_count ?? 0} mention
-                            {(x.mention_count ?? 0) === 1 ? '' : 's'}
-                          </span>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                  {mergeTarget && (
-                    <div className="merge-confirm">
-                      <div>
-                        <strong>{mergeTarget.name}</strong> is absorbed into{' '}
-                        <strong>{e.name}</strong> — its name becomes an alias, and its{' '}
-                        {mergeTarget.mention_count ?? 0} mention
-                        {(mergeTarget.mention_count ?? 0) === 1 ? '' : 's'}, aliases, items and
-                        linked review items move over. Then its card goes to Trash.
-                      </div>
-                      <div className="actions">
-                        <button className="btn-danger" disabled={merging} onClick={doMerge}>
-                          {merging ? 'Merging…' : 'Merge & move card to Trash'}
-                        </button>
-                        <button className="ghost" onClick={() => setMergeTarget(null)}>
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-          </aside>
+          </div>
         </div>
 
         <footer className="dw-ie__foot">
@@ -1250,260 +1526,34 @@ export default function EntityPanel({
             <TrashIcon />
             <span>Move to trash</span>
           </button>
-          <div style={{ flex: 1 }} />
-          {saveError && <span className="dw-ie__error">{saveError}</span>}
-          {saved && <span className="dw-ie__saved">saved ✓</span>}
+          <span
+            className="dw-ie__status"
+            data-state={saved ? 'saved' : dirty ? 'dirty' : 'clean'}
+            aria-live="polite"
+          >
+            <i aria-hidden="true" />
+            <span id="statusTxt">
+              {saveError ? saveError : saved ? 'Saved' : dirty ? 'Unsaved changes' : 'All changes saved'}
+            </span>
+          </span>
           <button
             className="dw-ie__btn dw-ie__btn--save"
+            data-state={saved ? 'saved' : dirty ? 'dirty' : 'clean'}
             disabled={!dirty || !thresholdValid}
             onClick={save}
           >
-            Save
+            <span className="dw-ie__save-a">
+              Save <kbd className="dw-ie__kbd">Ctrl S</kbd>
+            </span>
+            <span className="dw-ie__save-b">
+              Saved
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                <path d="M5 12.5 10 17.5 19 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
           </button>
         </footer>
       </div>
-    </div>
-  );
-}
-
-/** Authored edges only: no graph is inferred from mentions or chapter order. */
-function Relationships({
-  entityId,
-  entities,
-  relationships,
-  onReload,
-  onOpenEntity,
-}: {
-  entityId: number;
-  entities: Entity[];
-  relationships: EntityRelationship[];
-  onReload: () => Promise<void>;
-  onOpenEntity: (id: number) => void;
-}) {
-  const [targetId, setTargetId] = useState<number | null>(null);
-  const [label, setLabel] = useState('');
-  const [notes, setNotes] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editLabel, setEditLabel] = useState('');
-  const [editNotes, setEditNotes] = useState('');
-  const target = entities.find((e) => e.id === targetId) ?? null;
-  const candidates = entities.filter((e) => e.id !== entityId);
-
-  async function add() {
-    const text = label.trim();
-    if (!targetId || !text || busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      await api.addRelationship({
-        sourceId: entityId,
-        targetId,
-        label: text,
-        notes: notes.trim(),
-      });
-      setTargetId(null);
-      setLabel('');
-      setNotes('');
-      await onReload();
-    } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 409
-          ? 'That relationship already exists.'
-          : 'Could not save relationship.'
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function startEdit(rel: EntityRelationship) {
-    setEditingId(rel.id);
-    setEditLabel(rel.label);
-    setEditNotes(rel.notes);
-    setError('');
-  }
-
-  async function saveEdit(id: number) {
-    const text = editLabel.trim();
-    if (!text || busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      await api.updateRelationship(id, { label: text, notes: editNotes.trim() });
-      setEditingId(null);
-      await onReload();
-    } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 409
-          ? 'That relationship already exists.'
-          : 'Could not save relationship.'
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function remove(id: number) {
-    if (!confirm('Delete this relationship?')) return;
-    setError('');
-    try {
-      await api.deleteRelationship(id);
-      await onReload();
-    } catch {
-      setError('Could not delete relationship.');
-    }
-  }
-
-  return (
-    <div className="dw-ie__field">
-      <div className="dw-ie__label-row">
-        <span className="dw-ie__label">Relationships</span>
-        <span className="dw-ie__count">{relationships.length || ''}</span>
-      </div>
-
-      {relationships.length === 0 ? (
-        <span className="dw-ie__empty">No explicit relationships yet.</span>
-      ) : (
-        <div className="dw-ie__rel-list" role="list" aria-label="Relationships">
-          {relationships.map((rel) => {
-            const outgoing = rel.source_id === entityId;
-            const otherId = outgoing ? rel.target_id : rel.source_id;
-            const otherName = outgoing ? rel.target_name : rel.source_name;
-            const otherIcon = outgoing ? rel.target_type_icon : rel.source_type_icon;
-            const otherTrashed = outgoing ? rel.target_trashed_at : rel.source_trashed_at;
-            if (editingId === rel.id) {
-              return (
-                <div className="dw-ie__rel dw-ie__rel--editing" role="listitem" key={rel.id}>
-                  <span className="dw-ie__rel-dir" aria-hidden="true">
-                    {outgoing ? '→' : '←'}
-                  </span>
-                  <span className="dw-ie__rel-other">
-                    {otherIcon} {otherName}
-                  </span>
-                  <input
-                    className="dw-ie__input dw-ie__input--surface"
-                    value={editLabel}
-                    onChange={(ev) => setEditLabel(ev.target.value)}
-                    aria-label="Relationship label"
-                    autoFocus
-                  />
-                  <input
-                    className="dw-ie__input dw-ie__input--surface"
-                    value={editNotes}
-                    onChange={(ev) => setEditNotes(ev.target.value)}
-                    aria-label="Relationship note"
-                    placeholder="note"
-                  />
-                  <button
-                    type="button"
-                    className="dw-ie__btn"
-                    disabled={!editLabel.trim() || busy}
-                    onClick={() => saveEdit(rel.id)}
-                  >
-                    Save
-                  </button>
-                  <button type="button" className="ghost" onClick={() => setEditingId(null)}>
-                    Cancel
-                  </button>
-                </div>
-              );
-            }
-            return (
-              <div
-                className="dw-ie__rel"
-                role="listitem"
-                key={rel.id}
-                title={`${rel.source_name} — ${rel.label} → ${rel.target_name}`}
-              >
-                <span className="dw-ie__rel-dir" aria-hidden="true">
-                  {outgoing ? '→' : '←'}
-                </span>
-                <button
-                  type="button"
-                  className="dw-ie__alias-link"
-                  onClick={() => onOpenEntity(otherId)}
-                >
-                  {otherIcon} {otherName}
-                </button>
-                <span className="dw-ie__rel-label">{rel.label}</span>
-                {rel.notes && <span className="dw-ie__rel-notes">{rel.notes}</span>}
-                {otherTrashed && <span className="dw-ie__rel-trashed">trashed</span>}
-                <button
-                  type="button"
-                  className="dw-ie__rel-x"
-                  title="Edit relationship"
-                  aria-label="Edit relationship"
-                  onClick={() => startEdit(rel)}
-                >
-                  ✎
-                </button>
-                <button
-                  type="button"
-                  className="dw-ie__rel-x"
-                  title="Delete relationship"
-                  aria-label="Delete relationship"
-                  onClick={() => remove(rel.id)}
-                >
-                  ✕
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="dw-ie__rel-add">
-        <input
-          className="dw-ie__input dw-ie__input--surface"
-          list="dw-relationship-labels"
-          value={label}
-          onChange={(ev) => setLabel(ev.target.value)}
-          placeholder="e.g. ally of"
-          aria-label="Relationship label"
-          onKeyDown={(ev) => {
-            if (ev.key === 'Enter') {
-              ev.preventDefault();
-              add();
-            }
-          }}
-        />
-        <EntitySelect
-          value={target}
-          candidates={candidates}
-          onPick={setTargetId}
-          onOpenEntity={onOpenEntity}
-          label="Relationship target"
-          placeholder="Choose a card…"
-          clearLabel="None"
-        />
-        <button
-          type="button"
-          className="dw-ie__btn"
-          disabled={!targetId || !label.trim() || busy}
-          onClick={add}
-        >
-          {busy ? 'Saving…' : 'Add'}
-        </button>
-      </div>
-      <input
-        className="dw-ie__input dw-ie__input--surface dw-ie__rel-note"
-        value={notes}
-        onChange={(ev) => setNotes(ev.target.value)}
-        placeholder="Optional note"
-        aria-label="Relationship note"
-      />
-      <datalist id="dw-relationship-labels">
-        {RELATION_LABELS.map((option) => (
-          <option key={option} value={option} />
-        ))}
-      </datalist>
-      {error && (
-        <span className="dw-ie__rel-error" role="alert">
-          {error}
-        </span>
-      )}
     </div>
   );
 }
@@ -1589,12 +1639,12 @@ function RankSelect({ value, onChange }: { value: string; onChange: (v: string) 
         {meter}
         <Chevron />
       </button>
-      <div className="dw-ie__popover" role="listbox" hidden={!open} aria-label="Rank">
+      <div className="dw-ie__popover dw-ie__pop" role="listbox" hidden={!open} aria-label="Rank">
         {RANK_OPTIONS.map((o) => (
           <button
             key={o.value || 'unranked'}
             type="button"
-            className="dw-ie__option"
+            className="dw-ie__option dw-ie__opt"
             role="option"
             data-rank={rankKey(o.value)}
             aria-selected={o.value === value}
@@ -1665,14 +1715,14 @@ function EntitySelect({
         <Chevron />
       </button>
       <div
-        className="dw-ie__popover dw-ie__popover--owners"
+        className="dw-ie__popover dw-ie__popover--owners dw-ie__pop"
         role="listbox"
         hidden={!open}
         aria-label={label}
       >
         <button
           type="button"
-          className="dw-ie__option dw-ie__option--plain"
+          className="dw-ie__option dw-ie__option--plain dw-ie__opt"
           role="option"
           aria-selected={!value}
           onClick={() => {
@@ -1690,7 +1740,7 @@ function EntitySelect({
               <button
                 key={c.id}
                 type="button"
-                className="dw-ie__option"
+                className="dw-ie__option dw-ie__opt"
                 role="option"
                 aria-selected={value?.id === c.id}
                 onDoubleClick={() => onOpenEntity?.(c.id)}
@@ -1742,23 +1792,27 @@ function Switch({
  */
 function Trail({
   chapters,
-  seen,
+  counts,
+  hot,
+  onHot,
   onOpenChapter,
 }: {
   chapters: Chapter[];
-  seen: Set<number>;
+  counts: Map<number, number>;
+  hot: number | null;
+  onHot: (id: number | null) => void;
   onOpenChapter: (id: number) => void;
 }) {
   if (chapters.length === 0) return <span className="dw-ie__empty">No chapters yet</span>;
 
-  const WINDOW = 40;
+  const WINDOW = 28;
   let start = 0;
   let end = chapters.length;
   if (chapters.length > WINDOW * 1.5) {
-    const firstSeen = chapters.findIndex((c) => seen.has(c.id));
+    const firstSeen = chapters.findIndex((c) => counts.has(c.id));
     let lastSeen = -1;
     for (let i = chapters.length - 1; i >= 0; i -= 1) {
-      if (seen.has(chapters[i].id)) {
+      if (counts.has(chapters[i].id)) {
         lastSeen = i;
         break;
       }
@@ -1774,33 +1828,57 @@ function Trail({
   }
 
   const shown = chapters.slice(start, end);
-  const marks = [shown[0], shown[Math.floor(shown.length / 2)], shown[shown.length - 1]];
+  const max = Math.max(1, ...shown.map((c) => counts.get(c.id) ?? 0));
   const windowed = start > 0 || end < chapters.length;
+  const marks = [0, Math.floor(shown.length / 2), shown.length - 1];
 
   return (
     <>
-      <div className="dw-ie__trail">
-        {shown.map((c) => {
-          const on = seen.has(c.id);
-          const title = `${chapterLabel(c)}${on ? ' — mentioned' : ''}`;
-          return on ? (
-            <button
-              key={c.id}
-              type="button"
-              className="dw-ie__tick is-on"
-              title={title}
-              aria-label={title}
-              onClick={() => onOpenChapter(c.id)}
-            />
-          ) : (
-            <i key={c.id} className="dw-ie__tick" title={title} />
-          );
-        })}
-      </div>
-      <div className="dw-ie__trail-nums" aria-hidden="true">
-        {marks.map((c, i) => (
-          <span key={i}>{c ? chapterNumber(c) : ''}</span>
-        ))}
+      <div className="dw-ie__tl" style={{ ['--n']: shown.length } as CSSProperties}>
+        <div className="dw-ie__tl-bars" role="group" aria-label="Mentions by chapter">
+          {shown.map((c, i) => {
+            const count = counts.get(c.id) ?? 0;
+            const label = `${chapterLabel(c)}${
+              count ? ` — ${count} mention${count === 1 ? '' : 's'}` : ' — not mentioned'
+            }`;
+            const height = count ? 22 + Math.round((78 * count) / max) : 8;
+            const className = `dw-ie__tl-bar${count ? ' has' : ''}${
+              count && count === max ? ' peak' : ''
+            }${i === 0 ? ' edge-l' : ''}${i === shown.length - 1 ? ' edge-r' : ''}${
+              hot === c.id ? ' is-hot' : ''
+            }`;
+            const style = { ['--h']: `${height}%` } as CSSProperties;
+            if (!count) {
+              return <span key={c.id} className={className} style={style} data-tip={label} />;
+            }
+            return (
+              <button
+                key={c.id}
+                type="button"
+                className={className}
+                style={style}
+                data-tip={label}
+                aria-label={label}
+                onMouseEnter={() => onHot(c.id)}
+                onMouseLeave={() => onHot(null)}
+                onFocus={() => onHot(c.id)}
+                onBlur={() => onHot(null)}
+                onClick={() => onOpenChapter(c.id)}
+              />
+            );
+          })}
+        </div>
+        <div className="dw-ie__tl-axis" aria-hidden="true">
+          {marks.map((m, i) => (
+            <span
+              key={i}
+              className={counts.has(shown[m].id) ? 'has' : ''}
+              style={{ gridColumn: m + 1 }}
+            >
+              {chapterNumber(shown[m])}
+            </span>
+          ))}
+        </div>
       </div>
       {windowed && (
         <span className="dw-ie__hint">
@@ -1886,6 +1964,8 @@ function SubsectionList({
   bodyPlaceholder: string;
 }) {
   const [openId, setOpenId] = useState<string | null>(keys.length ? `f:${keys[0][0]}` : null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+  const dragFrom = useRef<number | null>(null);
   const nameRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const openFixed = openId?.startsWith('f:') ? openId.slice(2) : null;
@@ -1913,6 +1993,11 @@ function SubsectionList({
     if (openId === `c:${id}`) setOpenId(keys.length ? `f:${keys[0][0]}` : null);
   }
 
+  function moveCustom(from: number, to: number) {
+    onChange({ ...section, custom: moveRow(section.custom, from, to) });
+  }
+  const customIndex = openCustom ? section.custom.findIndex((x) => x.id === openCustom.id) : -1;
+
   return (
     <div className="dw-ie__subsections">
       <div className="dw-ie__pills" role="tablist">
@@ -1928,16 +2013,40 @@ function SubsectionList({
             <span className="dw-ie__pill-label">{label}</span>
           </button>
         ))}
-        {section.custom.map((entry) => {
+        {section.custom.map((entry, index) => {
           const active = openCustom?.id === entry.id;
           return (
             <button
               key={entry.id}
               type="button"
               role="tab"
+              draggable
               aria-selected={active}
-              className={`dw-ie__pill${active ? ' is-open' : ''}`}
+              className={`dw-ie__pill${active ? ' is-open' : ''}${
+                dragOver === index ? ' is-drop' : ''
+              }`}
+              title="Drag to reorder"
               onClick={() => setOpenId(`c:${entry.id}`)}
+              onDragStart={() => {
+                dragFrom.current = index;
+              }}
+              onDragOver={(ev) => {
+                if (dragFrom.current == null) return;
+                ev.preventDefault();
+                setDragOver(index);
+              }}
+              onDragLeave={() => setDragOver((v) => (v === index ? null : v))}
+              onDrop={(ev) => {
+                if (dragFrom.current == null) return;
+                ev.preventDefault();
+                moveCustom(dragFrom.current, index);
+                dragFrom.current = null;
+                setDragOver(null);
+              }}
+              onDragEnd={() => {
+                dragFrom.current = null;
+                setDragOver(null);
+              }}
             >
               <span className="dw-ie__pill-label">{entry.name.trim() || 'Untitled'}</span>
             </button>
@@ -1979,6 +2088,26 @@ function SubsectionList({
             />
             <button
               type="button"
+              className="dw-ie__move"
+              title="Move up"
+              aria-label="Move subsection up"
+              disabled={customIndex <= 0}
+              onClick={() => moveCustom(customIndex, customIndex - 1)}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="dw-ie__move"
+              title="Move down"
+              aria-label="Move subsection down"
+              disabled={customIndex >= section.custom.length - 1}
+              onClick={() => moveCustom(customIndex, customIndex + 1)}
+            >
+              ↓
+            </button>
+            <button
+              type="button"
               className="dw-ie__del"
               title="Delete subsection"
               aria-label={`Delete ${openCustom.name.trim() || 'subsection'}`}
@@ -1995,6 +2124,41 @@ function SubsectionList({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/** A dashed placeholder for a tab with nothing in it yet. */
+function EmptyState({
+  icon,
+  title,
+  sub,
+  action,
+  small = false,
+}: {
+  icon: string;
+  title: string;
+  sub?: string;
+  action?: ReactNode;
+  small?: boolean;
+}) {
+  return (
+    <div className={`dw-ie__es${small ? ' dw-ie__es--sm' : ''}`}>
+      <span className="dw-ie__es-ico" style={{ fontSize: 24 }} aria-hidden="true">
+        {icon}
+      </span>
+      {small ? (
+        <span className="dw-ie__es-txt">
+          <span className="dw-ie__es-t">{title}</span>
+          {sub && <span className="dw-ie__es-s">{sub}</span>}
+        </span>
+      ) : (
+        <>
+          <span className="dw-ie__es-t">{title}</span>
+          {sub && <span className="dw-ie__es-s">{sub}</span>}
+        </>
+      )}
+      {action}
     </div>
   );
 }
@@ -2022,7 +2186,13 @@ function EntryList({
   pill?: boolean;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+  const dragFrom = useRef<number | null>(null);
   const nameRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  function move(from: number, to: number) {
+    onChange(moveRow(entries, from, to));
+  }
 
   function add() {
     const entry: Entry = { id: uid(), name: '', body: '' };
@@ -2043,12 +2213,56 @@ function EntryList({
   return (
     <div className="dw-ie__entries">
       {label && <div className="dw-ie__sub-label">{label}</div>}
-      {entries.map((entry) => {
+      {entries.length === 0 && (
+        <EmptyState
+          icon="✦"
+          title="Nothing here yet"
+          action={
+            <button type="button" className="dw-ie__btn" onClick={add}>
+              <PlusIcon /> {addLabel}
+            </button>
+          }
+        />
+      )}
+      {entries.map((entry, index) => {
         const open = openId === entry.id;
         const name = entry.name.trim();
         return (
-          <div className={pill ? 'dw-ie__sub' : `dw-ie__entry${open ? ' is-open' : ''}`} key={entry.id}>
+          <div
+            className={`${pill ? 'dw-ie__sub' : `dw-ie__entry${open ? ' is-open' : ''}`}${
+              dragOver === index ? ' is-drop' : ''
+            }`}
+            key={entry.id}
+            onDragOver={(ev) => {
+              if (dragFrom.current == null) return;
+              ev.preventDefault();
+              setDragOver(index);
+            }}
+            onDragLeave={() => setDragOver((v) => (v === index ? null : v))}
+            onDrop={(ev) => {
+              if (dragFrom.current == null) return;
+              ev.preventDefault();
+              move(dragFrom.current, index);
+              dragFrom.current = null;
+              setDragOver(null);
+            }}
+          >
             <div className="dw-ie__entry-head">
+              <span
+                className="dw-ie__grip"
+                draggable
+                title="Drag to reorder"
+                aria-hidden="true"
+                onDragStart={() => {
+                  dragFrom.current = index;
+                }}
+                onDragEnd={() => {
+                  dragFrom.current = null;
+                  setDragOver(null);
+                }}
+              >
+                ⠿
+              </span>
               <button
                 type="button"
                 className={pill ? `dw-ie__pill${open ? ' is-open' : ''}` : 'dw-ie__entry-toggle'}
@@ -2065,6 +2279,26 @@ function EntryList({
                     </span>
                   </>
                 )}
+              </button>
+              <button
+                type="button"
+                className="dw-ie__move"
+                title="Move up"
+                aria-label={`Move ${name || 'entry'} up`}
+                disabled={index === 0}
+                onClick={() => move(index, index - 1)}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="dw-ie__move"
+                title="Move down"
+                aria-label={`Move ${name || 'entry'} down`}
+                disabled={index === entries.length - 1}
+                onClick={() => move(index, index + 1)}
+              >
+                ↓
               </button>
               <button
                 type="button"
@@ -2098,10 +2332,12 @@ function EntryList({
           </div>
         );
       })}
-      <button type="button" className="dw-ie__add" onClick={add}>
-        <PlusIcon />
-        <span>{addLabel}</span>
-      </button>
+      {entries.length > 0 && (
+        <button type="button" className="dw-ie__add" onClick={add}>
+          <PlusIcon />
+          <span>{addLabel}</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -2299,14 +2535,14 @@ function PowerLevelSelect({
         <Chevron />
       </button>
       <div
-        className="dw-ie__popover dw-ie__popover--levels"
+        className="dw-ie__popover dw-ie__popover--levels dw-ie__pop"
         role="listbox"
         hidden={!open}
         aria-label="Power level"
       >
         <button
           type="button"
-          className="dw-ie__option dw-ie__option--plain"
+          className="dw-ie__option dw-ie__option--plain dw-ie__opt"
           role="option"
           aria-selected={value == null}
           onClick={() => {

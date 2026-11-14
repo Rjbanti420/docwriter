@@ -1200,9 +1200,9 @@ app.get('/api/relationships', (_req, res) => {
       .prepare(
         `SELECT r.*,
                 s.name AS source_name, s.trashed_at AS source_trashed_at,
-                st.icon AS source_type_icon,
+                st.icon AS source_type_icon, st.name AS source_type_name, st.color AS source_type_color,
                 t.name AS target_name, t.trashed_at AS target_trashed_at,
-                tt.icon AS target_type_icon
+                tt.icon AS target_type_icon, tt.name AS target_type_name, tt.color AS target_type_color
          FROM relationships r
          JOIN entities s ON s.id = r.source_id
          JOIN entities t ON t.id = r.target_id
