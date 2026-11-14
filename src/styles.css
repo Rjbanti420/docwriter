@@ -270,7 +270,7 @@ h3 {
 
 .label-mono {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
@@ -726,7 +726,7 @@ textarea:focus {
 }
 .dw-section__label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -992,6 +992,8 @@ textarea:focus {
 }
 .reader-head__actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 .stack {
@@ -1144,7 +1146,7 @@ textarea:focus {
   margin: 1px 0 8px 16px;
   color: var(--color-text-faint);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1166,7 +1168,7 @@ textarea:focus {
   border-top: 1px solid var(--color-border);
   color: var(--color-text-faint);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.04em;
 }
 @keyframes entity-hover-card-in {
@@ -1610,7 +1612,7 @@ textarea:focus {
   border-radius: 6px;
   background: var(--color-side);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--color-text-secondary);
 }
 .card-foot {
@@ -1714,12 +1716,14 @@ textarea:focus {
 .group-head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin: 0 0 12px;
+  font: inherit;
+  line-height: 1;
 }
 .group-label {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1730,7 +1734,7 @@ textarea:focus {
   border-radius: 9px;
   background: var(--color-side);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--color-text-secondary);
 }
 .group-rule {
@@ -1749,7 +1753,7 @@ textarea:focus {
   border-radius: 6px;
   background: var(--color-side);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--color-text-secondary);
 }
 
@@ -1872,7 +1876,7 @@ textarea:focus {
 .alert-kind {
   margin-bottom: 2px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2106,7 +2110,7 @@ textarea:focus {
   margin: 0 0 16px;
   padding-bottom: 8px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2255,7 +2259,7 @@ textarea:focus {
 }
 .duel-side__label {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
@@ -2600,7 +2604,7 @@ textarea:focus {
   height: 22px;
   padding: 0 10px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2806,7 +2810,7 @@ textarea:focus {
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--dw-status) 14%, transparent);
   color: var(--dw-status);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2837,7 +2841,7 @@ textarea:focus {
 .dw-answer-label {
   display: block;
   margin-bottom: 2px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -3136,7 +3140,7 @@ textarea:focus {
   background: color-mix(in srgb, var(--ie-tone) 16%, transparent);
   color: color-mix(in srgb, var(--ie-tone) 55%, var(--color-text));
   font-family: var(--ie-font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -3258,7 +3262,7 @@ textarea:focus {
 .dw-ie__label,
 .dw-ie__group-label {
   font-family: var(--ie-font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
@@ -3511,7 +3515,7 @@ textarea:focus {
   align-items: center;
   gap: 8px;
   padding: 12px 10px 4px;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.1em;
   color: var(--color-text-faint);
 }
@@ -3886,7 +3890,7 @@ textarea:focus {
 }
 .dw-ie__sub-label {
   font-family: var(--ie-font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-text-faint);
@@ -4691,6 +4695,76 @@ button.primary {
 .group-label { color: var(--color-accent); }
 .pick { border-radius: 50%; }
 
+/* bible view controls: sort, compact rows, state filters */
+.bible-sort {
+  width: auto;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+}
+.btn-secondary[aria-pressed='true'] {
+  background: var(--color-accent-soft);
+  border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+  color: var(--color-accent);
+}
+.chips--stacked { flex-direction: column; align-items: flex-start; }
+.chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.chips-label {
+  align-self: center;
+  padding: 0 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.bible.is-compact .entity-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 8px;
+}
+.bible.is-compact .entity-group { margin-bottom: calc(20px * var(--density)); }
+.bible.is-compact .group-head { margin-bottom: 8px; }
+.bible.is-compact .entity-card {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: calc(9px * var(--density)) 12px;
+  border-radius: 12px;
+  contain-intrinsic-size: auto 56px;
+  box-shadow: 0 1px 1px color-mix(in srgb, var(--color-text) 5%, transparent);
+  animation: none;
+}
+.bible.is-compact .entity-card:hover {
+  transform: none;
+  box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--e, var(--color-accent)) 65%, transparent);
+}
+.bible.is-compact .card-head { flex: 1 1 auto; gap: 10px; }
+.bible.is-compact .card-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  font-size: 15px;
+}
+.bible.is-compact .entity-card .nm { font-size: 16px; }
+.bible.is-compact .card-meta { margin-left: auto; font-size: 12px; }
+/* compact rows drop the extra state lines; the Show filters above surface them */
+.bible.is-compact .badge-dead,
+.bible.is-compact .card-tracking { display: none; }
+
 /* manuscript */
 .paper {
   border-radius: 24px;
@@ -5284,7 +5358,7 @@ body {
   border-radius: var(--radius-pill);
   background: var(--color-surface);
   color: var(--color-text-secondary);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 500;
   line-height: 1.5;
   white-space: nowrap;
@@ -5550,7 +5624,7 @@ button.tl-link:hover {
 }
 .tl-link small {
   color: var(--color-text-faint);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -5623,7 +5697,7 @@ button.tl-link:hover {
 .tl-picker small {
   margin-left: auto;
   color: var(--color-text-faint);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -6680,7 +6754,7 @@ button.tl-link:hover {
   padding: 1px 6px;
   border-radius: 6px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.02em;
   background: rgb(255 255 255 / 0.2);
@@ -7147,7 +7221,7 @@ button.tl-link:hover {
   top: 9px;
   right: 3px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
   color: var(--color-text-faint);
   opacity: 0.65;
@@ -7395,5 +7469,21 @@ button.tl-link:hover {
 @media (max-width: 640px) {
   .dw-ie__dead-banner {
     padding: 8px 16px;
+  }
+}
+
+/* 37. Responsive display --------------------------------------------------- */
+/* The Harbor skin restated .reader-head h1 at 44px after the earlier
+   small-screen rule, so the display never stepped down on a phone width. */
+@media (max-width: 720px) {
+  .reader-head h1 {
+    font-size: 32px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+}
+@media (max-width: 480px) {
+  .reader-head h1 {
+    font-size: 28px;
   }
 }

@@ -6,6 +6,15 @@ import { getDeath } from '../entityRelations';
 import { chapterNumber } from '../chapters';
 import type { Chapter, Entity, Type } from '../types';
 
+type StateFilter = 'mentioned' | 'unmentioned' | 'dead' | 'tracking';
+
+const STATE_CHIPS: [StateFilter, string][] = [
+  ['mentioned', 'Mentioned'],
+  ['unmentioned', 'Unmentioned'],
+  ['dead', 'Dead'],
+  ['tracking', 'Tracking'],
+];
+
 export default function BibleView({
   entities,
   chapters,
@@ -26,6 +35,9 @@ export default function BibleView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState<string>('all');
+  const [sort, setSort] = useState<'name' | 'mentions'>('name');
+  const [compact, setCompact] = useState(false);
+  const [states, setStates] = useState<Set<StateFilter>>(new Set());
 
   function exitSelect() {
     setSelectMode(false);
@@ -63,10 +75,53 @@ export default function BibleView({
   }
   const groupEntries = [...groups.entries()];
   const typeCount = groups.size;
-  const shownGroups = filter === 'all' ? groupEntries : groupEntries.filter(([k]) => k === filter);
+  const typeEntries = filter === 'all' ? groupEntries : groupEntries.filter(([k]) => k === filter);
+
+  const isDead = (e: Entity) => e.type_name === 'Character' && !!getDeath(e.fields);
+  const isTracking = (e: Entity) => e.tracking !== 'off';
+  const mentions = (e: Entity) => e.mention_count ?? 0;
+  const matchesState = (e: Entity) => {
+    if (states.size === 0) return true;
+    if (states.has('mentioned') && mentions(e) > 0) return true;
+    if (states.has('unmentioned') && mentions(e) === 0) return true;
+    if (states.has('dead') && isDead(e)) return true;
+    if (states.has('tracking') && isTracking(e)) return true;
+    return false;
+  };
+
+  // Counts follow the type filter, so each chip shows what it would add to the current view.
+  const pool = typeEntries.flatMap(([, list]) => list);
+  const stateCounts: Record<StateFilter, number> = { mentioned: 0, unmentioned: 0, dead: 0, tracking: 0 };
+  for (const e of pool) {
+    if (mentions(e) > 0) stateCounts.mentioned += 1;
+    else stateCounts.unmentioned += 1;
+    if (isDead(e)) stateCounts.dead += 1;
+    if (isTracking(e)) stateCounts.tracking += 1;
+  }
+
+  const byName = (a: Entity, b: Entity) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  const sortList = (list: Entity[]) =>
+    [...list].sort(sort === 'name' ? byName : (a, b) => mentions(b) - mentions(a) || byName(a, b));
+  const shownGroups = typeEntries
+    .map(([name, list]) => [name, sortList(list.filter(matchesState))] as const)
+    .filter(([, list]) => list.length > 0);
+
+  function toggleState(s: StateFilter) {
+    setStates((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
+  }
+
+  function clearFilters() {
+    setStates(new Set());
+    setFilter('all');
+  }
 
   return (
-    <div className="main-inner bible">
+    <div className={`main-inner bible${compact ? ' is-compact' : ''}`}>
       <div className="reader-head">
         <div className="reader-head__titles">
           <h1>The Bible</h1>
@@ -76,6 +131,23 @@ export default function BibleView({
           </p>
         </div>
         <div className="reader-head__actions">
+          <select
+            className="bible-sort"
+            aria-label="Sort cards"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as 'name' | 'mentions')}
+          >
+            <option value="name">Name A–Z</option>
+            <option value="mentions">Most mentioned</option>
+          </select>
+          <button
+            className="btn-secondary"
+            aria-pressed={compact}
+            onClick={() => setCompact((v) => !v)}
+            title={compact ? 'Show full cards' : 'Show compact rows'}
+          >
+            {compact ? 'Cards' : 'Compact'}
+          </button>
           {selectMode ? (
             <>
               <button className="btn-secondary" onClick={() => setSelected(new Set(entities.map((x) => x.id)))}>
@@ -148,34 +220,58 @@ export default function BibleView({
         </div>
       ) : (
         <>
-          <div className="chips">
-            <button
-              className={`chip${filter === 'all' ? ' is-active' : ''}`}
-              aria-pressed={filter === 'all'}
-              onClick={() => setFilter('all')}
-            >
-              All · {entities.length}
-            </button>
-            {groupEntries.map(([typeName, list]) => (
+          <div className="chips chips--stacked">
+            <div className="chips-row">
               <button
-                key={typeName}
-                className={`chip${filter === typeName ? ' is-active' : ''}`}
-                aria-pressed={filter === typeName}
-                onClick={() => setFilter((f) => (f === typeName ? 'all' : typeName))}
+                className={`chip${filter === 'all' ? ' is-active' : ''}`}
+                aria-pressed={filter === 'all'}
+                onClick={() => setFilter('all')}
               >
-                <span className="d" style={{ ['--e']: list[0].type_color } as CSSProperties} />
-                {typeName} · {list.length}
+                All · {entities.length}
               </button>
-            ))}
+              {groupEntries.map(([typeName, list]) => (
+                <button
+                  key={typeName}
+                  className={`chip${filter === typeName ? ' is-active' : ''}`}
+                  aria-pressed={filter === typeName}
+                  onClick={() => setFilter((f) => (f === typeName ? 'all' : typeName))}
+                >
+                  <span className="d" style={{ ['--e']: list[0].type_color } as CSSProperties} />
+                  {typeName} · {list.length}
+                </button>
+              ))}
+            </div>
+            <div className="chips-row">
+              <span className="chips-label">Show</span>
+              {STATE_CHIPS.map(([key, label]) => (
+                <button
+                  key={key}
+                  className={`chip${states.has(key) ? ' is-active' : ''}`}
+                  aria-pressed={states.has(key)}
+                  onClick={() => toggleState(key)}
+                >
+                  {label} · {stateCounts[key]}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {shownGroups.length === 0 && (
+            <div className="empty-state">
+              No cards match these filters.{' '}
+              <button className="btn-secondary" onClick={clearFilters}>
+                Clear filters
+              </button>
+            </div>
+          )}
 
           {shownGroups.map(([typeName, list]) => (
             <div className="entity-group" key={typeName}>
-              <div className="group-head">
+              <h2 className="group-head">
                 <span className="group-label">{typeName}</span>
                 <span className="group-count">{list.length}</span>
-                <span className="group-rule" />
-              </div>
+                <span className="group-rule" aria-hidden="true" />
+              </h2>
               <div className="entity-grid">
                 {list.map((e) => {
                   const image = e.has_image ? `/api/entities/${e.id}/image` : null;
@@ -217,7 +313,7 @@ export default function BibleView({
                         </div>
                       )}
                       {e.tracking !== 'off' && (
-                        <div className="sub" style={{ color: 'var(--color-caution)' }}>
+                        <div className="sub card-tracking" style={{ color: 'var(--color-caution)' }}>
                           tracking · {e.tracking}
                           {e.gap_threshold ? ` ≥${e.gap_threshold}` : ''}
                         </div>

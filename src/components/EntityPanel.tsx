@@ -1228,43 +1228,6 @@ export default function EntityPanel({
                 </div>
               )}
 
-                <div className="dw-ie__field">
-                  <span className="dw-ie__label">Aliases</span>
-                  {detail.aliases.length === 0 ? (
-                    <span className="dw-ie__empty">None yet</span>
-                  ) : (
-                    <div className="dw-ie__alias-list">
-                      {detail.aliases.map((a) => (
-                        <span className="dw-ie__alias" key={a.id}>
-                          {a.alias}
-                          <button
-                            className="dw-ie__x"
-                            title="Remove alias"
-                            onClick={async () => {
-                              await api.removeAlias(entityId, a.id);
-                              await load();
-                            }}
-                          >
-                            ✕
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="dw-ie__alias-row">
-                    <input
-                      className="dw-ie__input dw-ie__input--surface"
-                      value={aliasDraft}
-                      onChange={(ev) => setAliasDraft(ev.target.value)}
-                      placeholder="Add a spelling variant"
-                      onKeyDown={(ev) => ev.key === 'Enter' && addAlias()}
-                    />
-                    <button className="dw-ie__btn" onClick={addAlias}>
-                      Add
-                    </button>
-                  </div>
-                </div>
-
                 {isItem ? (
                   <div className="dw-ie__field">
                     <span className="dw-ie__label">Possessed by</span>
@@ -1354,6 +1317,43 @@ export default function EntityPanel({
                     </div>
                   </div>
                 )}
+
+                <div className="dw-ie__field">
+                  <span className="dw-ie__label">Aliases</span>
+                  {detail.aliases.length === 0 ? (
+                    <span className="dw-ie__empty">None yet</span>
+                  ) : (
+                    <div className="dw-ie__alias-list">
+                      {detail.aliases.map((a) => (
+                        <span className="dw-ie__alias" key={a.id}>
+                          {a.alias}
+                          <button
+                            className="dw-ie__x"
+                            title="Remove alias"
+                            onClick={async () => {
+                              await api.removeAlias(entityId, a.id);
+                              await load();
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="dw-ie__alias-row">
+                    <input
+                      className="dw-ie__input dw-ie__input--surface"
+                      value={aliasDraft}
+                      onChange={(ev) => setAliasDraft(ev.target.value)}
+                      placeholder="Add a spelling variant"
+                      onKeyDown={(ev) => ev.key === 'Enter' && addAlias()}
+                    />
+                    <button className="dw-ie__btn" onClick={addAlias}>
+                      Add
+                    </button>
+                  </div>
+                </div>
 
                 <button className="dw-ie__merge" onClick={() => setMergeOpen((v) => !v)}>
                   <MergeIcon />

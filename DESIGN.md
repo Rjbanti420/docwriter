@@ -64,7 +64,7 @@ typography:
     letterSpacing: "0em"
   label:
     fontFamily: "DM Mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
-    fontSize: "10.5px"
+    fontSize: "11px"
     fontWeight: 500
     lineHeight: 1
     letterSpacing: "0.14em"
@@ -166,17 +166,17 @@ A cool, desaturated sea-glass range, warmed only by the five entity hues and the
 **Character:** A literary serif for everything the writer owns, a neutral grotesk for the machinery around it, and a mono for the small printed labels. The pairing reads as a book with a well-made index, not as an app with a theme.
 
 ### Hierarchy
-- **Display** (500, 44px, 1.02, −0.028em): screen titles such as "The Bible". One per screen.
+- **Display** (500, 44px, 1.02, −0.028em; 32px below 720px, 28px below 480px): screen titles such as "The Bible". One per screen.
 - **Headline** (600, 30px, 1.15, −0.015em): the entity panel title, the name of the thing being edited.
 - **Title** (500, 23px, 1.2): entity card names, candidate names. Spectral, never bolded past 500.
 - **Body** (400, 14px, 1.3): controls, forms, navigation, metadata. Hanken Grotesk.
 - **Reading** (400, 19px, 1.75): manuscript text in the 660px reading column; the only place long prose lives.
-- **Label** (500, 10.5px, 0.14em, uppercase): group heads, section labels, count badges. DM Mono, and the one known exception to the 11px floor.
+- **Label** (500, 11px, 0.14em, uppercase): section labels and count badges. Group heads use the same face at 12px. DM Mono.
 
 ### Named Rules
 **The Two Voices Rule.** Spectral is for what the writer named or reads; Hanken is for what the software does. A button never uses the serif, and a chapter title never uses the grotesk.
 
-**The 11px Floor Rule.** Functional text never goes below 11px. DM Mono labels sit at 10.5px today as the one known exception; raising them to 11–12px is the correction, never the precedent.
+**The 11px Floor Rule.** Functional text never goes below 11px. Group heads sit one step above at 12px; every other mono label, count and badge is 11px.
 
 ## Layout
 
@@ -268,7 +268,7 @@ A 780px dialog on the 20px radius with the modal shadow. Title in Spectral 30px,
 - **Don't** add a second accent hue, a gradient hero, or a metric-tile row. The rejected reference is the generic SaaS dashboard: stock gradients, purple blobs, cards that exist to fill space.
 - **Don't** hard-code type or theme hex values inside a component.
 - **Don't** use `--color-text-faint` for functional text — it measures 3.9:1 at night.
-- **Don't** set functional text below 11px; the 10.5px group labels are a defect to fix, not the standard.
+- **Don't** set functional text below 11px.
 - **Don't** use DM Mono for anything longer than a label.
 - **Don't** use pure-black shadows or a fifth elevation.
 - **Don't** fix a card or control height that ignores the density multiplier.

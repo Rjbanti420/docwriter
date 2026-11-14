@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-14T14:04:30.643Z",
+  "generatedAt": "2026-11-14T16:13:51.305Z",
   "title": "Design System: DocWriter",
   "extensions": {
     "colorMeta": {
@@ -638,7 +638,7 @@
       },
       {
         "name": "The 11px Floor Rule",
-        "body": "Functional text never goes below 11px. DM Mono labels sit at 10.5px today as the one known exception; raising them to 11–12px is the correction, never the precedent.",
+        "body": "Functional text never goes below 11px. Group heads sit one step above at 12px; every other mono label, count and badge is 11px.",
         "section": "typography"
       },
       {
@@ -679,7 +679,7 @@
       "Don't add a second accent hue, a gradient hero, or a metric-tile row. The rejected reference is the generic SaaS dashboard.",
       "Don't hard-code type or theme hex values inside a component.",
       "Don't use --color-text-faint for functional text — it measures 3.9:1 at night.",
-      "Don't set functional text below 11px; the 10.5px group labels are a defect to fix, not the standard.",
+      "Don't set functional text below 11px.",
       "Don't use DM Mono for anything longer than a label.",
       "Don't use pure-black shadows or a fifth elevation.",
       "Don't fix a card or control height that ignores the density multiplier."
