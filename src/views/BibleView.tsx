@@ -216,7 +216,7 @@ export default function BibleView({
 
       {entities.length === 0 ? (
         <div className="empty-state">
-          The bible is empty. Paste a chapter and accept some names to start building it.
+          The Bible is empty. Paste a chapter and accept some names to start building it.
         </div>
       ) : (
         <>
@@ -237,7 +237,7 @@ export default function BibleView({
                   onClick={() => setFilter((f) => (f === typeName ? 'all' : typeName))}
                 >
                   <span className="d" style={{ ['--e']: list[0].type_color } as CSSProperties} />
-                  {typeName} · {list.length}
+                  {typeName}
                 </button>
               ))}
             </div>
@@ -277,12 +277,13 @@ export default function BibleView({
                   const image = e.has_image ? `/api/entities/${e.id}/image` : null;
                   const death = e.type_name === 'Character' ? getDeath(e.fields) : null;
                   const deathChapter = death?.chapter != null ? chapters.find((c) => c.id === death.chapter) : undefined;
+                  const count = e.mention_count ?? 0;
                   // The card is one button, so its visible text runs together when
                   // announced. Give it the same facts in sentence form.
                   const spoken = [
                     e.name,
                     e.type_name || 'Uncategorised',
-                    `${e.mention_count} ${e.mention_count === 1 ? 'mention' : 'mentions'}`,
+                    `${count} ${count === 1 ? 'mention' : 'mentions'}`,
                     e.first_chapter
                       ? e.first_chapter === e.last_chapter
                         ? `chapter ${e.first_chapter}`
@@ -291,6 +292,7 @@ export default function BibleView({
                     death ? `died${deathChapter ? ` in chapter ${chapterNumber(deathChapter)}` : ''}` : null,
                     e.tracking !== 'off' ? `tracking ${e.tracking}` : null,
                   ].filter(Boolean).join(', ');
+                  const summary = e.summary?.trim();
                   return (
                     <button
                       className={`entity-card${death ? ' dead' : ''}${selectMode ? ' selecting' : ''}${selected.has(e.id) ? ' selected' : ''}`}
@@ -318,7 +320,14 @@ export default function BibleView({
                         </div>
                       </div>
                       <div className="sub card-meta">
-                        <span>{e.mention_count} mentions</span>
+                        {summary ? <span className="card-summary">{summary}</span> : null}
+                        {count > 0 ? (
+                          <span>
+                            {count} {count === 1 ? 'mention' : 'mentions'}
+                          </span>
+                        ) : !summary && e.first_chapter ? (
+                          <span>First seen ch.{e.first_chapter}</span>
+                        ) : null}
                         {e.first_chapter ? (
                           <span className="pill">ch.{e.first_chapter}–{e.last_chapter}</span>
                         ) : null}

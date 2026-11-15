@@ -1621,6 +1621,15 @@ textarea:focus {
   align-items: center;
   gap: 8px;
 }
+/* The summary is the card's second line when it has one; one line, so a long
+   summary cannot push the count and chapter pill off the card. */
+.card-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .pill {
   padding: 2px 7px;
   border-radius: 6px;
@@ -4659,6 +4668,7 @@ button.primary {
 .bible.is-compact .entity-card .nm { font-size: 16px; }
 .bible.is-compact .card-meta { margin-left: auto; font-size: 12px; }
 /* compact rows drop the extra state lines; the Show filters above surface them */
+.bible.is-compact .card-summary,
 .bible.is-compact .badge-dead,
 .bible.is-compact .card-tracking { display: none; }
 
