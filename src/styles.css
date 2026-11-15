@@ -959,6 +959,17 @@ textarea:focus {
   font-size: 12px;
   color: var(--color-text-secondary);
 }
+/* Reading position, a hairline at the window edge: no reading height lost. */
+.reading-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2px;
+  z-index: 40;
+  pointer-events: none;
+  background: var(--color-accent);
+  transform: scaleX(var(--reading-progress, 0));
+  transform-origin: 0 50%;
+}
 .reader-text[contenteditable="true"] {
   min-height: 260px;
   outline: none;

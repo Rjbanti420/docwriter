@@ -44,6 +44,7 @@ export default function ReadView({
   const [renumber, setRenumber] = useState(false);
   const cancelDeleteRef = useRef<HTMLButtonElement | null>(null);
   const deleteReturnRef = useRef<HTMLElement | null>(null);
+  const progressRef = useRef<HTMLDivElement | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -130,6 +131,34 @@ export default function ReadView({
     if (showDelete) cancelDeleteRef.current?.focus();
   }, [showDelete]);
 
+  // The chapter is long enough that the scrollbar is not a position. A hairline
+  // at the window edge tracks it without taking a single line of reading room.
+  useEffect(() => {
+    const scroller = progressRef.current?.closest('.main');
+    if (!scroller) return;
+    const update = () => {
+      const max = scroller.scrollHeight - scroller.clientHeight;
+      const ratio = max > 0 ? scroller.scrollTop / max : 0;
+      progressRef.current?.style.setProperty('--reading-progress', String(ratio));
+    };
+    update();
+    scroller.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      scroller.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [detail?.chapter?.id, detail?.text]);
+
+  const toTop = () => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Zero, not the paper: scrollIntoView would tuck the chapter head under the
+    // sticky topbar. The toolbar belongs at the top of the chapter too.
+    progressRef.current
+      ?.closest('.main')
+      ?.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  };
+
   useEffect(() => {
     if (!editing) return;
     const onKey = (ev: KeyboardEvent) => {
@@ -184,6 +213,7 @@ export default function ReadView({
     <div className="main-inner">
       {chapter && (
         <>
+          <div className="reading-progress" ref={progressRef} aria-hidden="true" />
           <div className="toolbar">
             <button
               disabled={idx <= 0 || saving}
@@ -308,12 +338,11 @@ export default function ReadView({
               {!editing && (
                 <div className="chapter-end">
                   <span>End of Chapter {chapterNumber(chapter)}</span>
-                  <button
-                    disabled={idx >= chapters.length - 1 || saving}
-                    onClick={() => onSelect(chapters[idx + 1].id)}
-                  >
-                    Next chapter →
-                  </button>
+                  {idx >= chapters.length - 1 ? (
+                    <button onClick={toTop}>Back to top</button>
+                  ) : (
+                    <button onClick={() => onSelect(chapters[idx + 1].id)}>Next chapter →</button>
+                  )}
                 </div>
               )}
             </div>
@@ -329,6 +358,19 @@ export default function ReadView({
             aria-modal="true"
             aria-labelledby="delete-chapter-title"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(ev) => {
+              if (ev.key !== 'Tab') return;
+              const items = ev.currentTarget.querySelectorAll<HTMLElement>('button, input');
+              const first = items[0];
+              const last = items[items.length - 1];
+              if (ev.shiftKey && document.activeElement === first) {
+                ev.preventDefault();
+                last.focus();
+              } else if (!ev.shiftKey && document.activeElement === last) {
+                ev.preventDefault();
+                first.focus();
+              }
+            }}
           >
             <div className="modal-head">
               <h2 id="delete-chapter-title">Delete Chapter {chapter.number || ''}?</h2>
