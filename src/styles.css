@@ -5219,6 +5219,9 @@ body {
   contain-intrinsic-size: auto 88px;
 }
 .dw-chapter { contain-intrinsic-size: auto 42px; }
+/* A trash row is one line: 24px name + 20px meta + 1px. The shared 88px guess
+   made 129 unseen rows look 43px each taller than they are. */
+.dw-list > .dw-trash { contain-intrinsic-size: auto 45px; }
 .list > .scan-chapter { contain-intrinsic-size: auto 48px; }
 .entity-card { contain-intrinsic-size: auto 220px; }
 
