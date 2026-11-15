@@ -105,6 +105,14 @@ export default function BibleView({
   const shownGroups = typeEntries
     .map(([name, list]) => [name, sortList(list.filter(matchesState))] as const)
     .filter(([, list]) => list.length > 0);
+  // Small groups share a band while their cards still fit one row: 1+1, 1+2, 2+1, 1+1+1.
+  const groupRows: (typeof shownGroups)[] = [];
+  for (const group of shownGroups) {
+    const last = groupRows[groupRows.length - 1];
+    const used = last ? last.reduce((n, [, list]) => n + list.length, 0) : 0;
+    if (last && used + group[1].length <= 3) last.push(group);
+    else groupRows.push([group]);
+  }
 
   function toggleState(s: StateFilter) {
     setStates((prev) => {
@@ -227,7 +235,7 @@ export default function BibleView({
                 aria-pressed={filter === 'all'}
                 onClick={() => setFilter('all')}
               >
-                All · {entities.length}
+                All
               </button>
               {groupEntries.map(([typeName, list]) => (
                 <button
@@ -265,88 +273,103 @@ export default function BibleView({
             </div>
           )}
 
-          {shownGroups.map(([typeName, list]) => (
-            <div className="entity-group" key={typeName}>
-              <h2 className="group-head">
-                <span className="group-label">{typeName}</span>
-                <span className="group-count">{list.length}</span>
-                <span className="group-rule" aria-hidden="true" />
-              </h2>
-              <div className="entity-grid">
-                {list.map((e) => {
-                  const image = e.has_image ? `/api/entities/${e.id}/image` : null;
-                  const death = e.type_name === 'Character' ? getDeath(e.fields) : null;
-                  const deathChapter = death?.chapter != null ? chapters.find((c) => c.id === death.chapter) : undefined;
-                  const count = e.mention_count ?? 0;
-                  // The card is one button, so its visible text runs together when
-                  // announced. Give it the same facts in sentence form.
-                  const spoken = [
-                    e.name,
-                    e.type_name || 'Uncategorised',
-                    `${count} ${count === 1 ? 'mention' : 'mentions'}`,
-                    e.first_chapter
-                      ? e.first_chapter === e.last_chapter
-                        ? `chapter ${e.first_chapter}`
-                        : `chapters ${e.first_chapter} to ${e.last_chapter}`
-                      : null,
-                    death ? `died${deathChapter ? ` in chapter ${chapterNumber(deathChapter)}` : ''}` : null,
-                    e.tracking !== 'off' ? `tracking ${e.tracking}` : null,
-                  ].filter(Boolean).join(', ');
-                  const summary = e.summary?.trim();
-                  return (
-                    <button
-                      className={`entity-card${death ? ' dead' : ''}${selectMode ? ' selecting' : ''}${selected.has(e.id) ? ' selected' : ''}`}
-                      key={e.id}
-                      aria-label={spoken}
-                      aria-pressed={selectMode ? selected.has(e.id) : undefined}
-                      onClick={() => (selectMode ? toggleSelect(e.id) : onOpenEntity(e.id))}
-                    >
-                      <div className="card-head">
-                        {selectMode && (
-                          <span className={`pick${selected.has(e.id) ? ' on' : ''}`} aria-hidden="true">
-                            {selected.has(e.id) ? '✓' : ''}
-                          </span>
-                        )}
-                        {image ? (
-                          <img className="card-icon card-photo" src={image} alt="" loading="lazy" />
-                        ) : (
-                          <span className="card-icon" style={{ ['--e']: e.type_color } as CSSProperties}>
-                            {e.type_icon}
-                          </span>
-                        )}
-                        <div className="nm">
-                          {death && <span title="Deceased">† </span>}
-                          {e.name}
-                        </div>
-                      </div>
-                      <div className="sub card-meta">
-                        {summary ? <span className="card-summary">{summary}</span> : null}
-                        {count > 0 ? (
-                          <span>
-                            {count} {count === 1 ? 'mention' : 'mentions'}
-                          </span>
-                        ) : !summary && e.first_chapter ? (
-                          <span>First seen ch.{e.first_chapter}</span>
-                        ) : null}
-                        {e.first_chapter ? (
-                          <span className="pill">ch.{e.first_chapter}–{e.last_chapter}</span>
-                        ) : null}
-                      </div>
-                      {death && (
-                        <div className="badge badge-dead">
-                          died{deathChapter ? ` in ch.${chapterNumber(deathChapter)}` : ''}
-                        </div>
-                      )}
-                      {e.tracking !== 'off' && (
-                        <div className="sub card-tracking" style={{ color: 'var(--color-caution)' }}>
-                          tracking · {e.tracking}
-                          {e.gap_threshold ? ` ≥${e.gap_threshold}` : ''}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+          {groupRows.map((row) => (
+            <div
+              className={`entity-group-row${row.length > 1 ? ' is-paired' : ''}`}
+              key={row.map(([typeName]) => typeName).join('|')}
+            >
+              {row.map(([typeName, list]) => (
+                <div
+                  className="entity-group"
+                  key={typeName}
+                  style={row.length > 1 ? { gridColumn: `span ${list.length}` } : undefined}
+                >
+                  <h2 className="group-head">
+                    <span className="group-label">{typeName}</span>
+                    <span className="group-count">{list.length}</span>
+                    <span className="group-rule" aria-hidden="true" />
+                  </h2>
+                  <div className="entity-grid">
+                    {list.map((e) => {
+                      const image = e.has_image ? `/api/entities/${e.id}/image` : null;
+                      const death = e.type_name === 'Character' ? getDeath(e.fields) : null;
+                      const deathChapter = death?.chapter != null ? chapters.find((c) => c.id === death.chapter) : undefined;
+                      const count = e.mention_count ?? 0;
+                      // The card is one button, so its visible text runs together when
+                      // announced. Give it the same facts in sentence form.
+                      const spoken = [
+                        e.name,
+                        e.type_name || 'Uncategorised',
+                        `${count} ${count === 1 ? 'mention' : 'mentions'}`,
+                        e.first_chapter
+                          ? e.first_chapter === e.last_chapter
+                            ? `chapter ${e.first_chapter}`
+                            : `chapters ${e.first_chapter} to ${e.last_chapter}`
+                          : null,
+                        death ? `died${deathChapter ? ` in chapter ${chapterNumber(deathChapter)}` : ''}` : null,
+                        e.tracking !== 'off' ? `tracking ${e.tracking}` : null,
+                      ].filter(Boolean).join(', ');
+                      const summary = e.summary?.trim();
+                      return (
+                        <button
+                          className={`entity-card${death ? ' dead' : ''}${selectMode ? ' selecting' : ''}${selected.has(e.id) ? ' selected' : ''}`}
+                          key={e.id}
+                          aria-label={spoken}
+                          aria-pressed={selectMode ? selected.has(e.id) : undefined}
+                          onClick={() => (selectMode ? toggleSelect(e.id) : onOpenEntity(e.id))}
+                        >
+                          <div className="card-head">
+                            {selectMode && (
+                              <span className={`pick${selected.has(e.id) ? ' on' : ''}`} aria-hidden="true">
+                                {selected.has(e.id) ? '✓' : ''}
+                              </span>
+                            )}
+                            {image ? (
+                              <img className="card-icon card-photo" src={image} alt="" loading="lazy" />
+                            ) : (
+                              <span className="card-icon" style={{ ['--e']: e.type_color } as CSSProperties}>
+                                {e.type_icon}
+                              </span>
+                            )}
+                            <div className="nm">
+                              {death && <span title="Deceased">† </span>}
+                              {e.name}
+                            </div>
+                          </div>
+                          <div className="sub card-meta">
+                            {summary ? <span className="card-summary">{summary}</span> : null}
+                            {count > 0 ? (
+                              <span>
+                                {count} {count === 1 ? 'mention' : 'mentions'}
+                              </span>
+                            ) : !summary ? (
+                              <span>Not yet mentioned</span>
+                            ) : null}
+                            {e.first_chapter ? (
+                              <span className="pill">
+                                {e.first_chapter === e.last_chapter
+                                  ? `ch.${e.first_chapter}`
+                                  : `ch.${e.first_chapter}–${e.last_chapter}`}
+                              </span>
+                            ) : null}
+                          </div>
+                          {death && (
+                            <div className="badge badge-dead">
+                              died{deathChapter ? ` in ch.${chapterNumber(deathChapter)}` : ''}
+                            </div>
+                          )}
+                          {e.tracking !== 'off' && (
+                            <div className="sub card-tracking" style={{ color: 'var(--color-caution)' }}>
+                              tracking · {e.tracking}
+                              {e.gap_threshold ? ` ≥${e.gap_threshold}` : ''}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
         </>

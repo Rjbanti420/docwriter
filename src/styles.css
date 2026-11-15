@@ -1586,6 +1586,15 @@ textarea:focus {
 .entity-group {
   margin-bottom: calc(28px * var(--density));
 }
+/* Two single-card groups share a band instead of each owning one. The row uses
+   the same track maths as .entity-grid, so paired cards keep the normal width. */
+.entity-group-row.is-paired {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: 0 16px;
+  align-items: start;
+}
+.entity-group-row.is-paired > .entity-group { min-width: 0; }
 .group-head {
   display: flex;
   align-items: center;
