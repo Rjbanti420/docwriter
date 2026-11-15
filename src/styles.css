@@ -304,6 +304,9 @@ textarea:focus {
 /* three-way theme switch */
 .segmented {
   display: inline-flex;
+  /* A flex child stretches by default; a two-word toggle must not become an
+     858px track with the options stranded at its left edge. */
+  align-self: flex-start;
   gap: 2px;
   padding: 3px;
   background: var(--color-surface);
@@ -311,6 +314,9 @@ textarea:focus {
   border-radius: var(--radius-pill);
 }
 .segmented button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
   border: none;
   background: transparent;
   padding: 5px 12px;
@@ -1363,6 +1369,7 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  min-height: 34px;
   padding: 5px 12px;
   font-size: 13px;
   border-radius: var(--radius-pill);
@@ -2974,6 +2981,9 @@ textarea:focus {
 .dw-trash .dw-card-meta {
   margin-top: 1px;
   font-size: var(--text-xs);
+}
+.book-path {
+  overflow-wrap: anywhere;
 }
 .dw-trash-filter {
   max-width: 320px;

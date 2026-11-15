@@ -1,13 +1,13 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = join(root, 'data');
 
 // DOCWRITER_DB lets the desktop app and tests point at another database file.
-const dbPath = process.env.DOCWRITER_DB || join(dataDir, 'docwriter.db');
+export const dbPath = resolve(process.env.DOCWRITER_DB || join(dataDir, 'docwriter.db'));
 mkdirSync(dirname(dbPath), { recursive: true });
 
 export const db = new DatabaseSync(dbPath);

@@ -45,6 +45,21 @@ export default function App() {
   const [triage, setTriage] = useState<{ items: Candidate[]; index: number } | null>(null);
   const [entityId, setEntityId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Settings replaces the page, so closing it must hand the keyboard back to
+  // the control that opened it.
+  const settingsReturnRef = useRef<HTMLElement | null>(null);
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false);
+    // After the commit, not during it: the title inside Settings is focused and
+    // unmounting it would otherwise drop focus back to the document.
+    window.setTimeout(() => {
+      const opener = settingsReturnRef.current;
+      // The sidebar is a drawer: once it closes, the opener is hidden and
+      // unfocusable, so fall back to the control that opens it.
+      if (opener && opener.checkVisibility?.({ checkVisibilityCSS: true })) opener.focus();
+      else document.querySelector<HTMLElement>('.menu-btn')?.focus();
+    }, 0);
+  }, []);
   const [menuOpen, setMenuOpen] = useState(false);
   const [planningFocus, setPlanningFocus] = useState<number | null>(null);
   const [meta, setMeta] = useState<ExportMeta | null>(null);
@@ -539,7 +554,7 @@ export default function App() {
         }
         if (settingsOpen) {
           ev.stopImmediatePropagation();
-          setSettingsOpen(false);
+          closeSettings();
           return;
         }
         if (menuOpen) {
@@ -711,8 +726,9 @@ export default function App() {
           <button
             className={`dw-nav__item${settingsOpen ? ' is-active' : ''}`}
             aria-current={settingsOpen ? 'page' : undefined}
-            onClick={() => {
+            onClick={(event) => {
               if (!confirmDiscard()) return;
+              settingsReturnRef.current = event.currentTarget;
               setSettingsOpen(true);
               setMenuOpen(false);
               setEntityId(null);
@@ -750,7 +766,7 @@ export default function App() {
         <div className="body">
           <div className="content">
         {settingsOpen ? (
-          <SettingsView onClose={() => setSettingsOpen(false)} />
+          <SettingsView onClose={closeSettings} />
         ) : (
           <>
         {view === 'read' &&

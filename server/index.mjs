@@ -5,7 +5,7 @@ import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { randomInt } from 'node:crypto';
-import { db, migrate } from './db.mjs';
+import { db, dbPath, migrate } from './db.mjs';
 import { detect, normalizeKey, findLookalike, buildLookalikeIndex } from './detect.mjs';
 import { mergeFields, newAliasList, repointReferences } from './entitymerge.mjs';
 import {
@@ -2370,6 +2370,9 @@ function metaState() {
     profileName: rows.profile_name ?? '',
     profileEmail: rows.profile_email ?? '',
     libraryPath: rows.library_path ?? '',
+    // The file actually open, so Settings can name it instead of a path a
+    // writer typed into a field that nothing reads.
+    bookPath: dbPath,
     due: hasWork && isNudgeDue({ nudge, lastExportAt, lastNudgedOn, today }),
   };
 }

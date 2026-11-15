@@ -304,6 +304,8 @@ export interface ExportMeta {
   profileName: string;
   profileEmail: string;
   libraryPath: string;
+  /** The SQLite file this book is open from. Read-only; shown in Settings. */
+  bookPath: string;
   due: boolean;
 }
 

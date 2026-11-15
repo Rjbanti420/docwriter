@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ExportMeta } from '../types';
 import { applyDensity, applyFontReading, applyFontUi, applyTheme } from '../appearance';
@@ -43,9 +43,13 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
   const [fontReading, setFontReading] = useState('Spectral');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [libraryPath, setLibraryPath] = useState('');
   const [meta, setMeta] = useState<ExportMeta | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const noticeTimer = useRef<number | null>(null);
 
   // The reminder and appearance live in the book, so Settings reads them from
   // the API rather than localStorage — which the packaged app loses every launch.
@@ -58,7 +62,6 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
       if (m.fontReading) setFontReading(m.fontReading);
       if (m.profileName) setName(m.profileName);
       if (m.profileEmail) setEmail(m.profileEmail);
-      if (m.libraryPath) setLibraryPath(m.libraryPath);
     }).catch(() => {});
   }, []);
 
@@ -69,161 +72,219 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
     try { setFontReading(localStorage.getItem(FONT_READING_KEY) || 'Spectral'); } catch {}
     try { setName(localStorage.getItem('docwriter.profile.name') || ''); } catch {}
     try { setEmail(localStorage.getItem('docwriter.profile.email') || ''); } catch {}
-    try { setLibraryPath(localStorage.getItem('docwriter.libraryPath') || '~/Documents/DocWriter'); } catch {}
   }, []);
 
-  // The meta write is best-effort; the visible change must not wait for it.
-  const remember = (patch: Record<string, string>) => {
-    api.setMeta(patch).then(setMeta).catch(() => {});
+  // Settings is a page, not a dialog, but it replaces the writer's place in the
+  // book; the title takes focus so the keyboard starts at the top of it.
+  useEffect(() => {
+    titleRef.current?.focus();
+    return () => {
+      if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    };
+  }, []);
+
+  const say = (message: string) => {
+    setNotice(message);
+    if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(''), 2500);
+  };
+
+  // Appearance applies before the write, so a failed write must not undo the
+  // visible change — it reports instead.
+  const remember = async (patch: Record<string, string>) => {
+    try {
+      setMeta(await api.setMeta(patch));
+      return true;
+    } catch {
+      setError('Could not save that to the book. It applies now, but may not survive a restart.');
+      return false;
+    }
   };
 
   function applyThemeChoice(t: string) {
     setTheme(t);
     try { localStorage.setItem(THEME_KEY, t); } catch {}
     applyTheme(t);
-    remember({ theme: t });
+    void remember({ theme: t });
   }
 
   function applyDensityChoice(d: string) {
     setDensity(d);
     try { localStorage.setItem(DENSITY_KEY, d); } catch {}
     applyDensity(d);
-    remember({ density: d });
+    void remember({ density: d });
   }
 
   function applyFontUiChoice(f: string) {
     setFontUi(f);
     try { localStorage.setItem(FONT_UI_KEY, f); } catch {}
     applyFontUi(f);
-    remember({ font_ui: f });
+    void remember({ font_ui: f });
   }
 
   function applyFontReadingChoice(f: string) {
     setFontReading(f);
     try { localStorage.setItem(FONT_READING_KEY, f); } catch {}
     applyFontReading(f);
-    remember({ font_reading: f });
+    void remember({ font_reading: f });
   }
 
-  function saveProfile() {
+  async function saveProfile() {
     try {
       localStorage.setItem('docwriter.profile.name', name);
       localStorage.setItem('docwriter.profile.email', email);
-      localStorage.setItem('docwriter.libraryPath', libraryPath);
     } catch {}
-    remember({ profile_name: name, profile_email: email, library_path: libraryPath });
+    if (await remember({ profile_name: name, profile_email: email })) say('Profile saved.');
   }
 
   async function exportBook() {
     setExporting(true);
+    setError('');
     try {
       // exportMarkdown stamps the date itself, once the file is really on disk.
-      if (await api.exportMarkdown()) setMeta(await api.meta());
+      if (await api.exportMarkdown()) {
+        setMeta(await api.meta());
+        say('Exported as Markdown.');
+      }
     } catch {
-      alert('Could not write the export.');
+      setError('Could not write the export.');
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function downloadBackup() {
+    if (backingUp) return;
+    setBackingUp(true);
+    setError('');
+    try {
+      await api.backup();
+      say('Backup downloaded.');
+    } catch {
+      setError('Could not create the backup.');
+    } finally {
+      setBackingUp(false);
     }
   }
 
   async function changeNudge(nudge: string) {
     try {
       setMeta(await api.setMeta({ export_nudge: nudge }));
+      say('Reminder saved.');
     } catch {
-      alert('Could not save that reminder setting.');
+      setError('Could not save that reminder setting.');
     }
   }
 
   return (
     <div className="main-inner">
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
-        <h1 style={{margin:0,fontSize:20}}>Profile / Settings</h1>
-        <button className="ghost" aria-label="Close settings" onClick={onClose}>✕</button>
+      <div className="reader-head">
+        <div className="reader-head__titles">
+          <h1 ref={titleRef} tabIndex={-1}>Settings</h1>
+          <p className="reader-head__sub">
+            Look is saved as you choose it; your profile saves with the button.
+          </p>
+        </div>
+        <div className="reader-head__actions">
+          <button className="ghost" aria-label="Close settings" onClick={onClose}>✕</button>
+        </div>
       </div>
 
-      <section style={{marginBottom:16}} className="card">
-        <h2 style={{margin:'0 0 10px',fontSize:16}}>User</h2>
+      {error && (
+        <div className="save-error" role="alert">
+          <div>
+            <strong>That didn’t go through.</strong> {error}
+          </div>
+          <button onClick={() => setError('')}>Dismiss</button>
+        </div>
+      )}
+      {notice && (
+        <p className="progress" role="status">{notice}</p>
+      )}
+
+      <section className="card" style={{ marginBottom: 16 }}>
+        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>User</h2>
         <div className="field">
           <label htmlFor="set-name">Name</label>
-          <input id="set-name" value={name} onChange={(e)=>setName(e.target.value)} />
+          <input id="set-name" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="field">
           <label htmlFor="set-email">Email (placeholder for future sync)</label>
-          <input id="set-email" value={email} onChange={(e)=>setEmail(e.target.value)} />
+          <input id="set-email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
-        <div className="field">
-          <label htmlFor="set-library">Library path</label>
-          <input id="set-library" value={libraryPath} onChange={(e)=>setLibraryPath(e.target.value)} />
-        </div>
-        <div className="actions"><button className="primary" onClick={saveProfile}>Save profile</button></div>
+        <div className="actions"><button className="btn-secondary" onClick={saveProfile}>Save profile</button></div>
       </section>
 
-      <section style={{marginBottom:16}} className="card">
-        <h2 style={{margin:'0 0 10px',fontSize:16}}>Projects</h2>
-        <p className="progress" style={{marginTop:0,marginBottom:8}}>Library folder: <code>{libraryPath || '~/Documents/DocWriter'}</code></p>
-        <div className="actions" style={{marginTop:0}}>
-          <button onClick={async ()=>{ try{ const list=await (await import('../api')).api.projects(); alert('Projects: '+list.length); }catch(e){alert('err');}}}>Load projects</button>
-        </div>
-      </section>
-
-      <section style={{marginBottom:16}} className="card">
-        <h2 style={{margin:'0 0 10px',fontSize:16}}>Export</h2>
-        <p className="progress" style={{marginTop:0,marginBottom:8}}>
+      <section className="card" style={{ marginBottom: 16 }}>
+        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Export</h2>
+        <p className="progress" style={{ marginTop: 0, marginBottom: 8 }}>
           Writes the whole book to one Markdown file — every chapter’s current draft, the Bible and
           Planning. Images, Trash and the Review queue stay behind.
           {meta?.lastExportAt && <> Last exported {meta.lastExportAt}.</>}
         </p>
-        <div className="actions" style={{marginTop:0}}>
+        <div className="actions" style={{ marginTop: 0 }}>
           <button className="primary" disabled={exporting} onClick={exportBook}>
             {exporting ? 'Exporting…' : 'Export as Markdown'}
           </button>
         </div>
-        <div className="field" style={{marginTop:12,marginBottom:0}}>
+        <div className="field" style={{ marginTop: 12, marginBottom: 0 }}>
           <label htmlFor="set-nudge">Remind me to export</label>
-          <select id="set-nudge" value={meta?.nudge ?? 'daily'} disabled={!meta} onChange={(e)=>changeNudge(e.target.value)}>
+          <select id="set-nudge" value={meta?.nudge ?? 'daily'} disabled={!meta} onChange={(e) => changeNudge(e.target.value)}>
             {NUDGE_CHOICES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </div>
       </section>
 
-      <section style={{marginBottom:16}} className="card">
-        <h2 style={{margin:'0 0 10px',fontSize:16}}>Backup</h2>
-        <p className="progress" style={{marginTop:0,marginBottom:8}}>
+      <section className="card" style={{ marginBottom: 16 }}>
+        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Backup</h2>
+        <p className="progress" style={{ marginTop: 0, marginBottom: 8 }}>
           Saves a complete, self-contained copy of this book — the whole database, including
           everything written since the last checkpoint.
         </p>
-        <div className="actions" style={{marginTop:0}}>
-          <button className="primary" onClick={() => api.backup().catch(() => alert('Could not create the backup.'))}>
-            Download a backup
+        <p className="progress" style={{ marginTop: 0, marginBottom: 12 }}>
+          This book is one file: <code className="book-path">{meta?.bookPath || '…'}</code>
+        </p>
+        <div className="actions" style={{ marginTop: 0 }}>
+          <button className="btn-secondary" disabled={backingUp} onClick={downloadBackup}>
+            {backingUp ? 'Preparing…' : 'Download a backup'}
           </button>
         </div>
       </section>
 
       <section className="card">
-        <h2 style={{margin:'0 0 10px',fontSize:16}}>Interface</h2>
+        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Interface</h2>
         <div className="field">
           <label>Theme</label>
           <div className="type-row">
-            {THEMES.map(t => <button key={t.id} className={theme===t.id?'type-btn sel':'type-btn'} onClick={()=>applyThemeChoice(t.id)}>{t.label}</button>)}
+            {THEMES.map(t => (
+              <button
+                key={t.id}
+                className={theme === t.id ? 'type-btn sel' : 'type-btn'}
+                aria-pressed={theme === t.id}
+                onClick={() => applyThemeChoice(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
         </div>
         <div className="field">
           <label>Density</label>
           <div className="segmented">
-            <button aria-pressed={density==='comfortable'} className={density==='comfortable'?'active':''} onClick={()=>applyDensityChoice('comfortable')}>Comfortable</button>
-            <button aria-pressed={density==='compact'} className={density==='compact'?'active':''} onClick={()=>applyDensityChoice('compact')}>Compact</button>
+            <button aria-pressed={density === 'comfortable'} className={density === 'comfortable' ? 'active' : ''} onClick={() => applyDensityChoice('comfortable')}>Comfortable</button>
+            <button aria-pressed={density === 'compact'} className={density === 'compact' ? 'active' : ''} onClick={() => applyDensityChoice('compact')}>Compact</button>
           </div>
         </div>
         <div className="row">
           <div className="field">
             <label htmlFor="set-font-ui">UI font</label>
-            <select id="set-font-ui" value={fontUi} onChange={(e)=>applyFontUiChoice(e.target.value)}>
+            <select id="set-font-ui" value={fontUi} onChange={(e) => applyFontUiChoice(e.target.value)}>
               {UI_FONTS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </div>
           <div className="field">
             <label htmlFor="set-font-reading">Reading font</label>
-            <select id="set-font-reading" value={fontReading} onChange={(e)=>applyFontReadingChoice(e.target.value)}>
+            <select id="set-font-reading" value={fontReading} onChange={(e) => applyFontReadingChoice(e.target.value)}>
               {READING_FONTS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </div>
