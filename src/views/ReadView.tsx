@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import ReaderText from '../components/ReaderText';
+import { chapterNumber } from '../chapters';
 import type { Chapter, ChapterDetail, Entity } from '../types';
 
 const READ_SIZE_KEY = 'docwriter.readingSize';
@@ -253,9 +254,13 @@ export default function ReadView({
               <div className="paper-inner">
                 <div className="paper-head">
                   <div className="paper-meta">
-                    <span className="label-mono">
-                      {chapter.number ? `Chapter ${chapter.number}` : 'Chapter'}
-                    </span>
+                    {/* An untitled chapter still needs the page's only h1, and the
+                        kicker is already the line the reader sees there. */}
+                    {chapter.title ? (
+                      <span className="label-mono">Chapter {chapterNumber(chapter)}</span>
+                    ) : (
+                      <h1 className="label-mono">Chapter {chapterNumber(chapter)}</h1>
+                    )}
                     <span className="progress">{chapter.word_count} words</span>
                   </div>
                   {chapter.title ? <h1 className="paper-title">{chapter.title}</h1> : null}

@@ -275,6 +275,11 @@ h3 {
   text-transform: uppercase;
   color: var(--color-text-secondary);
 }
+/* The kicker doubles as the page h1 when a chapter has no title. */
+h1.label-mono {
+  margin: 0;
+  line-height: inherit;
+}
 
 @media (prefers-reduced-motion: reduce) {
   * {
@@ -4612,7 +4617,7 @@ body {
 .dw-brand span {
   margin-top: 4px;
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--dw-sb-muted);

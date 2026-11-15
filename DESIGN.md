@@ -68,22 +68,73 @@ typography:
     fontWeight: 500
     lineHeight: 1
     letterSpacing: "0.14em"
+  # Working steps between the six roles. Sizes only: each inherits the family
+  # of the role it serves, as the Hierarchy section describes.
+  caption:
+    fontSize: "12px"
+  control:
+    fontSize: "13px"
+  input:
+    fontSize: "15px"
+  subhead:
+    fontSize: "16px"
+  question:
+    fontSize: "17px"
+  section:
+    fontSize: "18px"
+  card-title:
+    fontSize: "20px"
+  inline-name:
+    fontSize: "21px"
+  candidate:
+    fontSize: "22px"
+  name:
+    fontSize: "24px"
+  inspector:
+    fontSize: "26px"
+  reader-sm:
+    fontSize: "28px"
+  panel-title:
+    fontSize: "32px"
+  reader-lg:
+    fontSize: "34px"
+  reader-hero:
+    fontSize: "36px"
+  # Ornamental daggers behind dead entities, not running text.
+  watermark:
+    fontSize: "128px"
+  watermark-xl:
+    fontSize: "190px"
 rounded:
-  sm: "9px"
-  md: "14px"
-  lg: "20px"
+  hairline: "2px"     # meters, rules, the rule under the page head
+  underline: "3px"    # mention underlines, active-tab markers
+  xs: "4px"           # kbd caps, the focused mention ring
+  sm-alt: "6px"       # chapter medallion, small pills
+  tag: "7px"          # panel tags and move handles
+  sm: "8px"           # icon buttons and inline panel buttons
+  sm-lg: "9px"        # compact cards, small controls
+  control: "10px"     # inputs, icon buttons, tab tops
+  control-lg: "11px"  # nav items, card icons, reader headings
+  control-xl: "12px"  # buttons, top bar, panel body, compact cards
+  md: "14px"          # inner cards, icon tiles
+  md-lg: "16px"       # grouped sections, small tiles
+  chip: "17px"        # a fully round 34px chip
+  panel-sm: "18px"    # entity-panel tiles, expanded panel
+  lg: "20px"          # entity cards, panels, modal
+  paper: "24px"       # the manuscript page
+  panel-xl: "26px"    # the entity editor dialog
   pill: "999px"
 components:
   button-primary:
     backgroundColor: "{colors.accent}"
     textColor: "{colors.accent-ink}"
-    rounded: "{rounded.md}"
+    rounded: "{rounded.control-xl}"
     padding: "0 16px"
     height: "40px"
   button-secondary:
     backgroundColor: "{colors.night-surface}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
+    rounded: "{rounded.control-xl}"
     padding: "0 16px"
     height: "40px"
   chip:
@@ -105,7 +156,7 @@ components:
   input:
     backgroundColor: "{colors.night-paper}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
+    rounded: "{rounded.control}"
     padding: "0 14px"
     height: "44px"
 ---
@@ -173,6 +224,8 @@ A cool, desaturated sea-glass range, warmed only by the five entity hues and the
 - **Reading** (400, 19px, 1.75): manuscript text in the 660px reading column; the only place long prose lives.
 - **Label** (500, 11px, 0.14em, uppercase): section labels and count badges. Group heads use the same face at 12px. DM Mono.
 
+Between these roles sit named working steps for chips, controls, panel subtitles, reader titles and responsive display sizes. A step takes the family of the role it serves; none introduces a fourth face.
+
 ### Named Rules
 **The Two Voices Rule.** Spectral is for what the writer named or reads; Hanken is for what the software does. A button never uses the serif, and a chapter title never uses the grotesk.
 
@@ -208,12 +261,13 @@ Lamplit and lifted: depth is light falling from above, not a drop shadow. Every 
 
 ## Shapes
 
-Corners round with size: small controls at 12px, inner cards at 14px, panels and entity cards at 20px, chips fully round. Borders are always 1px and always a theme border token. The silhouette vocabulary is soft rectangles and pills — no sharp corners, no heavy outlines, no glassy blur except the inspector and drawer surfaces.
+Corners round with size, on one continuous ladder rather than a 3-step scale: hairlines and rules at the small end, controls in the middle, panels and paper at the top. Borders are always 1px and always a theme border token. The silhouette vocabulary is soft rectangles and pills — no sharp corners, no heavy outlines, no glassy blur except the inspector and drawer surfaces.
 
-- **Controls** (buttons, inputs, selects): 12px, 40–44px tall.
-- **Cards and panels**: 20px; the manuscript paper goes to 24px.
+- **Hairlines and marks**: 2–4px for meters, rules, kbd caps and the mention ring.
+- **Controls** (buttons, inputs, selects): 8–12px, 34–44px tall.
+- **Cards and panels**: 14–20px; the entity editor goes to 26px and the manuscript page to 24px.
 - **Chips and status pills**: full round (`999px`), 34px tall.
-- **Icons**: 46px rounded square with a 14px radius, filled with a type-tinted gradient.
+- **Icons**: 46px rounded square with a 14px radius (9px in compact rows), filled with a type-tinted gradient.
 - **Tabs**: top corners only, 10px, with a 3px underline in the active colour for the selected tab.
 
 ### Named Rules
@@ -242,7 +296,7 @@ Refined and restrained: softly tactile, quiet at rest, and obviously interactive
 - **Internal Padding:** `calc(18px * var(--density))`.
 
 ### Inputs / Fields
-- **Style:** 44px, 12px radius, paper fill, strong 1px border, 15px Hanken text.
+- **Style:** 44px, 10px radius, paper fill, strong 1px border, 15px Hanken text; the top-bar search is a full-round pill.
 - **Focus:** 2px accent outline, 2px offset — never a border-colour-only change.
 - **Placeholder:** muted ink. Never the faint ink; it fails contrast on every theme.
 
