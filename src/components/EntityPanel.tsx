@@ -17,6 +17,10 @@ import type { Chapter, Entity, EntityDetail, PowerLevel, Type } from '../types';
 // Every entity type may hold an Item, except an Item itself: a possession is
 // something a person, place, nation or guild has, never another item.
 
+// Focusable descendants the dialog's Tab trap cycles through.
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 /** Types an entity can be led by and staffed with (always people). */
 const PERSON_TYPES = ['Character'];
 
@@ -233,6 +237,7 @@ export default function EntityPanel({
   const [mod, setMod] = useState(false);
   const [hot, setHot] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   // Latest save, so the one Ctrl+S listener never reads a stale render.
   const saveRef = useRef<() => void>(() => {});
 
@@ -310,6 +315,28 @@ export default function EntityPanel({
     load();
   }, [entityId]);
 
+  // The dialog owns focus while it is open: keep the page behind it out of the
+  // tab order, and hand focus back where it came from on close.
+  useEffect(() => {
+    const returnTo = document.activeElement as HTMLElement | null;
+    const behind = [document.querySelector('.main'), document.querySelector('.dw-sidebar')];
+    for (const el of behind) el?.setAttribute('inert', '');
+    return () => {
+      for (const el of behind) el?.removeAttribute('inert');
+      returnTo?.focus?.({ preventScroll: true });
+    };
+  }, []);
+
+  // The first render is a loading shell with no dialog ref, so wait for the
+  // loaded dialog. Only once per open: a save reloads detail and must not steal
+  // focus from the field being edited.
+  const focusedOnce = useRef(false);
+  useEffect(() => {
+    if (!detail || focusedOnce.current) return;
+    focusedOnce.current = true;
+    dialogRef.current?.focus({ preventScroll: true });
+  }, [detail]);
+
   const isItemType = detail?.entity.type_name === 'Item';
   const isCharacterType = detail?.entity.type_name === 'Character';
   const isOrgLike = ORG_TYPES.includes(detail?.entity.type_name ?? '');
@@ -356,6 +383,25 @@ export default function EntityPanel({
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Tab') {
+        const node = dialogRef.current;
+        if (!node) return;
+        const items = [...node.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+          (el) => el.getClientRects().length > 0
+        );
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        const atDialog = document.activeElement === node;
+        if (ev.shiftKey && (atDialog || document.activeElement === first)) {
+          ev.preventDefault();
+          last.focus();
+        } else if (!ev.shiftKey && document.activeElement === last) {
+          ev.preventDefault();
+          first.focus();
+        }
+        return;
+      }
       if (ev.key !== 'Escape') return;
       // An open dropdown consumes the first Escape; only then close the panel.
       // (Section disclosures also carry aria-expanded, so match the dropdowns.)
@@ -782,6 +828,8 @@ export default function EntityPanel({
   return (
     <div className="dw-ie-backdrop" onClick={requestClose}>
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         className={`dw-ie${full ? ' is-expanded' : ''}${mod ? ' is-mod' : ''}${death ? ' is-dead' : ''}`}
         style={{ ['--ie-tone']: e.type_color } as CSSProperties}
         onClick={(ev) => ev.stopPropagation()}
@@ -1204,6 +1252,7 @@ export default function EntityPanel({
                       <div className="dw-ie__select-wrap dw-ie__grow">
                         <select
                           className="dw-ie__select"
+                          aria-label="Died in chapter"
                           value={deathDraft}
                           onChange={(ev) => setDeathDraft(ev.target.value)}
                         >
@@ -1259,6 +1308,7 @@ export default function EntityPanel({
                     <div className="dw-ie__select-wrap">
                       <select
                         className="dw-ie__select"
+                        aria-label="Add an item"
                         value=""
                         onChange={(ev) => {
                           if (ev.target.value) assignItem(Number(ev.target.value));
@@ -1283,6 +1333,7 @@ export default function EntityPanel({
                     <div className="dw-ie__alias-row">
                       <input
                         className="dw-ie__input dw-ie__input--surface"
+                        aria-label="New possession name"
                         value={newItemName}
                         onChange={(ev) => setNewItemName(ev.target.value)}
                         placeholder="create a new item"
@@ -1344,6 +1395,7 @@ export default function EntityPanel({
                   <div className="dw-ie__alias-row">
                     <input
                       className="dw-ie__input dw-ie__input--surface"
+                      aria-label="Add a spelling variant"
                       value={aliasDraft}
                       onChange={(ev) => setAliasDraft(ev.target.value)}
                       placeholder="Add a spelling variant"
@@ -2412,6 +2464,7 @@ function EntityMultiSelect({
       <div className="dw-ie__select-wrap">
         <select
           className="dw-ie__select"
+          aria-label={addLabel}
           value=""
           disabled={unused.length === 0}
           onChange={(ev) => {
@@ -2634,6 +2687,7 @@ function PowerLevelSelect({
           />
           <input
             className="dw-ie__input dw-ie__input--surface"
+            aria-label="New power level"
             value={draft}
             placeholder="New level…"
             onChange={(ev) => setDraft(ev.target.value)}

@@ -138,22 +138,22 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
     <div className="main-inner">
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
         <h1 style={{margin:0,fontSize:20}}>Profile / Settings</h1>
-        <button className="ghost" onClick={onClose}>✕</button>
+        <button className="ghost" aria-label="Close settings" onClick={onClose}>✕</button>
       </div>
 
       <section style={{marginBottom:16}} className="card">
         <h2 style={{margin:'0 0 10px',fontSize:16}}>User</h2>
         <div className="field">
-          <label>Name</label>
-          <input value={name} onChange={(e)=>setName(e.target.value)} />
+          <label htmlFor="set-name">Name</label>
+          <input id="set-name" value={name} onChange={(e)=>setName(e.target.value)} />
         </div>
         <div className="field">
-          <label>Email (placeholder for future sync)</label>
-          <input value={email} onChange={(e)=>setEmail(e.target.value)} />
+          <label htmlFor="set-email">Email (placeholder for future sync)</label>
+          <input id="set-email" value={email} onChange={(e)=>setEmail(e.target.value)} />
         </div>
         <div className="field">
-          <label>Library path</label>
-          <input value={libraryPath} onChange={(e)=>setLibraryPath(e.target.value)} />
+          <label htmlFor="set-library">Library path</label>
+          <input id="set-library" value={libraryPath} onChange={(e)=>setLibraryPath(e.target.value)} />
         </div>
         <div className="actions"><button className="primary" onClick={saveProfile}>Save profile</button></div>
       </section>
@@ -179,8 +179,8 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="field" style={{marginTop:12,marginBottom:0}}>
-          <label>Remind me to export</label>
-          <select value={meta?.nudge ?? 'daily'} disabled={!meta} onChange={(e)=>changeNudge(e.target.value)}>
+          <label htmlFor="set-nudge">Remind me to export</label>
+          <select id="set-nudge" value={meta?.nudge ?? 'daily'} disabled={!meta} onChange={(e)=>changeNudge(e.target.value)}>
             {NUDGE_CHOICES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </div>
@@ -216,14 +216,14 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
         </div>
         <div className="row">
           <div className="field">
-            <label>UI font</label>
-            <select value={fontUi} onChange={(e)=>applyFontUiChoice(e.target.value)}>
+            <label htmlFor="set-font-ui">UI font</label>
+            <select id="set-font-ui" value={fontUi} onChange={(e)=>applyFontUiChoice(e.target.value)}>
               {UI_FONTS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </div>
           <div className="field">
-            <label>Reading font</label>
-            <select value={fontReading} onChange={(e)=>applyFontReadingChoice(e.target.value)}>
+            <label htmlFor="set-font-reading">Reading font</label>
+            <select id="set-font-reading" value={fontReading} onChange={(e)=>applyFontReadingChoice(e.target.value)}>
               {READING_FONTS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </div>

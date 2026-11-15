@@ -99,6 +99,7 @@ function CandidateRow({
         </div>
         <div style={{ minWidth: 160 }}>
           <select
+            aria-label={`Type for ${c.surface_text}`}
             value={typeId ?? ''}
             onChange={(e) => setTypeId(e.target.value ? Number(e.target.value) : null)}
           >
