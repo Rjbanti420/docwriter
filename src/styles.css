@@ -87,137 +87,8 @@
 }
 
 /* 2. Themes ---------------------------------------------------------------- */
-
-/* Light (default) */
-:root,
-:root[data-theme="light"] {
-  color-scheme: light;
-
-  --color-base: #f6f7fa;
-  --color-side: #eceef4;
-  --color-surface: #ffffff;
-  --color-surface-2: #f6f7fa;
-  --color-paper: #ffffff;
-  --color-overlay: rgba(20, 22, 30, 0.38);
-
-  --color-text: #1f2430;
-  --color-text-secondary: #5f6675;
-  --color-text-faint: #8a91a0;
-  --color-text-subtle: #3d4351;
-  --color-text-reading: #1f2430;
-
-  --color-border: #d9dce6;
-  --color-border-strong: #c3c9d4;
-
-  --color-accent: #5b57c9;
-  --color-accent-ink: #ffffff;
-
-  --color-hover: #e0e3ec;
-  --color-hover-soft: rgba(20, 30, 60, 0.045);
-  --color-hover-softer: rgba(20, 30, 60, 0.03);
-  --color-chip-bg: #eceef4;
-  --color-tag-bg: #eceef4;
-
-  --color-mark-unknown: #8a91a0;
-  --color-mark-unknown-text: #5b6372;
-  --color-mark-unknown-hover: rgba(20, 30, 60, 0.06);
-
-  --color-danger: #b83a2e;
-  --color-danger-border: #e8b9b4;
-  --color-danger-bg: #fbeceb;
-  --color-warn-bg: #fff7e6;
-  --color-warn-border: #f0d9a0;
-  --color-warn-text: #8a5a12;
-  --color-positive: #2f7d5b;
-  --color-caution: #a8620f;
-}
-
-/* Mocha (dark, warm) */
-:root[data-theme="mocha"] {
-  color-scheme: dark;
-
-  --color-base: #1f1917;
-  --color-side: #2a2320;
-  --color-surface: #352c28;
-  --color-surface-2: #2b251e;
-  --color-paper: #1e1914;
-  --color-overlay: rgba(10, 8, 6, 0.62);
-
-  --color-text: #f1e7dd;
-  --color-text-secondary: #b3a496;
-  --color-text-faint: #8a7c6f;
-  --color-text-subtle: #cfc5b3;
-  --color-text-reading: #f1e7dd;
-
-  --color-border: #463a33;
-  --color-border-strong: #5a4c42;
-
-  --color-accent: #e0a27a;
-  --color-accent-ink: #1d1714;
-  --color-accent-hover: color-mix(in srgb, var(--color-accent) 82%, #fff);
-
-  --color-hover: #3d332e;
-  --color-hover-soft: rgba(255, 240, 220, 0.055);
-  --color-hover-softer: rgba(255, 240, 220, 0.04);
-  --color-chip-bg: #2b251e;
-  --color-tag-bg: #2b251e;
-
-  --color-mark-unknown: #8a7c6f;
-  --color-mark-unknown-text: #b3a496;
-  --color-mark-unknown-hover: rgba(255, 240, 220, 0.07);
-
-  --color-danger: #e8806f;
-  --color-danger-border: #6b3b34;
-  --color-danger-bg: #4a2b1f;
-  --color-warn-bg: rgba(224, 160, 70, 0.12);
-  --color-warn-border: rgba(224, 160, 70, 0.38);
-  --color-warn-text: #e6b265;
-  --color-positive: #7fcf9a;
-  --color-caution: #e6a15a;
-}
-
-/* Sepia (reading-oriented) */
-:root[data-theme="sepia"] {
-  color-scheme: light;
-
-  --color-base: #f6eddb;
-  --color-side: #efe4cf;
-  --color-surface: #f9f2e2;
-  --color-surface-2: #efe5cf;
-  --color-paper: #f7f0e0;
-  --color-overlay: rgba(60, 40, 10, 0.4);
-
-  --color-text: #3b2f20;
-  --color-text-secondary: #7d6d55;
-  --color-text-faint: #a39373;
-  --color-text-subtle: #54452d;
-  --color-text-reading: #3b2f20;
-
-  --color-border: #dccdb0;
-  --color-border-strong: #bfae86;
-
-  --color-accent: #9a5b2e;
-  --color-accent-ink: #ffffff;
-
-  --color-hover: #e6d9bd;
-  --color-hover-soft: rgba(80, 55, 20, 0.06);
-  --color-hover-softer: rgba(80, 55, 20, 0.04);
-  --color-chip-bg: #efe4cf;
-  --color-tag-bg: #efe4cf;
-
-  --color-mark-unknown: #a39373;
-  --color-mark-unknown-text: #7d6d55;
-  --color-mark-unknown-hover: rgba(80, 55, 20, 0.08);
-
-  --color-danger: #a63a2a;
-  --color-danger-border: #d9b0a6;
-  --color-danger-bg: #f3dcd3;
-  --color-warn-bg: rgba(181, 120, 48, 0.12);
-  --color-warn-border: rgba(181, 120, 48, 0.35);
-  --color-warn-text: #7d5a2a;
-  --color-positive: #4a6b3a;
-  --color-caution: #8a5a22;
-}
+/* The three palettes live in the Harbor skin at the end of this file so there
+   is one source for them; this marker stays for the section numbering. */
 
 /* 3. Density --------------------------------------------------------------- */
 :root[data-density="compact"] {
@@ -4407,9 +4278,10 @@ textarea:focus {
 }
 
 /* 27. Harbor skin — visual restyle (supplied design) ------------------------ */
-/* Layered last on purpose: this section only re-declares tokens and rules
-   from sections 1-26, it adds no behaviour. Semantic danger/warn colours for
-   light + sepia intentionally inherit section 2 values (cascade).
+/* Layered last on purpose: this section re-declares tokens and rules from
+   sections 1-26 and adds no behaviour. It is also the single home of the
+   three theme palettes: Fog, Harbor night and Driftwood each bind every
+   surface token here, so a value is never declared twice.
    Deviations from the supplied sheet, with reasons:
    - .dw-sidebar__top override omitted: it assumed brand + close markup; our
      sidebar top holds one close button and would get left-aligned.
@@ -4465,6 +4337,8 @@ textarea:focus {
 /* Fog (light) */
 :root,
 :root[data-theme="light"] {
+  color-scheme: light;
+
   --color-base: #edf1f0;
   --color-side: #e2e9e8;
   --color-surface: #f8fbfa;
@@ -4474,7 +4348,7 @@ textarea:focus {
 
   --color-text: #16262b;
   --color-text-secondary: #506369;
-  --color-text-faint: #7d9096;
+  --color-text-faint: #5d7175;
   --color-text-subtle: #2e4349;
   --color-text-reading: #1a2a2f;
 
@@ -4490,13 +4364,24 @@ textarea:focus {
   --color-chip-bg: #e2e9e8;
   --color-tag-bg: #e2e9e8;
 
-  --color-mark-unknown: #7d9096;
+  --color-mark-unknown: #5d7175;
   --color-mark-unknown-text: #506369;
   --color-mark-unknown-hover: rgba(22, 60, 66, 0.07);
+
+  --color-danger: #b83a2e;
+  --color-danger-border: #e8b9b4;
+  --color-danger-bg: #fbeceb;
+  --color-warn-bg: #fff7e6;
+  --color-warn-border: #f0d9a0;
+  --color-warn-text: #8a5a12;
+  --color-positive: #2f7d5b;
+  --color-caution: #a8620f;
 }
 
 /* Harbor night (dark) */
 :root[data-theme="mocha"] {
+  color-scheme: dark;
+
   --color-base: #0b1315;
   --color-side: #101b1e;
   --color-surface: #162428;
@@ -4506,7 +4391,7 @@ textarea:focus {
 
   --color-text: #e3ece9;
   --color-text-secondary: #9ab0ad;
-  --color-text-faint: #6b8280;
+  --color-text-faint: #7f9895;
   --color-text-subtle: #c3d3d0;
   --color-text-reading: #dfe9e6;
 
@@ -4515,6 +4400,7 @@ textarea:focus {
 
   --color-accent: #7fd6b8;
   --color-accent-ink: #08221b;
+  --color-accent-hover: color-mix(in srgb, var(--color-accent) 82%, #fff);
 
   --color-hover: #1c2f34;
   --color-hover-soft: rgba(200, 240, 230, 0.055);
@@ -4522,7 +4408,7 @@ textarea:focus {
   --color-chip-bg: #0f1b1e;
   --color-tag-bg: #0f1b1e;
 
-  --color-mark-unknown: #6b8280;
+  --color-mark-unknown: #7f9895;
   --color-mark-unknown-text: #9ab0ad;
   --color-mark-unknown-hover: rgba(200, 240, 230, 0.07);
 
@@ -4538,6 +4424,8 @@ textarea:focus {
 
 /* Driftwood (reading) */
 :root[data-theme="sepia"] {
+  color-scheme: light;
+
   --color-base: #e8e4db;
   --color-side: #ddd8cc;
   --color-surface: #f3f0e8;
@@ -4546,8 +4434,8 @@ textarea:focus {
   --color-overlay: rgba(40, 34, 22, 0.42);
 
   --color-text: #2b2923;
-  --color-text-secondary: #686458;
-  --color-text-faint: #958f80;
+  --color-text-secondary: #5a5449;
+  --color-text-faint: #645d51;
   --color-text-subtle: #46433a;
   --color-text-reading: #2b2923;
 
@@ -4563,11 +4451,18 @@ textarea:focus {
   --color-chip-bg: #ddd8cc;
   --color-tag-bg: #ddd8cc;
 
-  --color-mark-unknown: #958f80;
+  --color-mark-unknown: #645d51;
   --color-mark-unknown-text: #686458;
   --color-mark-unknown-hover: rgba(60, 50, 30, 0.08);
 
+  --color-danger: #a63a2a;
+  --color-danger-border: #d9b0a6;
+  --color-danger-bg: #f3dcd3;
+  --color-warn-bg: rgba(181, 120, 48, 0.12);
+  --color-warn-border: rgba(181, 120, 48, 0.35);
+  --color-warn-text: #7d5a2a;
   --color-positive: #3f6b4a;
+  --color-caution: #8a5a22;
 }
 
 /* theme preview chips in Settings */

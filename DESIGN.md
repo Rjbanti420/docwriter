@@ -17,7 +17,7 @@ colors:
   driftwood-paper: "#f6f3ec"
   ink: "#e3ece9"
   ink-muted: "#9ab0ad"
-  ink-faint: "#6b8280"
+  ink-faint: "#7f9895"
   ink-fog: "#16262b"
   ink-driftwood: "#2b2923"
   border-night: "#213539"
@@ -195,7 +195,7 @@ A cool, desaturated sea-glass range, warmed only by the five entity hues and the
 ### Neutral
 - **Fog Glass** (#edf1f0) / **Night Water** (#0b1315) / **Driftwood** (#e8e4db): the page base per theme.
 - **Harbor Surface** (#162428) and **Lamplight Paper** (#111e22): raised surface and manuscript paper in the dark theme.
-- **Ink** (#e3ece9), **Ink Muted** (#9ab0ad), **Ink Faint** (#6b8280): the three text weights at night; Fog and Driftwood re-bind the same roles.
+- **Ink** (#e3ece9), **Ink Muted** (#9ab0ad), **Ink Faint** (#7f9895): the three text weights at night; Fog and Driftwood re-bind the same roles, and faint clears AA on base, surface and paper in all three.
 - **Tarnished Brass** (#213539): the one border colour at night; 1px, never thicker.
 
 ### Status
@@ -298,7 +298,7 @@ Refined and restrained: softly tactile, quiet at rest, and obviously interactive
 ### Inputs / Fields
 - **Style:** 44px, 10px radius, paper fill, strong 1px border, 15px Hanken text; the top-bar search is a full-round pill.
 - **Focus:** 2px accent outline, 2px offset — never a border-colour-only change.
-- **Placeholder:** muted ink. Never the faint ink; it fails contrast on every theme.
+- **Placeholder:** muted ink. Faint clears AA as well, but placeholders stay one step louder than tertiary metadata.
 
 ### Navigation
 - **Style:** 288px sidebar, 38px items, 11px radius, 14px/600 Hanken with a 20px line icon.
@@ -316,12 +316,12 @@ A 780px dialog on the 20px radius with the modal shadow. Title in Spectral 30px,
 - **Do** check every screen in Fog, Harbor night and Driftwood before calling it done.
 - **Do** keep raised surfaces on the four shadow tokens with the 1px inset highlight.
 - **Do** multiply spacing by `--density` so compact mode keeps working.
-- **Do** use `--color-text-secondary` for placeholders and empty text; it clears AA on every theme.
+- **Do** use `--color-text-secondary` for placeholders and empty text, and `--color-text-faint` for timestamps, counts and asides; both clear AA on every theme.
 
 ### Don't:
 - **Don't** add a second accent hue, a gradient hero, or a metric-tile row. The rejected reference is the generic SaaS dashboard: stock gradients, purple blobs, cards that exist to fill space.
 - **Don't** hard-code type or theme hex values inside a component.
-- **Don't** use `--color-text-faint` for functional text — it measures 3.9:1 at night.
+- **Don't** use `--color-text-faint` for anything longer than a caption; its 4.5:1 floor is for metadata, not prose.
 - **Don't** set functional text below 11px.
 - **Don't** use DM Mono for anything longer than a label.
 - **Don't** use pure-black shadows or a fifth elevation.

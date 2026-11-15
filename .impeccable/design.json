@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-14T17:26:54.460Z",
+  "generatedAt": "2026-11-15T04:35:37.316Z",
   "title": "Design System: DocWriter",
   "extensions": {
     "colorMeta": {
@@ -247,16 +247,16 @@
       "ink-faint": {
         "role": "neutral",
         "displayName": "Ink Faint",
-        "canonical": "#6b8280",
-        "purpose": "Decorative only; fails AA for functional text.",
+        "canonical": "#7f9895",
+        "purpose": "Tertiary metadata: timestamps, counts, asides. Clears AA on every theme.",
         "tonalRamp": [
-          "#101817",
-          "#233130",
-          "#3e5150",
-          "#607775",
-          "#879e9c",
-          "#b0c2c0",
-          "#d6e1e0",
+          "#0f1817",
+          "#223130",
+          "#3d524f",
+          "#5f7774",
+          "#869e9b",
+          "#afc2c0",
+          "#d5e1df",
           "#eef3f2"
         ]
       },
@@ -673,12 +673,12 @@
       "Do check every screen in Fog, Harbor night and Driftwood before calling it done.",
       "Do keep raised surfaces on the four shadow tokens with the 1px inset highlight.",
       "Do multiply spacing by --density so compact mode keeps working.",
-      "Do use --color-text-secondary for placeholders and empty text; it clears AA on every theme."
+      "Do use --color-text-secondary for placeholders and empty text, and --color-text-faint for timestamps, counts and asides; both clear AA on every theme."
     ],
     "donts": [
       "Don't add a second accent hue, a gradient hero, or a metric-tile row. The rejected reference is the generic SaaS dashboard.",
       "Don't hard-code type or theme hex values inside a component.",
-      "Don't use --color-text-faint for functional text — it measures 3.9:1 at night.",
+      "Don't use --color-text-faint for anything longer than a caption; its 4.5:1 floor is for metadata, not prose.",
       "Don't set functional text below 11px.",
       "Don't use DM Mono for anything longer than a label.",
       "Don't use pure-black shadows or a fifth elevation.",
