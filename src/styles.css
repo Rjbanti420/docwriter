@@ -6539,6 +6539,10 @@ button.tl-link:hover {
     animation: none !important;
     transition: none !important;
   }
+  /* The tick is drawn by an animation; show it at once instead of never. */
+  .dw-ie__btn--save[data-state='saved'] .dw-ie__save-b path {
+    stroke-dashoffset: 0;
+  }
 }
 
 /* 35. Entity editor — feature pass ---------------------------------------------
@@ -7464,6 +7468,18 @@ button.tl-link:hover {
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--e, var(--color-accent)) 70%, transparent); }
   60% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--e, var(--color-accent)) 22%, transparent); }
   100% { box-shadow: 0 0 0 0 transparent; }
+}
+/* Without the pulse the class would mark nothing, so reduced motion gets a
+   still ring for the same 2.6s window: fades in, holds, fades out. */
+@keyframes mention-mark {
+  0% { box-shadow: 0 0 0 2px transparent; }
+  10%, 82% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--e, var(--color-accent)) 55%, transparent); }
+  100% { box-shadow: 0 0 0 2px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reader-text .mention.is-focused-mention {
+    animation: mention-mark 2.6s ease-out both !important;
+  }
 }
 
 @media (max-width: 640px) {

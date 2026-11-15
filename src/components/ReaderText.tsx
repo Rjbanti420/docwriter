@@ -152,7 +152,9 @@ export default function ReaderText({
     );
     if (marks.length === 0) return;
     marks.forEach((el) => el.classList.add('is-focused-mention'));
-    marks[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // Reduced motion asks for the destination without the travel.
+    const scroll = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    marks[0].scrollIntoView({ block: 'center', behavior: scroll });
     const timer = window.setTimeout(() => {
       marks.forEach((el) => el.classList.remove('is-focused-mention'));
     }, 2600);
