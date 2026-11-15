@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { api } from '../api';
 import DuelBuilder from '../components/DuelBuilder';
 import DuelList from '../components/DuelList';
@@ -19,6 +19,14 @@ function gunState(gun: Gun): string {
   if (gun.ready) return 'ready';
   return 'active';
 }
+
+// Ready first, settled last: a ready gun is the only card asking for a decision
+// today, and a fired one only needs to be findable.
+const GUN_RANK: Record<string, number> = { ready: 0, active: 1, discussed: 1, used: 2, fired: 3 };
+const QUESTION_RANK: Record<Question['status'], number> = { open: 0, answered: 1, delivered: 2 };
+
+const gunRank = (gun: Gun) => GUN_RANK[gunState(gun)] ?? 1;
+const questionRank = (q: Question) => QUESTION_RANK[q.status] ?? 0;
 
 function GunCard({
   gun,
@@ -359,11 +367,13 @@ function CandidateRow({
 function QuestionEditor({
   question,
   chapters,
+  answerFirst = false,
   onClose,
   onSaved,
 }: {
   question: Question | null;
   chapters: Chapter[];
+  answerFirst?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -407,16 +417,16 @@ function QuestionEditor({
         onClick={(ev) => ev.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label={question ? 'Edit question' : 'New question'}
+        aria-label={answerFirst && question ? 'Answer question' : question ? 'Edit question' : 'New question'}
       >
         <div className="modal-head">
-          <h2>{question ? 'Edit question' : 'New question'}</h2>
+          <h2>{answerFirst && question ? 'Answer question' : question ? 'Edit question' : 'New question'}</h2>
         </div>
         <div className="modal-body">
           <div className="field">
             <label>The question</label>
             <textarea
-              autoFocus
+              autoFocus={!answerFirst}
               value={text}
               onChange={(ev) => setText(ev.target.value)}
               style={{ minHeight: 70 }}
@@ -426,6 +436,7 @@ function QuestionEditor({
           <div className="field">
             <label>Answer (optional — the reader gets it when delivered)</label>
             <textarea
+              autoFocus={answerFirst}
               value={answer}
               onChange={(ev) => setAnswer(ev.target.value)}
               style={{ minHeight: 60 }}
@@ -633,6 +644,7 @@ export default function PlanningView({
   const [gunReview, setGunReview] = useState<GunReview | null>(null);
   const [gunEditor, setGunEditor] = useState<Gun | 'new' | null>(null);
   const [questionEditor, setQuestionEditor] = useState<Question | 'new' | null>(null);
+  const [answerFirst, setAnswerFirst] = useState(false);
   const [scanKind, setScanKind] = useState<'questions' | 'guns' | null>(null);
   const [showMoreGuns, setShowMoreGuns] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -640,6 +652,7 @@ export default function PlanningView({
   const [notice, setNotice] = useState('');
   const [loaded, setLoaded] = useState(false);
   const prompted = useRef(false);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // App's sidebar guard cannot see the builder, so report its dirty flag up.
   useEffect(() => {
@@ -782,12 +795,22 @@ export default function PlanningView({
     answered: questions.filter((q) => q.status === 'answered').length,
     delivered: questions.filter((q) => q.status === 'delivered').length,
   };
-  const shownQuestions = filter === 'all' ? questions : questions.filter((q) => q.status === filter);
-  const openQuestions = counts.open + counts.answered;
+  const shownQuestions = (filter === 'all' ? questions : questions.filter((q) => q.status === filter))
+    .slice()
+    .sort((a, b) => questionRank(a) - questionRank(b));
+  // Ready guns first: the chapter that pays them off has arrived, so they are
+  // the only cards that ask for a decision today.
+  const orderedGuns = guns.slice().sort((a, b) => gunRank(a) - gunRank(b));
   const primaryGunCandidates = gunCandidates.filter((c) => c.tier === 'primary');
   const shownGunCandidates =
     showMoreGuns || primaryGunCandidates.length === 0 ? gunCandidates : primaryGunCandidates;
   const moreGunCount = gunCandidates.length - primaryGunCandidates.length;
+
+  const tabs: { id: Tab; label: string; count: number }[] = [
+    { id: 'guns', label: "Chekhov's Guns", count: guns.length },
+    { id: 'questions', label: 'Questions', count: questions.length },
+    { id: 'duels', label: 'Duels', count: 0 },
+  ];
 
   function changeTab(next: Tab) {
     if (builderOpen && next !== 'duels') {
@@ -798,14 +821,27 @@ export default function PlanningView({
     setTab(next);
   }
 
+  function stepTab(ev: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const step = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
+    if (!step) return;
+    ev.preventDefault();
+    const next = (index + step + tabs.length) % tabs.length;
+    changeTab(tabs[next].id);
+    tabRefs.current[next]?.focus();
+  }
+
   return (
     <div className="main-inner">
       <div className="reader-head">
         <div className="reader-head__titles">
           <h1>Planning</h1>
           <p className="reader-head__sub">
-            {guns.length} gun{guns.length === 1 ? '' : 's'} · {openQuestions} question
-            {openQuestions === 1 ? '' : 's'} still open
+            {loaded && (
+              <>
+                {guns.length} gun{guns.length === 1 ? '' : 's'} · {questions.length} question
+                {questions.length === 1 ? '' : 's'}, {counts.open} still open
+              </>
+            )}
           </p>
         </div>
         <div className="reader-head__actions">
@@ -831,7 +867,13 @@ export default function PlanningView({
               >
                 Scan chapters
               </button>
-              <button className="btn-primary" onClick={() => setQuestionEditor('new')}>
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  setAnswerFirst(false);
+                  setQuestionEditor('new');
+                }}
+              >
                 ＋ New question
               </button>
             </>
@@ -849,16 +891,24 @@ export default function PlanningView({
         </div>
       </div>
 
-      <div className="tabs">
-        <button className={tab === 'guns' ? 'active' : ''} onClick={() => changeTab('guns')}>
-          Chekhov's Guns {guns.length > 0 && <span className="badge">{guns.length}</span>}
-        </button>
-        <button className={tab === 'questions' ? 'active' : ''} onClick={() => changeTab('questions')}>
-          Questions {candidates.length > 0 && <span className="badge">{candidates.length}</span>}
-        </button>
-        <button className={tab === 'duels' ? 'active' : ''} onClick={() => changeTab('duels')}>
-          Duels
-        </button>
+      <div className="tabs" role="tablist" aria-label="Planning">
+        {tabs.map((t, index) => (
+          <button
+            key={t.id}
+            ref={(el) => {
+              tabRefs.current[index] = el;
+            }}
+            role="tab"
+            id={`planning-tab-${t.id}`}
+            aria-selected={tab === t.id}
+            tabIndex={tab === t.id ? 0 : -1}
+            className={tab === t.id ? 'active' : ''}
+            onClick={() => changeTab(t.id)}
+            onKeyDown={(ev) => stepTab(ev, index)}
+          >
+            {t.label} {t.count > 0 && <span className="badge">{t.count}</span>}
+          </button>
+        ))}
       </div>
 
       {notice && (
@@ -871,7 +921,7 @@ export default function PlanningView({
       )}
 
       {tab === 'guns' && (
-        <>
+        <div role="tabpanel" id="planning-panel-guns" aria-labelledby="planning-tab-guns">
           <p className="progress" style={{ marginTop: 0 }}>
             Plant something early that will matter later. When a gun reaches its chapter you get an alert in
             Review: <strong>Used</strong> pays it off but stays revisitable — you can reopen it if you change your
@@ -902,13 +952,13 @@ export default function PlanningView({
               )}
             </div>
           )}
-          {guns.length === 0 ? (
+          {!loaded ? null : guns.length === 0 ? (
             <div className="empty-state">
               No guns yet. A locked chest, a scar, a debt — anything you plant that has to come back.
             </div>
           ) : (
             <div className="list">
-              {guns.map((g) => (
+              {orderedGuns.map((g) => (
                 <GunCard
                   key={g.id}
                   gun={g}
@@ -922,28 +972,31 @@ export default function PlanningView({
               ))}
             </div>
           )}
-        </>
+        </div>
       )}
 
-      {tab === 'duels' &&
-        (builderOpen ? (
-          <DuelBuilder
-            entities={entities}
-            types={types}
-            onOpenEntity={onOpenEntity}
-            onChanged={onChanged}
-            onDirtyChange={setBuilderDirty}
-            onBack={() => {
-              setBuilderOpen(false);
-              setBuilderDirty(false);
-            }}
-          />
-        ) : (
-          <DuelList />
-        ))}
+      {tab === 'duels' && (
+        <div role="tabpanel" id="planning-panel-duels" aria-labelledby="planning-tab-duels">
+          {builderOpen ? (
+            <DuelBuilder
+              entities={entities}
+              types={types}
+              onOpenEntity={onOpenEntity}
+              onChanged={onChanged}
+              onDirtyChange={setBuilderDirty}
+              onBack={() => {
+                setBuilderOpen(false);
+                setBuilderDirty(false);
+              }}
+            />
+          ) : (
+            <DuelList />
+          )}
+        </div>
+      )}
 
       {tab === 'questions' && (
-        <>
+        <div role="tabpanel" id="planning-panel-questions" aria-labelledby="planning-tab-questions">
           {candidates.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <div className="group-head">
@@ -964,7 +1017,7 @@ export default function PlanningView({
             </div>
           )}
 
-          {questions.length === 0 ? (
+          {!loaded ? null : questions.length === 0 ? (
             <div className="dw-empty">
               No questions tracked yet. Scan a chapter to find the ones your prose raises, or add one by hand.
             </div>
@@ -1004,10 +1057,28 @@ export default function PlanningView({
                         </div>
                       )}
                       <div className="dw-card-actions">
-                        <button className="btn-secondary" onClick={() => setQuestionEditor(q)}>
-                          Edit
-                        </button>
-                        <button className="btn-danger" onClick={() => removeQuestion(q)}>
+                        {q.status === 'open' ? (
+                          <button
+                            className="btn-primary"
+                            onClick={() => {
+                              setAnswerFirst(true);
+                              setQuestionEditor(q);
+                            }}
+                          >
+                            Answer
+                          </button>
+                        ) : (
+                          <button
+                            className="btn-secondary"
+                            onClick={() => {
+                              setAnswerFirst(false);
+                              setQuestionEditor(q);
+                            }}
+                          >
+                            Edit
+                          </button>
+                        )}
+                        <button className="danger-quiet" onClick={() => removeQuestion(q)}>
                           Delete
                         </button>
                       </div>
@@ -1017,7 +1088,7 @@ export default function PlanningView({
               )}
             </>
           )}
-        </>
+        </div>
       )}
 
       {gunEditor && (
@@ -1035,6 +1106,7 @@ export default function PlanningView({
         <QuestionEditor
           question={questionEditor === 'new' ? null : questionEditor}
           chapters={chapters}
+          answerFirst={answerFirst}
           onClose={() => setQuestionEditor(null)}
           onSaved={async () => {
             setQuestionEditor(null);

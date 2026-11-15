@@ -75,12 +75,18 @@ export function outcomeNotes(outcome: DuelOutcome, sides: DuelSides): string[] {
   const notes: string[] = [];
   if (outcome.skillSide) notes.push(`More skilled: ${sideNames(sides, outcome.skillSide)}`);
 
-  const audit: string[] = [];
   if (Number.isFinite(outcome.probabilityA)) {
-    audit.push(`Win chance for A: ${(outcome.probabilityA * 100).toFixed(1)}%`);
+    notes.push(`Win chance for A: ${(outcome.probabilityA * 100).toFixed(1)}%`);
   }
-  if (Number.isInteger(outcome.seed)) audit.push(`seed ${outcome.seed}`);
-  if (Number.isFinite(outcome.roll)) audit.push(`roll ${Number(outcome.roll).toFixed(4)}`);
-  if (audit.length) notes.push(audit.join(' · '));
   return notes;
+}
+
+// The dice themselves: only useful for reproducing a fight, so it sits with the
+// account rather than beside the outcome.
+export function outcomeAudit(outcome: DuelOutcome): string {
+  if (outcome.chosenBy) return '';
+  const parts: string[] = [];
+  if (Number.isInteger(outcome.seed)) parts.push(`seed ${outcome.seed}`);
+  if (Number.isFinite(outcome.roll)) parts.push(`roll ${Number(outcome.roll).toFixed(4)}`);
+  return parts.join(' · ');
 }

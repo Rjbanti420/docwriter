@@ -1,5 +1,12 @@
 import type { Duel } from '../types';
-import { dateLabel, fighterAbilityLine, fighterBreakdownLine, outcomeNotes, sideTotalLine } from '../duelcard';
+import {
+  dateLabel,
+  fighterAbilityLine,
+  fighterBreakdownLine,
+  outcomeAudit,
+  outcomeNotes,
+  sideTotalLine,
+} from '../duelcard';
 
 /**
  * One stored duel. Shared by the saved list and the result screen so both show
@@ -18,6 +25,7 @@ export default function DuelCard({
   const { sides, outcome } = duel;
   const breakdown = outcome.breakdown;
   const notes = outcomeNotes(outcome, sides);
+  const audit = outcomeAudit(outcome);
 
   return (
     <div className="dw-card duel-card">
@@ -92,6 +100,7 @@ export default function DuelCard({
       <details className="duel-narrative" open={narrativeOpen || undefined}>
         <summary>Read the account</summary>
         <p>{duel.narrative}</p>
+        {audit && <p className="duel-audit">{audit}</p>}
       </details>
 
       {onDelete && (

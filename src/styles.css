@@ -2306,6 +2306,12 @@ textarea:focus {
   line-height: 1.6;
   color: var(--color-text);
 }
+/* The seed and roll: reproducibility, not outcome. */
+.duel-narrative p.duel-audit {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+}
 @media (max-width: 720px) {
   .duel-sides,
   .duel-scoreboard {
@@ -2602,8 +2608,10 @@ textarea:focus {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, currentColor 14%, transparent);
-  color: var(--color-text-secondary);
+  /* 11px uppercase needs AA at 4.5:1, and the hue alone does not reach it on
+     the tinted pill. Darken the ink toward body text, keep the tint on the hue. */
+  background: color-mix(in srgb, var(--chip-ink, currentColor) 14%, transparent);
+  color: color-mix(in srgb, var(--chip-ink, var(--color-text-secondary)) 72%, var(--color-text));
 }
 .status-chip::before {
   content: '';
@@ -2615,14 +2623,14 @@ textarea:focus {
 .status-chip.ready,
 .status-chip.discussed,
 .status-chip.answered {
-  color: var(--color-caution);
+  --chip-ink: var(--color-caution);
 }
 .status-chip.used,
 .status-chip.delivered {
-  color: var(--color-positive);
+  --chip-ink: var(--color-positive);
 }
 .status-chip.fired {
-  color: var(--color-text-faint);
+  --chip-ink: var(--color-text-faint);
 }
 .alert-kind.gun_ready {
   color: var(--color-caution);
@@ -2802,7 +2810,7 @@ textarea:focus {
   padding: 0 10px;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--dw-status) 14%, transparent);
-  color: var(--dw-status);
+  color: color-mix(in srgb, var(--dw-status) 72%, var(--color-text));
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -2853,12 +2861,6 @@ textarea:focus {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px dashed var(--color-border);
-  opacity: 0.55;
-  transition: opacity 0.15s ease;
-}
-.dw-card:hover .dw-card-actions,
-.dw-card:focus-within .dw-card-actions {
-  opacity: 1;
 }
 .dw-empty {
   padding: calc(56px * var(--density)) 24px;

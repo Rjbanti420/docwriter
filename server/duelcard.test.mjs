@@ -8,6 +8,7 @@ import {
   fighterAbilityLine,
   fighterBreakdownLine,
   joinNames,
+  outcomeAudit,
   outcomeNotes,
   sideNames,
   sideTotalLine,
@@ -77,14 +78,15 @@ test('a chosen result says so and never shows a roll', () => {
   assert.doesNotMatch(notes.join(' '), /seed|chance|roll \d/i);
 });
 
-test('a rolled result shows the skill side, the chance, the seed and the roll', () => {
-  assert.deepEqual(
-    outcomeNotes(
-      { winnerSide: 'A', chosenBy: null, skillSide: 'A', seed: 7, roll: 0.25, probabilityA: 0.5142857 },
-      sides
-    ),
-    ['More skilled: Kael, Ren and Vane', 'Win chance for A: 51.4% · seed 7 · roll 0.2500']
-  );
+test('a rolled result shows the skill side and the chance, never the dice', () => {
+  const outcome = { winnerSide: 'A', chosenBy: null, skillSide: 'A', seed: 7, roll: 0.25, probabilityA: 0.5142857 };
+  assert.deepEqual(outcomeNotes(outcome, sides), [
+    'More skilled: Kael, Ren and Vane',
+    'Win chance for A: 51.4%',
+  ]);
+  assert.doesNotMatch(outcomeNotes(outcome, sides).join(' '), /seed|roll \d/i);
+  assert.equal(outcomeAudit(outcome), 'seed 7 · roll 0.2500');
+  assert.equal(outcomeAudit({ ...outcome, chosenBy: 'A' }), '');
 });
 
 test('chosen abilities list in stored order, and a legacy record still reads', () => {
