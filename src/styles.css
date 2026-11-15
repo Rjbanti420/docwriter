@@ -1794,6 +1794,11 @@ textarea:focus {
   border-color: transparent;
   text-decoration: underline;
 }
+.cand-open {
+  margin-left: 6px;
+  color: var(--color-text-faint);
+  font-weight: 400;
+}
 .cand-why {
   margin-top: 8px;
 }
@@ -2057,11 +2062,15 @@ textarea:focus {
   padding: 22px;
 }
 .modal-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   padding: 14px 22px;
   border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 /* 15. Style guide (hidden dev page) ---------------------------------------- */
@@ -2951,6 +2960,24 @@ textarea:focus {
   display: flex;
   flex: none;
   gap: 6px;
+}
+/* 129 cards is a list, not a wall: one line each, one quiet danger action. */
+.dw-card.dw-trash {
+  padding: 10px 14px 10px calc(20px * var(--density));
+}
+.dw-card.dw-trash:hover {
+  transform: none;
+}
+.dw-trash .dw-trash__name {
+  font-size: 16px;
+}
+.dw-trash .dw-card-meta {
+  margin-top: 1px;
+  font-size: var(--text-xs);
+}
+.dw-trash-filter {
+  max-width: 320px;
+  margin-bottom: calc(12px * var(--density));
 }
 @media (max-width: 719px) {
   .dw-trash {

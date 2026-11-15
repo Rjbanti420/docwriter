@@ -19,6 +19,7 @@ function CandidateRow({
   types,
   onResolve,
   onOpen,
+  onTypeChange,
   busy,
   selected,
   onToggle,
@@ -27,6 +28,7 @@ function CandidateRow({
   types: Type[];
   onResolve: (c: Candidate, action: string, extra?: Record<string, unknown>) => void;
   onOpen: (c: Candidate) => void;
+  onTypeChange?: (id: number, typeId: number | null) => void;
   busy?: boolean;
   /** Omitted only where the list has no selection bar. */
   selected?: boolean;
@@ -78,10 +80,23 @@ function CandidateRow({
               type="button"
               className="cand-name-btn"
               onClick={() => onOpen(c)}
+              onKeyDown={(e) => {
+                // A list of 17 cards is 129 Tab stops; arrows walk the names.
+                if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                const list = e.currentTarget.closest('.list');
+                const stops = [...(list?.querySelectorAll<HTMLElement>('.cand-name-btn') ?? [])];
+                const next = stops[stops.indexOf(e.currentTarget) + (e.key === 'ArrowDown' ? 1 : -1)];
+                if (!next) return;
+                e.preventDefault();
+                next.focus();
+              }}
               disabled={busy}
               aria-label={`Open ${c.surface_text}`}
             >
               {c.surface_text}
+              <span className="cand-open" aria-hidden="true">
+                ›
+              </span>
             </button>{' '}
             <span className="progress">
               {c.occurrences}× · ch.{c.chapter_number || '?'} · {Math.round(c.confidence * 100)}%
@@ -118,7 +133,11 @@ function CandidateRow({
           <select
             aria-label={`Type for ${c.surface_text}`}
             value={typeId ?? ''}
-            onChange={(e) => setTypeId(e.target.value ? Number(e.target.value) : null)}
+            onChange={(e) => {
+              const next = e.target.value ? Number(e.target.value) : null;
+              setTypeId(next);
+              onTypeChange?.(c.id, next);
+            }}
           >
             {types.map((t) => (
               <option key={t.id} value={t.id}>
@@ -187,6 +206,10 @@ export default function ReviewView({
   const [selectedNames, setSelectedNames] = useState<number[]>([]);
   const [busy, setBusy] = useState<number | 'bulk' | 'trash' | 'alerts' | 'rejected' | null>(null);
   const [actionError, setActionError] = useState('');
+  // Types chosen on a row, so a bulk Accept uses what the row shows rather
+  // than silently reverting to the scanner's guess.
+  const [rowTypes, setRowTypes] = useState<Record<number, number>>({});
+  const [trashFilter, setTrashFilter] = useState('');
 
   // A failed write must not look like a dead button: keep the row, say what
   // happened, and stop a second click while the first is still in flight.
@@ -209,10 +232,13 @@ export default function ReviewView({
   const demoted = review.pending.filter((c) => c.tier === 'demoted');
   const unread = review.alerts.filter((a) => a.state === 'unread').length;
 
-  const allTrashSelected = trash.length > 0 && selectedTrash.length === trash.length;
+  const trashShown = trashFilter.trim()
+    ? trash.filter((e) => e.name.toLowerCase().includes(trashFilter.trim().toLowerCase()))
+    : trash;
+  const allTrashSelected = trashShown.length > 0 && trashShown.every((e) => selectedTrash.includes(e.id));
   const toggleTrash = (id: number) =>
     setSelectedTrash((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  const toggleAllTrash = () => setSelectedTrash(allTrashSelected ? [] : trash.map((e) => e.id));
+  const toggleAllTrash = () => setSelectedTrash(allTrashSelected ? [] : trashShown.map((e) => e.id));
   const clearTrashSelection = () => setSelectedTrash([]);
   const restoreSelected = () => {
     const ids = selectedTrash;
@@ -259,6 +285,23 @@ export default function ReviewView({
     clearNamesSelection();
     void attempt('bulk', () => onResolveMany(ids, action));
   };
+  const bulkAccept = () => {
+    const chosen = (showMore ? [...primary, ...demoted] : primary).filter((c) =>
+      selectedIds.includes(c.id)
+    );
+    if (chosen.length === 0) return;
+    clearNamesSelection();
+    void attempt('bulk', async () => {
+      for (const c of chosen) {
+        const typeId =
+          rowTypes[c.id] ??
+          c.suggested_type_id ??
+          types.find((t) => t.name === 'Character')?.id ??
+          null;
+        await onResolve(c, 'accept', { typeId });
+      }
+    });
+  };
   const resolveOne = (c: Candidate, action: string, extra?: Record<string, unknown>) => {
     void attempt(c.id, () => onResolve(c, action, extra));
   };
@@ -267,11 +310,14 @@ export default function ReviewView({
   const bulkActions = selectedIds.length > 0 && (
     <div className="dw-trash-bulk">
       <span className="progress">{selectedIds.length} selected</span>
-      <button className="btn-primary" disabled={busy === 'bulk'} onClick={() => bulkResolve('ignore')}>
-        Ignore
+      <button className="btn-primary" disabled={busy === 'bulk'} onClick={bulkAccept}>
+        Accept
       </button>
       <button className="btn-secondary" disabled={busy === 'bulk'} onClick={() => bulkResolve('later')}>
         Later
+      </button>
+      <button className="btn-secondary" disabled={busy === 'bulk'} onClick={() => bulkResolve('ignore')}>
+        Ignore for good
       </button>
       <button className="btn-secondary" onClick={clearNamesSelection}>
         Clear
@@ -357,6 +403,9 @@ export default function ReviewView({
                   types={types}
                   onResolve={resolveOne}
                   onOpen={openCandidate}
+                  onTypeChange={(id, typeId) =>
+                    setRowTypes((prev) => (typeId == null ? prev : { ...prev, [id]: typeId }))
+                  }
                   busy={busy === c.id}
                   selected={selectedNames.includes(c.id)}
                   onToggle={toggleName}
@@ -405,6 +454,9 @@ export default function ReviewView({
                         types={types}
                         onResolve={resolveOne}
                         onOpen={openCandidate}
+                        onTypeChange={(id, typeId) =>
+                          setRowTypes((prev) => (typeId == null ? prev : { ...prev, [id]: typeId }))
+                        }
                         busy={busy === c.id}
                         selected={selectedIds.includes(c.id)}
                         onToggle={toggleName}
@@ -517,6 +569,21 @@ export default function ReviewView({
             <div className="empty-state">Trash is empty.</div>
           ) : (
             <>
+              {trash.length > 6 && (
+                <input
+                  type="search"
+                  className="dw-trash-filter"
+                  placeholder={`Find in ${trash.length} trashed cards…`}
+                  aria-label={`Find in ${trash.length} trashed cards`}
+                  value={trashFilter}
+                  onChange={(e) => {
+                    setTrashFilter(e.target.value);
+                    // Hidden rows must not stay selected: a bulk delete would
+                    // then act on cards the writer can no longer see.
+                    setSelectedTrash([]);
+                  }}
+                />
+              )}
               <div className="toolbar dw-trash-bar">
                 <label className="dw-check">
                   <input type="checkbox" checked={allTrashSelected} onChange={toggleAllTrash} />
@@ -537,47 +604,51 @@ export default function ReviewView({
                   </div>
                 )}
               </div>
-              <ul className="dw-list">
-                {trash.map((e) => (
-                  <li className="dw-card dw-trash" key={e.id}>
-                    <input
-                      type="checkbox"
-                      className="dw-trash__check"
-                      checked={selectedTrash.includes(e.id)}
-                      onChange={() => toggleTrash(e.id)}
-                      aria-label={`Select ${e.name}`}
-                    />
-                    <div className="dw-trash__body">
-                      <div className="dw-trash__name">
-                        <span className="dot" style={{ background: e.type_color }} />
-                        {e.name}
+              {trashShown.length === 0 ? (
+                <div className="empty-state">No trashed card matches “{trashFilter}”.</div>
+              ) : (
+                <ul className="dw-list">
+                  {trashShown.map((e) => (
+                    <li className="dw-card dw-trash" key={e.id}>
+                      <input
+                        type="checkbox"
+                        className="dw-trash__check"
+                        checked={selectedTrash.includes(e.id)}
+                        onChange={() => toggleTrash(e.id)}
+                        aria-label={`Select ${e.name}`}
+                      />
+                      <div className="dw-trash__body">
+                        <div className="dw-trash__name">
+                          <span className="dot" style={{ background: e.type_color }} />
+                          {e.name}
+                        </div>
+                        <div className="dw-card-meta">
+                          <span className="dw-ref">{e.type_name || 'Uncategorised'}</span>
+                          <span>{formatTrashed(e.trashed_at)}</span>
+                        </div>
                       </div>
-                      <div className="dw-card-meta">
-                        <span className="dw-ref">{e.type_name || 'Uncategorised'}</span>
-                        <span>{formatTrashed(e.trashed_at)}</span>
+                      <div className="dw-trash__actions">
+                        <button
+                          className="btn-secondary"
+                          onClick={() => void attempt('trash', () => onRestore(e.id))}
+                        >
+                          Restore
+                        </button>
+                        <button
+                          className="danger-quiet"
+                          onClick={() => {
+                            if (confirm(`Permanently delete "${e.name}"? This cannot be undone.`)) {
+                              void attempt('trash', () => onDeleteForever(e.id));
+                            }
+                          }}
+                        >
+                          Delete forever
+                        </button>
                       </div>
-                    </div>
-                    <div className="dw-trash__actions">
-                      <button
-                        className="btn-secondary"
-                        onClick={() => void attempt('trash', () => onRestore(e.id))}
-                      >
-                        Restore
-                      </button>
-                      <button
-                        className="btn-danger"
-                        onClick={() => {
-                          if (confirm(`Permanently delete "${e.name}"? This cannot be undone.`)) {
-                            void attempt('trash', () => onDeleteForever(e.id));
-                          }
-                        }}
-                      >
-                        Delete forever
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </>
           )}
         </>
