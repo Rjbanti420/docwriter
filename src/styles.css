@@ -1410,12 +1410,9 @@ textarea:focus {
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, var(--dead) 55%, transparent);
 }
-/* Opacity on a parent multiplies with a child's, so .pill is left out of this
-   pair — it lives inside .sub in the cards and would fade to 0.36. */
-.entity-card.dead .sub,
-.entity-card.dead .card-foot {
-  opacity: 0.6;
-}
+/* The red wash, the struck name and the dagger already say "dead", so the
+   metadata keeps the shared .sub ink. A second 0.6 opacity gate put the count
+   and chapter pill at 2.6:1 in Fog and 3.4:1 at night. */
 /* The "died" tag: a red pill with a cross. align-self keeps it a tag rather
    than a full-width bar (the card is a stretch-aligned flex column). */
 .entity-card.dead .badge-dead {
@@ -1426,7 +1423,7 @@ textarea:focus {
   font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--dead);
+  color: color-mix(in srgb, var(--dead) 80%, var(--color-text));
   background: color-mix(in srgb, var(--dead) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--dead) 38%, transparent);
 }
@@ -3014,7 +3011,7 @@ textarea:focus {
   padding: 3px 9px;
   border-radius: 7px;
   background: color-mix(in srgb, var(--ie-tone) 16%, transparent);
-  color: color-mix(in srgb, var(--ie-tone) 55%, var(--color-text));
+  color: color-mix(in srgb, var(--ie-tone) 40%, var(--color-text));
   font-family: var(--ie-font-mono);
   font-size: 11px;
   letter-spacing: 0.12em;
@@ -5754,7 +5751,6 @@ button.tl-link:hover {
   letter-spacing: 0.02em;
   text-transform: none;
   padding: 4px 12px;
-  color: color-mix(in srgb, var(--ie-tone) 70%, var(--color-text));
   background: color-mix(in srgb, var(--ie-tone) 16%, transparent);
 }
 .dw-ie__link {

@@ -277,10 +277,26 @@ export default function BibleView({
                   const image = e.has_image ? `/api/entities/${e.id}/image` : null;
                   const death = e.type_name === 'Character' ? getDeath(e.fields) : null;
                   const deathChapter = death?.chapter != null ? chapters.find((c) => c.id === death.chapter) : undefined;
+                  // The card is one button, so its visible text runs together when
+                  // announced. Give it the same facts in sentence form.
+                  const spoken = [
+                    e.name,
+                    e.type_name || 'Uncategorised',
+                    `${e.mention_count} ${e.mention_count === 1 ? 'mention' : 'mentions'}`,
+                    e.first_chapter
+                      ? e.first_chapter === e.last_chapter
+                        ? `chapter ${e.first_chapter}`
+                        : `chapters ${e.first_chapter} to ${e.last_chapter}`
+                      : null,
+                    death ? `died${deathChapter ? ` in chapter ${chapterNumber(deathChapter)}` : ''}` : null,
+                    e.tracking !== 'off' ? `tracking ${e.tracking}` : null,
+                  ].filter(Boolean).join(', ');
                   return (
                     <button
                       className={`entity-card${death ? ' dead' : ''}${selectMode ? ' selecting' : ''}${selected.has(e.id) ? ' selected' : ''}`}
                       key={e.id}
+                      aria-label={spoken}
+                      aria-pressed={selectMode ? selected.has(e.id) : undefined}
                       onClick={() => (selectMode ? toggleSelect(e.id) : onOpenEntity(e.id))}
                     >
                       <div className="card-head">
