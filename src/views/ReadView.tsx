@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReaderText from '../components/ReaderText';
 import { chapterNumber } from '../chapters';
 import type { Chapter, ChapterDetail, Entity } from '../types';
@@ -42,6 +42,8 @@ export default function ReadView({
 }) {
   const [showDelete, setShowDelete] = useState(false);
   const [renumber, setRenumber] = useState(false);
+  const cancelDeleteRef = useRef<HTMLButtonElement | null>(null);
+  const deleteReturnRef = useRef<HTMLElement | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -111,6 +113,22 @@ export default function ReadView({
       setSaveError('Could not copy automatically. Select the draft text and copy it manually.');
     }
   };
+
+  // A dialog that takes focus and gives it back, so a mis-click is recoverable.
+  const openDelete = () => {
+    deleteReturnRef.current = document.activeElement as HTMLElement | null;
+    setShowDelete(true);
+  };
+
+  const closeDelete = () => {
+    setShowDelete(false);
+    deleteReturnRef.current?.focus();
+    deleteReturnRef.current = null;
+  };
+
+  useEffect(() => {
+    if (showDelete) cancelDeleteRef.current?.focus();
+  }, [showDelete]);
 
   useEffect(() => {
     if (!editing) return;
@@ -205,7 +223,8 @@ export default function ReadView({
             {!editing ? (
               <>
                 <button onClick={startEdit}>Edit</button>
-                <button className="danger" onClick={() => setShowDelete(true)}>
+                {/* Destructive, but not the loudest thing on a reading page. */}
+                <button className="danger-quiet" onClick={openDelete}>
                   Delete chapter
                 </button>
               </>
@@ -237,34 +256,45 @@ export default function ReadView({
             </div>
           )}
 
-          {editing ? (
-            <textarea
-              className="editor-textarea"
-              value={draft}
-              readOnly={saving}
-              onChange={(e) => {
-                const next = e.target.value;
-                setDraft(next);
-                setDirty(next !== (detail?.text ?? ''));
-              }}
-              spellCheck
-            />
-          ) : (
-            <div className="paper" key={chapter.id}>
-              <div className="paper-inner">
-                <div className="paper-head">
-                  <div className="paper-meta">
-                    {/* An untitled chapter still needs the page's only h1, and the
-                        kicker is already the line the reader sees there. */}
-                    {chapter.title ? (
-                      <span className="label-mono">Chapter {chapterNumber(chapter)}</span>
-                    ) : (
-                      <h1 className="label-mono">Chapter {chapterNumber(chapter)}</h1>
-                    )}
-                    <span className="progress">{chapter.word_count} words</span>
-                  </div>
-                  {chapter.title ? <h1 className="paper-title">{chapter.title}</h1> : null}
+          <div className="paper" key={chapter.id}>
+            <div className="paper-inner">
+              <div className="paper-head">
+                <div className="paper-meta">
+                  {/* An untitled chapter still needs the page's only h1, and the
+                      kicker is already the line the reader sees there. */}
+                  {chapter.title ? (
+                    <span className="label-mono">Chapter {chapterNumber(chapter)}</span>
+                  ) : (
+                    <h1 className="label-mono">Chapter {chapterNumber(chapter)}</h1>
+                  )}
+                  <span className="progress">{chapter.word_count.toLocaleString('en-US')} words</span>
                 </div>
+                {chapter.title ? <h1 className="paper-title">{chapter.title}</h1> : null}
+                {detail!.candidates.length > 0 ? (
+                  // Kept in the layout while editing so the prose does not jump
+                  // a line when Edit is pressed.
+                  <p
+                    className={`mark-legend${editing ? ' is-hidden' : ''}`}
+                    aria-hidden={editing || undefined}
+                  >
+                    Solid underlines are names in your Bible. Dotted ones are new — open one to add it.
+                  </p>
+                ) : null}
+              </div>
+              {editing ? (
+                <textarea
+                  className="editor-textarea"
+                  aria-label={`Chapter ${chapterNumber(chapter)} text`}
+                  value={draft}
+                  readOnly={saving}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setDraft(next);
+                    setDirty(next !== (detail?.text ?? ''));
+                  }}
+                  spellCheck
+                />
+              ) : (
                 <ReaderText
                   text={detail!.text}
                   mentions={detail!.mentions}
@@ -274,17 +304,34 @@ export default function ReadView({
                   onMention={onOpenEntity}
                   onUnknown={onOpenCandidate}
                 />
-              </div>
+              )}
+              {!editing && (
+                <div className="chapter-end">
+                  <span>End of Chapter {chapterNumber(chapter)}</span>
+                  <button
+                    disabled={idx >= chapters.length - 1 || saving}
+                    onClick={() => onSelect(chapters[idx + 1].id)}
+                  >
+                    Next chapter →
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </>
       )}
 
       {showDelete && chapter && (
-        <div className="overlay" onClick={() => setShowDelete(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="overlay" onClick={closeDelete}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-chapter-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-head">
-              <h2>Delete Chapter {chapter.number || ''}?</h2>
+              <h2 id="delete-chapter-title">Delete Chapter {chapter.number || ''}?</h2>
             </div>
             <div className="modal-body">
               <p>
@@ -305,7 +352,9 @@ export default function ReadView({
               </div>
             </div>
             <div className="modal-foot">
-              <button onClick={() => setShowDelete(false)}>Cancel</button>
+              <button ref={cancelDeleteRef} onClick={closeDelete}>
+                Cancel
+              </button>
               <button
                 className="danger"
                 onClick={async () => {

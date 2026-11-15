@@ -77,7 +77,7 @@ export default function ReaderText({
     []
   );
 
-  const { nodes } = useMemo(() => {
+  const { blocks } = useMemo(() => {
     const marks: Marker[] = [];
     for (const m of mentions) {
       marks.push({
@@ -110,37 +110,66 @@ export default function ReaderText({
       cursor = mk.end;
     }
 
-    const out: Array<string | JSX.Element> = [];
-    let pos = 0;
-    chosen.forEach((mk, i) => {
-      if (mk.start > pos) out.push(text.slice(pos, mk.start));
-      const cls = mk.kind === 'known' ? 'mention' : 'mention unknown';
-      const style =
-        mk.kind === 'known' ? ({ ['--e']: mk.color } as CSSProperties) : undefined;
-      out.push(
-        <span
-          key={`m${i}`}
-          className={cls}
-          style={style}
-          data-entity={mk.kind === 'known' ? mk.entityId : undefined}
-          title={mk.kind === 'unknown' ? mk.title : undefined}
-          onMouseEnter={(ev) => {
-            if (mk.kind !== 'known' || !mk.entityId || document.querySelector('.highlights-off')) return;
-            const entity = entityById.get(mk.entityId);
-            if (!entity) return;
-            clearClose();
-            setHover({ entity, rect: ev.currentTarget.getBoundingClientRect() });
-          }}
-          onMouseLeave={closeSoon}
-          onClick={() => (mk.kind === 'known' ? onMention(mk.entityId!) : onUnknown(mk.candidateId!))}
-        >
-          {text.slice(mk.start, mk.end)}
-        </span>
-      );
-      pos = mk.end;
+    // Paragraphs, so a screen reader has somewhere to land: the blank lines
+    // between them become margin instead of literal whitespace.
+    const parts: Array<{ start: number; end: number }> = [];
+    const gap = /\n{2,}/g;
+    let from = 0;
+    for (let g = gap.exec(text); g; g = gap.exec(text)) {
+      if (g.index > from) parts.push({ start: from, end: g.index });
+      from = g.index + g[0].length;
+    }
+    if (from < text.length) parts.push({ start: from, end: text.length });
+
+    const blocks = parts.map((part, pi) => {
+      const out: Array<string | JSX.Element> = [];
+      let pos = part.start;
+      chosen.forEach((mk, i) => {
+        // A name never straddles a blank line; clamp so a stray marker cannot
+        // swallow the paragraph break.
+        if (mk.end <= part.start || mk.start >= part.end) return;
+        const start = Math.max(mk.start, part.start);
+        const end = Math.min(mk.end, part.end);
+        if (start > pos) out.push(text.slice(pos, start));
+        const open = () =>
+          mk.kind === 'known' ? onMention(mk.entityId!) : onUnknown(mk.candidateId!);
+        out.push(
+          <span
+            key={`m${pi}-${i}`}
+            className={mk.kind === 'known' ? 'mention' : 'mention unknown'}
+            style={mk.kind === 'known' ? ({ ['--e']: mk.color } as CSSProperties) : undefined}
+            data-entity={mk.kind === 'known' ? mk.entityId : undefined}
+            title={mk.kind === 'unknown' ? mk.title : undefined}
+            role="button"
+            tabIndex={0}
+            aria-label={
+              mk.kind === 'unknown' ? `${text.slice(start, end)} — not yet triaged` : undefined
+            }
+            onMouseEnter={(ev) => {
+              if (mk.kind !== 'known' || !mk.entityId || document.querySelector('.highlights-off')) return;
+              const entity = entityById.get(mk.entityId);
+              if (!entity) return;
+              clearClose();
+              setHover({ entity, rect: ev.currentTarget.getBoundingClientRect() });
+            }}
+            onMouseLeave={closeSoon}
+            onClick={open}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                open();
+              }
+            }}
+          >
+            {text.slice(start, end)}
+          </span>
+        );
+        pos = end;
+      });
+      if (pos < part.end) out.push(text.slice(pos, part.end));
+      return out;
     });
-    if (pos < text.length) out.push(text.slice(pos));
-    return { nodes: out };
+    return { blocks };
   }, [text, mentions, candidates, entityById, onMention, onUnknown]);
 
   // Arriving from an entity's mentions timeline: bring its first mention into
@@ -185,7 +214,9 @@ export default function ReaderText({
 
   return (
     <div className="reader-text">
-      {nodes}
+      {blocks.map((nodes, i) => (
+        <p key={i}>{nodes}</p>
+      ))}
       {hover &&
         createPortal(
           <div

@@ -210,6 +210,17 @@ button.danger:hover {
   background: var(--color-danger-bg);
   border-color: var(--color-danger);
 }
+/* A once-a-book action: always available, never the loudest thing in the row. */
+button.danger-quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-secondary);
+}
+button.danger-quiet:hover {
+  background: var(--color-danger-bg);
+  border-color: transparent;
+  color: var(--color-danger);
+}
 
 input,
 select,
@@ -241,8 +252,8 @@ textarea:focus {
   flex: none;
 }
 .icon-btn {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -903,6 +914,16 @@ textarea:focus {
   justify-content: space-between;
   gap: 8px;
 }
+.mark-legend {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+.mark-legend.is-hidden {
+  visibility: hidden;
+}
 .paper-title {
   margin: 0;
   font-family: var(--font-reading);
@@ -921,7 +942,22 @@ textarea:focus {
   color: var(--color-text-reading);
 }
 .reader-text p {
-  margin: 0 0 calc(var(--text-reading) * 0.85);
+  /* One blank line of the manuscript's own rhythm, now as margin. */
+  margin: 0 0 calc(var(--text-reading) * var(--leading-reading));
+}
+.chapter-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: calc(48px * var(--density));
+  padding-top: calc(24px * var(--density));
+  border-top: 1px solid var(--color-border);
+}
+.chapter-end span {
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 .reader-text[contenteditable="true"] {
   min-height: 260px;
@@ -943,9 +979,6 @@ textarea:focus {
 }
 .mention:hover {
   background: color-mix(in srgb, var(--e, var(--color-character)) 18%, transparent);
-}
-.mention[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--e, var(--color-character)) 30%, transparent);
 }
 .mention.unknown {
   text-decoration-style: dotted;
@@ -1056,10 +1089,15 @@ textarea:focus {
   width: 100%;
   min-height: 60vh;
   font-family: var(--font-reading);
-  font-size: var(--text-editor);
-  line-height: var(--leading-editor);
-  padding: 20px;
+  font-size: var(--text-reading);
+  line-height: var(--leading-reading);
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
   resize: vertical;
+  /* Chromium: the draft grows with the text instead of scrolling in a box, so
+     editing keeps the page's height and the reading column's measure. */
+  field-sizing: content;
 }
 
 /* 9. Inspector (right panel) ----------------------------------------------- */
