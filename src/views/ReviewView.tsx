@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Candidate, Entity, IgnoredToken, ReviewData, Type } from '../types';
+import { signalLabel } from '../signalLabel';
 
 // SQLite stores `datetime('now')` as "YYYY-MM-DD HH:MM:SS" in UTC.
 function formatTrashed(ts?: string | null): string {
@@ -17,12 +18,16 @@ function CandidateRow({
   c,
   types,
   onResolve,
+  onOpen,
+  busy,
   selected,
   onToggle,
 }: {
   c: Candidate;
   types: Type[];
   onResolve: (c: Candidate, action: string, extra?: Record<string, unknown>) => void;
+  onOpen: (c: Candidate) => void;
+  busy?: boolean;
   /** Omitted only where the list has no selection bar. */
   selected?: boolean;
   onToggle?: (id: number) => void;
@@ -46,7 +51,7 @@ function CandidateRow({
   })();
 
   return (
-    <div className="card">
+    <div className="card" role="listitem">
       <div
         className={onToggle ? 'cand-row with-select' : 'cand-row'}
         // Clicking the row's text toggles selection; its own controls (checkbox,
@@ -69,20 +74,31 @@ function CandidateRow({
         )}
         <div>
           <div className="cand-name">
-            {c.surface_text}{' '}
+            <button
+              type="button"
+              className="cand-name-btn"
+              onClick={() => onOpen(c)}
+              disabled={busy}
+              aria-label={`Open ${c.surface_text}`}
+            >
+              {c.surface_text}
+            </button>{' '}
             <span className="progress">
               {c.occurrences}× · ch.{c.chapter_number || '?'} · {Math.round(c.confidence * 100)}%
             </span>
           </div>
           {contexts[0] && <div className="cand-context">{contexts[0]}</div>}
           {signals.length > 0 && (
-            <div style={{ marginTop: 6, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              {signals.map((s) => (
-                <span className="chip" key={s}>
-                  {s}
-                </span>
-              ))}
-            </div>
+            <details className="cand-why">
+              <summary>Why this name?</summary>
+              <div className="cand-why-chips">
+                {signals.map((s) => (
+                  <span className="chip" key={s}>
+                    {signalLabel(s)}
+                  </span>
+                ))}
+              </div>
+            </details>
           )}
           {c.possible_name && (
             <div className="lookalike">
@@ -90,6 +106,7 @@ function CandidateRow({
               <button
                 className="ghost"
                 style={{ padding: '0 4px', textDecoration: 'underline' }}
+                disabled={busy}
                 onClick={() => onResolve(c, 'merge', { entityId: c.possible_entity_id })}
               >
                 same thing
@@ -112,11 +129,15 @@ function CandidateRow({
         </div>
       </div>
       <div className="actions">
-        <button className="primary" onClick={() => onResolve(c, 'accept', { typeId })}>
+        <button disabled={busy} onClick={() => onResolve(c, 'accept', { typeId })}>
           Accept
         </button>
-        <button onClick={() => onResolve(c, 'later')}>Later</button>
-        <button onClick={() => onResolve(c, 'ignore')}>Ignore — never ask again</button>
+        <button disabled={busy} onClick={() => onResolve(c, 'later')}>
+          Later
+        </button>
+        <button disabled={busy} onClick={() => onResolve(c, 'ignore')}>
+          Ignore for good
+        </button>
       </div>
     </div>
   );
@@ -133,6 +154,7 @@ export default function ReviewView({
   onAlertState,
   onOpenEntity,
   onOpenGun,
+  onOpenCandidate,
   onTriageAll,
   onUnignore,
   onRestore,
@@ -144,16 +166,17 @@ export default function ReviewView({
   types: Type[];
   ignored: IgnoredToken[];
   trash: Entity[];
-  onResolve: (c: Candidate, action: string, extra?: Record<string, unknown>) => void;
+  onResolve: (c: Candidate, action: string, extra?: Record<string, unknown>) => Promise<unknown> | void;
   onResolveMany: (ids: number[], action: string) => Promise<void>;
   onLoadMore: (tier: 'primary' | 'demoted') => Promise<void>;
-  onAlertState: (id: number, state: string) => void;
+  onAlertState: (id: number, state: string) => Promise<unknown> | void;
   onOpenEntity: (id: number) => void;
   onOpenGun: (id: number) => void;
+  onOpenCandidate: (id: number, queue?: Candidate[]) => void;
   onTriageAll: () => void;
-  onUnignore: (id: number) => void;
-  onRestore: (id: number) => void;
-  onDeleteForever: (id: number) => void;
+  onUnignore: (id: number) => Promise<unknown> | void;
+  onRestore: (id: number) => Promise<unknown> | void;
+  onDeleteForever: (id: number) => Promise<unknown> | void;
   onRestoreMany: (ids: number[]) => Promise<void>;
   onDeleteMany: (ids: number[]) => Promise<void>;
 }) {
@@ -162,6 +185,25 @@ export default function ReviewView({
   const [loadingMore, setLoadingMore] = useState<'primary' | 'demoted' | null>(null);
   const [selectedTrash, setSelectedTrash] = useState<number[]>([]);
   const [selectedNames, setSelectedNames] = useState<number[]>([]);
+  const [busy, setBusy] = useState<number | 'bulk' | 'trash' | 'alerts' | 'rejected' | null>(null);
+  const [actionError, setActionError] = useState('');
+
+  // A failed write must not look like a dead button: keep the row, say what
+  // happened, and stop a second click while the first is still in flight.
+  const attempt = async (
+    key: Exclude<typeof busy, null>,
+    run: () => Promise<unknown> | void
+  ) => {
+    setBusy(key);
+    setActionError('');
+    try {
+      await run();
+    } catch (err) {
+      setActionError(err instanceof Error && err.message ? err.message : 'The server did not answer.');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const primary = review.pending.filter((c) => c.tier !== 'demoted');
   const demoted = review.pending.filter((c) => c.tier === 'demoted');
@@ -172,17 +214,17 @@ export default function ReviewView({
     setSelectedTrash((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const toggleAllTrash = () => setSelectedTrash(allTrashSelected ? [] : trash.map((e) => e.id));
   const clearTrashSelection = () => setSelectedTrash([]);
-  const restoreSelected = async () => {
+  const restoreSelected = () => {
     const ids = selectedTrash;
     clearTrashSelection();
-    await onRestoreMany(ids);
+    void attempt('trash', () => onRestoreMany(ids));
   };
   const deleteSelected = () => {
     if (selectedTrash.length === 0) return;
     if (confirm(`Permanently delete ${selectedTrash.length} card(s)? This cannot be undone.`)) {
       const ids = selectedTrash;
       clearTrashSelection();
-      void onDeleteMany(ids);
+      void attempt('trash', () => onDeleteMany(ids));
     }
   };
 
@@ -210,20 +252,25 @@ export default function ReviewView({
       setLoadingMore(null);
     }
   };
-  const bulkResolve = async (action: 'ignore' | 'later') => {
+  const bulkResolve = (action: 'ignore' | 'later') => {
     const ids = selectedIds;
     if (ids.length === 0) return;
     if (action === 'ignore' && !confirm(`Ignore ${ids.length} selected name(s)? They will never be suggested again.`)) return;
     clearNamesSelection();
-    await onResolveMany(ids, action);
+    void attempt('bulk', () => onResolveMany(ids, action));
   };
+  const resolveOne = (c: Candidate, action: string, extra?: Record<string, unknown>) => {
+    void attempt(c.id, () => onResolve(c, action, extra));
+  };
+  const openCandidate = (c: Candidate) =>
+    onOpenCandidate(c.id, showMore ? [...primary, ...demoted] : primary);
   const bulkActions = selectedIds.length > 0 && (
     <div className="dw-trash-bulk">
       <span className="progress">{selectedIds.length} selected</span>
-      <button className="btn-primary" onClick={() => bulkResolve('ignore')}>
+      <button className="btn-primary" disabled={busy === 'bulk'} onClick={() => bulkResolve('ignore')}>
         Ignore
       </button>
-      <button className="btn-secondary" onClick={() => bulkResolve('later')}>
+      <button className="btn-secondary" disabled={busy === 'bulk'} onClick={() => bulkResolve('later')}>
         Later
       </button>
       <button className="btn-secondary" onClick={clearNamesSelection}>
@@ -239,19 +286,44 @@ export default function ReviewView({
         Everything waiting on your input lives here.
       </p>
       <div className="tabs">
-        <button className={tab === 'names' ? 'active' : ''} onClick={() => setTab('names')}>
+        <button
+          className={tab === 'names' ? 'active' : ''}
+          aria-current={tab === 'names' ? 'page' : undefined}
+          onClick={() => setTab('names')}
+        >
           New names {primary.length > 0 && <span className="badge">{primary.length}</span>}
         </button>
-        <button className={tab === 'alerts' ? 'active' : ''} onClick={() => setTab('alerts')}>
+        <button
+          className={tab === 'alerts' ? 'active' : ''}
+          aria-current={tab === 'alerts' ? 'page' : undefined}
+          onClick={() => setTab('alerts')}
+        >
           Trail alerts {unread > 0 && <span className="badge">{unread}</span>}
         </button>
-        <button className={tab === 'rejected' ? 'active' : ''} onClick={() => setTab('rejected')}>
+        <button
+          className={tab === 'rejected' ? 'active' : ''}
+          aria-current={tab === 'rejected' ? 'page' : undefined}
+          onClick={() => setTab('rejected')}
+        >
           Rejected {ignored.length > 0 && <span className="badge">{ignored.length}</span>}
         </button>
-        <button className={tab === 'trash' ? 'active' : ''} onClick={() => setTab('trash')}>
+        <button
+          className={tab === 'trash' ? 'active' : ''}
+          aria-current={tab === 'trash' ? 'page' : undefined}
+          onClick={() => setTab('trash')}
+        >
           Trash {trash.length > 0 && <span className="badge">{trash.length}</span>}
         </button>
       </div>
+
+      {actionError && (
+        <div className="save-error" role="alert">
+          <div>
+            <strong>That didn’t go through.</strong> {actionError}
+          </div>
+          <button onClick={() => setActionError('')}>Dismiss</button>
+        </div>
+      )}
 
       {tab === 'names' && (
         <>
@@ -277,13 +349,15 @@ export default function ReviewView({
           {primary.length === 0 && demoted.length === 0 ? (
             <div className="empty-state">No new names waiting. Paste a chapter to scan it.</div>
           ) : (
-            <div className="list">
+            <div className="list" role="list" aria-label="New names">
               {primary.map((c) => (
                 <CandidateRow
                   key={c.id}
                   c={c}
                   types={types}
-                  onResolve={onResolve}
+                  onResolve={resolveOne}
+                  onOpen={openCandidate}
+                  busy={busy === c.id}
                   selected={selectedNames.includes(c.id)}
                   onToggle={toggleName}
                 />
@@ -323,13 +397,15 @@ export default function ReviewView({
                     </label>
                     {bulkActions}
                   </div>
-                  <div className="list">
+                  <div className="list" role="list" aria-label="Low-confidence names">
                     {demoted.map((c) => (
                       <CandidateRow
                         key={c.id}
                         c={c}
                         types={types}
-                        onResolve={onResolve}
+                        onResolve={resolveOne}
+                        onOpen={openCandidate}
+                        busy={busy === c.id}
                         selected={selectedIds.includes(c.id)}
                         onToggle={toggleName}
                       />
@@ -358,9 +434,9 @@ export default function ReviewView({
               No trail alerts. Turn on tracking for a character to be told when they reappear or go missing.
             </div>
           ) : (
-            <div className="list">
+            <div className="list" role="list" aria-label="Trail alerts">
               {review.alerts.map((a) => (
-                <div className="card" key={a.id}>
+                <div className="card" key={a.id} role="listitem">
                   <div className="alert-row">
                     <div style={{ flex: 1 }}>
                       <span className={`alert-kind ${a.kind}`}>{a.kind.replace(/_/g, ' ')}</span>
@@ -391,8 +467,14 @@ export default function ReviewView({
                       </div>
                     </div>
                     <div className="actions" style={{ marginTop: 0 }}>
-                      {a.state === 'unread' && <button onClick={() => onAlertState(a.id, 'read')}>Mark read</button>}
-                      <button onClick={() => onAlertState(a.id, 'resolved')}>Resolve</button>
+                      {a.state === 'unread' && (
+                        <button onClick={() => void attempt('alerts', () => onAlertState(a.id, 'read'))}>
+                          Mark read
+                        </button>
+                      )}
+                      <button onClick={() => void attempt('alerts', () => onAlertState(a.id, 'resolved'))}>
+                        Resolve
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -411,13 +493,13 @@ export default function ReviewView({
           {ignored.length === 0 ? (
             <div className="empty-state">Nothing rejected yet.</div>
           ) : (
-            <div className="list">
+            <div className="list" role="list" aria-label="Rejected words">
               {ignored.map((t) => (
-                <div className="card" key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div className="card" key={t.id} role="listitem" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ flex: 1 }} className="cand-name">
                     {t.normalized}
                   </div>
-                  <button onClick={() => onUnignore(t.id)}>Restore</button>
+                  <button onClick={() => void attempt('rejected', () => onUnignore(t.id))}>Restore</button>
                 </div>
               ))}
             </div>
@@ -443,10 +525,10 @@ export default function ReviewView({
                 {selectedTrash.length > 0 && (
                   <div className="dw-trash-bulk">
                     <span className="progress">{selectedTrash.length} selected</span>
-                    <button className="btn-primary" onClick={restoreSelected}>
+                    <button className="btn-primary" disabled={busy === 'trash'} onClick={restoreSelected}>
                       Restore
                     </button>
-                    <button className="btn-danger" onClick={deleteSelected}>
+                    <button className="btn-danger" disabled={busy === 'trash'} onClick={deleteSelected}>
                       Delete forever
                     </button>
                     <button className="btn-secondary" onClick={clearTrashSelection}>
@@ -476,13 +558,18 @@ export default function ReviewView({
                       </div>
                     </div>
                     <div className="dw-trash__actions">
-                      <button className="btn-secondary" onClick={() => onRestore(e.id)}>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => void attempt('trash', () => onRestore(e.id))}
+                      >
                         Restore
                       </button>
                       <button
                         className="btn-danger"
                         onClick={() => {
-                          if (confirm(`Permanently delete "${e.name}"? This cannot be undone.`)) onDeleteForever(e.id);
+                          if (confirm(`Permanently delete "${e.name}"? This cannot be undone.`)) {
+                            void attempt('trash', () => onDeleteForever(e.id));
+                          }
                         }}
                       >
                         Delete forever

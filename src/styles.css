@@ -1776,6 +1776,43 @@ textarea:focus {
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+/* In the Review inbox the name is a button, not a headline: keep the row
+   compact and let the queue be the page's one primary action. */
+.cand-row .cand-name {
+  font-size: 18px;
+  font-weight: 600;
+}
+.cand-name-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.cand-name-btn:hover {
+  border-color: transparent;
+  text-decoration: underline;
+}
+.cand-why {
+  margin-top: 8px;
+}
+.cand-why summary {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.cand-why-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+.triage-step {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .cand-meta {
   margin-top: 2px;
   font-size: var(--text-sm);

@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { api } from '../api';
 import type { Candidate, Type } from '../types';
+import { signalLabel } from '../signalLabel';
 
 export default function TriageModal({
   items,
@@ -25,6 +27,32 @@ export default function TriageModal({
     () => types.find((t) => t.name === 'Character')?.id ?? types[0]?.id ?? null
   );
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  // A dialog has to take focus, keep it, and give it back to whatever opened it.
+  useEffect(() => {
+    returnFocusRef.current = document.activeElement as HTMLElement | null;
+    modalRef.current?.focus();
+    return () => returnFocusRef.current?.focus();
+  }, []);
+
+  const trapTab = (ev: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (ev.key !== 'Tab') return;
+    const stops = [...ev.currentTarget.querySelectorAll<HTMLElement>('button, input, select')].filter(
+      (el) => !el.hasAttribute('disabled')
+    );
+    const first = stops[0];
+    const last = stops[stops.length - 1];
+    if (!first || !last) return;
+    if (ev.shiftKey && document.activeElement === first) {
+      ev.preventDefault();
+      last.focus();
+    } else if (!ev.shiftKey && document.activeElement === last) {
+      ev.preventDefault();
+      first.focus();
+    }
+  };
 
   useEffect(() => {
     if (item) {
@@ -102,9 +130,18 @@ export default function TriageModal({
   if (!item) {
     return (
       <div className="overlay" onClick={onClose}>
-        <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="triage-empty-title"
+          tabIndex={-1}
+          ref={modalRef}
+          onKeyDown={trapTab}
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="modal-head">
-            <h2>Triage</h2>
+            <h2 id="triage-empty-title">Triage</h2>
           </div>
           <div className="modal-body">
             <div className="empty-state">Nothing left to triage. 🎉</div>
@@ -136,12 +173,39 @@ export default function TriageModal({
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className={`modal${view === 'grid' ? ' wide' : ''}`} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={`modal${view === 'grid' ? ' wide' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="triage-title"
+        tabIndex={-1}
+        ref={modalRef}
+        onKeyDown={trapTab}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
-          <h2>{view === 'grid' ? 'Triage all' : 'New name found'}</h2>
-          <span className="progress">
-            {index + 1} / {items.length}
-          </span>
+          <h2 id="triage-title">{view === 'grid' ? 'Triage all' : 'New name found'}</h2>
+          <div className="triage-step">
+            <button
+              className="icon-btn"
+              aria-label="Previous name"
+              disabled={index === 0}
+              onClick={() => onNavigate(index - 1)}
+            >
+              ←
+            </button>
+            <span className="progress">
+              {index + 1} / {items.length}
+            </span>
+            <button
+              className="icon-btn"
+              aria-label="Next name"
+              disabled={index >= items.length - 1}
+              onClick={() => onNavigate(index + 1)}
+            >
+              →
+            </button>
+          </div>
           <div style={{ display: 'flex', gap: 4 }}>
             <button className={view === 'list' ? 'primary' : ''} onClick={() => setView('list')}>
               List
@@ -156,6 +220,9 @@ export default function TriageModal({
               Grid
             </button>
           </div>
+          <button className="icon-btn" aria-label="Close triage" onClick={onClose}>
+            ✕
+          </button>
         </div>
         <div className="modal-body">
           {view === 'grid' ? (
@@ -198,7 +265,7 @@ export default function TriageModal({
                     <button
                       key={t.id}
                       className={`type-btn${bulkTypeId === t.id ? ' sel' : ''}`}
-                      style={{ color: t.color }}
+                      style={{ ['--e']: t.color } as CSSProperties}
                       onClick={() => setBulkTypeId(t.id)}
                     >
                       <span>{t.icon}</span>
@@ -247,7 +314,7 @@ export default function TriageModal({
                 <button
                   key={t.id}
                   className={`type-btn${typeId === t.id ? ' sel' : ''}`}
-                  style={{ color: t.color }}
+                  style={{ ['--e']: t.color } as CSSProperties}
                   onClick={() => setTypeId(t.id)}
                 >
                   <span>{t.icon}</span>
@@ -262,7 +329,7 @@ export default function TriageModal({
             <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {signals.map((s) => (
                 <span className="chip" key={s}>
-                  {s}
+                  {signalLabel(s)}
                 </span>
               ))}
             </div>
@@ -298,7 +365,6 @@ export default function TriageModal({
             <>
               <button onClick={() => onResolve(item, 'ignore')}>Ignore</button>
               <button onClick={() => onResolve(item, 'later')}>Later</button>
-              {index > 0 && <button className="ghost" onClick={() => onNavigate(index - 1)}>← Back</button>}
               <button className="primary" onClick={() => onResolve(item, 'accept', { typeId })}>
                 Accept
               </button>

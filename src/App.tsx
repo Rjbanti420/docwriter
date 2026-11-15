@@ -415,10 +415,11 @@ export default function App() {
   );
 
   const openCandidate = useCallback(
-    async (candidateId: number) => {
-      const idx = review.pending.findIndex((c) => c.id === candidateId);
+    async (candidateId: number, queue?: Candidate[]) => {
+      const items = queue ?? review.pending;
+      const idx = items.findIndex((c) => c.id === candidateId);
       if (idx >= 0) {
-        setTriage({ items: review.pending, index: idx });
+        setTriage({ items, index: idx });
         return;
       }
       // The row may sit past the 100-per-tier page; fetch it directly rather
@@ -788,6 +789,7 @@ export default function App() {
             onLoadMore={loadMoreCandidates}
             onAlertState={setAlertState}
             onOpenEntity={(id) => setEntityId(id)}
+            onOpenCandidate={openCandidate}
             onOpenGun={(id) => {
               setPlanningFocus(id);
               go('planning');
