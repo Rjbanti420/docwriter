@@ -19,7 +19,7 @@ export default function ExportReminderModal({
     <div className="overlay" onClick={onLater}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>Ready for a backup copy?</h2>
+          <h2>Ready to export?</h2>
         </div>
         <div className="modal-body">
           <p style={{ marginTop: 0 }}>

@@ -203,63 +203,14 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
       )}
 
       <section className="card" style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>User</h2>
-        <div className="field">
-          <label htmlFor="set-name">Name</label>
-          <input id="set-name" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div className="field">
-          <label htmlFor="set-email">Email (placeholder for future sync)</label>
-          <input id="set-email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div className="actions"><button className="btn-secondary" onClick={saveProfile}>Save profile</button></div>
-      </section>
-
-      <section className="card" style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Export</h2>
-        <p className="progress" style={{ marginTop: 0, marginBottom: 8 }}>
-          Writes the whole book to one Markdown file — every chapter’s current draft, the Bible and
-          Planning. Images, Trash and the Review queue stay behind.
-          {meta?.lastExportAt && <> Last exported {meta.lastExportAt}.</>}
-        </p>
-        <div className="actions" style={{ marginTop: 0 }}>
-          <button className="primary" disabled={exporting} onClick={exportBook}>
-            {exporting ? 'Exporting…' : 'Export as Markdown'}
-          </button>
-        </div>
-        <div className="field" style={{ marginTop: 12, marginBottom: 0 }}>
-          <label htmlFor="set-nudge">Remind me to export</label>
-          <select id="set-nudge" value={meta?.nudge ?? 'daily'} disabled={!meta} onChange={(e) => changeNudge(e.target.value)}>
-            {NUDGE_CHOICES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-          </select>
-        </div>
-      </section>
-
-      <section className="card" style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Backup</h2>
-        <p className="progress" style={{ marginTop: 0, marginBottom: 8 }}>
-          Saves a complete, self-contained copy of this book — the whole database, including
-          everything written since the last checkpoint.
-        </p>
-        <p className="progress" style={{ marginTop: 0, marginBottom: 12 }}>
-          This book is one file: <code className="book-path">{meta?.bookPath || '…'}</code>
-        </p>
-        <div className="actions" style={{ marginTop: 0 }}>
-          <button className="btn-secondary" disabled={backingUp} onClick={downloadBackup}>
-            {backingUp ? 'Preparing…' : 'Download a backup'}
-          </button>
-        </div>
-      </section>
-
-      <section className="card">
-        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Interface</h2>
+        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Look</h2>
         <div className="field">
           <label>Theme</label>
-          <div className="type-row">
+          <div className="segmented">
             {THEMES.map(t => (
               <button
                 key={t.id}
-                className={theme === t.id ? 'type-btn sel' : 'type-btn'}
+                className={theme === t.id ? 'active' : ''}
                 aria-pressed={theme === t.id}
                 onClick={() => applyThemeChoice(t.id)}
               >
@@ -288,6 +239,55 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
               {READING_FONTS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </div>
+        </div>
+      </section>
+
+      <section className="card" style={{ marginBottom: 16 }}>
+        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>User</h2>
+        <div className="field">
+          <label htmlFor="set-name">Name</label>
+          <input id="set-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="set-email">Email</label>
+          <input id="set-email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div className="actions"><button className="btn-secondary" onClick={saveProfile}>Save profile</button></div>
+      </section>
+
+      <section className="card" style={{ marginBottom: 16 }}>
+        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Export</h2>
+        <p className="card-note">
+          Writes the whole book to one Markdown file — every chapter’s current draft, the Bible and
+          Planning. Images, Trash and the Review queue stay behind.
+          {meta?.lastExportAt && <> Last exported {meta.lastExportAt}.</>}
+        </p>
+        <div className="actions" style={{ marginTop: 0 }}>
+          <button className="primary" disabled={exporting} onClick={exportBook}>
+            {exporting ? 'Exporting…' : 'Export as Markdown'}
+          </button>
+        </div>
+        <div className="field" style={{ marginTop: 12, marginBottom: 0 }}>
+          <label htmlFor="set-nudge">Remind me to export</label>
+          <select id="set-nudge" value={meta?.nudge ?? 'daily'} disabled={!meta} onChange={(e) => changeNudge(e.target.value)}>
+            {NUDGE_CHOICES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Backup</h2>
+        <p className="card-note">
+          Saves a complete, self-contained copy of this book — the whole database, including
+          everything written since the last checkpoint.
+        </p>
+        <p className="card-note">
+          This book is one file: <code className="book-path">{meta?.bookPath || '…'}</code>
+        </p>
+        <div className="actions" style={{ marginTop: 0 }}>
+          <button className="btn-secondary" disabled={backingUp} onClick={downloadBackup}>
+            {backingUp ? 'Preparing…' : 'Download a backup'}
+          </button>
         </div>
       </section>
     </div>
