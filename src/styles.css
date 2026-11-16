@@ -5401,87 +5401,147 @@ body {
 }
 
 /* 31. Timeline ------------------------------------------------------------- */
-/* The map is manuscript order; the story list is the author's explicit order.
-   Keep the two visually distinct so a flashback cannot be mistaken for a
-   reordered chapter. */
+/* The map is a chronology by story day; the story list is the author's
+   explicit, editable order. A flashback belongs at its day, not its chapter. */
 .timeline-note {
   max-width: 660px;
   margin: 0 0 14px;
   line-height: 1.5;
 }
-.tl-map-tools {
-  margin-bottom: 12px;
-}
-.tl-map {
+.tl-chrono {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  max-width: 760px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.tl-chapter {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 7px 14px;
-  border-bottom: 1px solid var(--color-border);
-  content-visibility: auto;
-  contain-intrinsic-size: auto 48px;
-}
-.tl-chapter:last-child {
-  border-bottom: 0;
-}
-.tl-chapter__open {
-  flex: 1;
-  min-height: 34px;
-  min-width: 0;
+.tl-chrono__item {
+  --tl-color: var(--color-accent);
   display: grid;
-  grid-template-columns: minmax(120px, 1.2fr) minmax(60px, 2fr) auto;
-  align-items: center;
-  gap: 14px;
-  padding: 4px 2px;
-  border: 0;
+  grid-template-columns: 64px 18px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+}
+.tl-chrono__day {
+  padding-top: 12px;
+  text-align: right;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.tl-chrono__rail {
+  position: relative;
+  align-self: stretch;
+  min-height: 48px;
+}
+.tl-chrono__rail::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 8px;
+  width: 1px;
+  background: var(--color-border);
+}
+.tl-chrono__item:first-child .tl-chrono__rail::before {
+  top: 18px;
+}
+.tl-chrono__item:last-child .tl-chrono__rail::before {
+  bottom: auto;
+  height: 18px;
+}
+.tl-chrono__rail i {
+  position: absolute;
+  top: 12px;
+  left: 3px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--tl-color);
+  box-shadow: 0 0 0 3px var(--color-bg);
+}
+.tl-chrono__card {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  margin: 0 0 4px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
   text-align: left;
 }
-.tl-chapter__open:hover {
-  background: transparent;
-  color: var(--color-accent);
+.tl-chrono__card:hover {
+  border-color: var(--color-border);
+  background: var(--color-hover-soft);
 }
-.tl-chapter__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-reading);
-  font-size: 15px;
-  font-weight: 500;
-}
-.tl-chapter__bar {
-  height: 6px;
-  overflow: hidden;
-  background: var(--color-border);
-  border-radius: var(--radius-pill);
-}
-.tl-chapter__bar i {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, var(--color-accent), var(--color-location));
-  border-radius: inherit;
-}
-.tl-chapter__stats {
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--color-text-faint);
-}
-.tl-chapter__markers {
-  flex: none;
+.tl-chrono__meta {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px;
-  max-width: 250px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.tl-chrono__title {
+  display: block;
+  font-family: var(--font-reading);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-text);
+}
+.tl-chrono__foot {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.tl-chrono-undated {
+  max-width: 760px;
+  margin-top: 26px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+.tl-chrono-undated h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-family: var(--font-reading);
+  font-size: 16px;
+  font-weight: 600;
+}
+.tl-chrono-undated__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.tl-chrono-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-side);
+  color: var(--color-text);
+  font-size: 13px;
+  text-align: left;
+}
+.tl-chrono-pill small {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+.tl-chrono-pill:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-hover);
 }
 .tl-marker {
   display: inline-flex;
@@ -5622,22 +5682,28 @@ button.tl-marker:hover {
   content-visibility: auto;
   contain-intrinsic-size: auto 150px;
 }
-.tl-event[data-kind='birth'] {
+.tl-event[data-kind='birth'],
+.tl-chrono__item[data-kind='birth'] {
   --tl-color: var(--color-positive);
 }
-.tl-event[data-kind='death'] {
+.tl-event[data-kind='death'],
+.tl-chrono__item[data-kind='death'] {
   --tl-color: var(--color-danger);
 }
-.tl-event[data-kind='battle'] {
+.tl-event[data-kind='battle'],
+.tl-chrono__item[data-kind='battle'] {
   --tl-color: var(--color-character);
 }
-.tl-event[data-kind='reveal'] {
+.tl-event[data-kind='reveal'],
+.tl-chrono__item[data-kind='reveal'] {
   --tl-color: var(--color-faction);
 }
-.tl-event[data-kind='travel'] {
+.tl-event[data-kind='travel'],
+.tl-chrono__item[data-kind='travel'] {
   --tl-color: var(--color-location);
 }
-.tl-event[data-kind='other'] {
+.tl-event[data-kind='other'],
+.tl-chrono__item[data-kind='other'] {
   --tl-color: var(--color-text-faint);
 }
 .tl-event__order {
@@ -5844,19 +5910,15 @@ button.tl-link:hover {
 }
 
 @media (max-width: 720px) {
-  .tl-chapter {
-    flex-wrap: wrap;
+  .tl-chrono__item {
+    grid-template-columns: 52px 14px minmax(0, 1fr);
+    column-gap: 8px;
   }
-  .tl-chapter__open {
-    grid-template-columns: 1fr auto;
+  .tl-chrono__rail::before {
+    left: 6px;
   }
-  .tl-chapter__bar {
-    grid-column: 1 / -1;
-  }
-  .tl-chapter__markers {
-    justify-content: flex-start;
-    max-width: none;
-    padding-left: 2px;
+  .tl-chrono__rail i {
+    left: 1px;
   }
   .tl-event {
     gap: 10px;

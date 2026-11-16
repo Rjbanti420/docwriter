@@ -417,6 +417,7 @@ function EventEditor({
 }
 
 function dayGapLabel(gap: number): string {
+  if (gap === 0) return 'same day';
   return `${gap > 0 ? '+' : ''}${gap} day${Math.abs(gap) === 1 ? '' : 's'}`;
 }
 
@@ -532,7 +533,6 @@ export default function TimelineView({
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
-  const [mapActiveOnly, setMapActiveOnly] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestChapterId, setSuggestChapterId] = useState<number | null>(null);
   const [scannedChapterId, setScannedChapterId] = useState<number | null>(null);
@@ -575,14 +575,6 @@ export default function TimelineView({
   useEffect(() => {
     void load();
   }, [load, chapterSig, entitySig]);
-
-  const eventCountByChapter = useMemo(() => {
-    const counts = new Map<number, number>();
-    for (const event of events) {
-      if (event.chapter_id != null) counts.set(event.chapter_id, (counts.get(event.chapter_id) ?? 0) + 1);
-    }
-    return counts;
-  }, [events]);
 
   const markersByChapter = useMemo(() => {
     const map = new Map<number, MapMarker[]>();
@@ -665,22 +657,6 @@ export default function TimelineView({
   );
 
   const totalWords = useMemo(() => chapters.reduce((sum, chapter) => sum + (chapter.word_count || 0), 0), [chapters]);
-  const maxWords = useMemo(
-    () => Math.max(1, ...chapters.map((chapter) => chapter.word_count || 0)),
-    [chapters]
-  );
-
-  const activeChapterCount = useMemo(
-    () =>
-      chapters.filter(
-        (chapter) => eventCountByChapter.has(chapter.id) || markersByChapter.has(chapter.id)
-      ).length,
-    [chapters, eventCountByChapter, markersByChapter]
-  );
-  const mapChapters = mapActiveOnly
-    ? chapters.filter((chapter) => eventCountByChapter.has(chapter.id) || markersByChapter.has(chapter.id))
-    : chapters;
-
   const counts = useMemo(() => {
     const next: Record<string, number> = { all: events.length };
     for (const kind of KINDS) next[kind.id] = 0;
@@ -720,6 +696,38 @@ export default function TimelineView({
       span: dated.length > 1 ? (dated[dated.length - 1].story_day as number) - (dated[0].story_day as number) : null,
     };
   }, [events]);
+
+  // The Map is a chronology: earliest story day first. Events with no day wait
+  // below instead of being guessed into the line; ties keep the author's order.
+  const chronology = useMemo(() => {
+    const dated = events
+      .filter((event) => event.story_day != null)
+      .slice()
+      .sort(
+        (a, b) =>
+          (a.story_day as number) - (b.story_day as number) || a.story_order - b.story_order
+      );
+    const gaps = new Map<number, number>();
+    for (let i = 1; i < dated.length; i += 1) {
+      gaps.set(dated[i].id, (dated[i].story_day as number) - (dated[i - 1].story_day as number));
+    }
+    return {
+      dated,
+      undated: events.filter((event) => event.story_day == null),
+      gaps,
+      first: dated.length > 0 ? (dated[0].story_day as number) : null,
+      last: dated.length > 1 ? (dated[dated.length - 1].story_day as number) : null,
+      span:
+        dated.length > 1
+          ? (dated[dated.length - 1].story_day as number) - (dated[0].story_day as number)
+          : null,
+    };
+  }, [events]);
+
+  const openEditor = (event: TimelineEvent) => {
+    editorReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setEditor(event);
+  };
 
   const moveEvent = async (id: number, direction: -1 | 1) => {
     const index = events.findIndex((event) => event.id === id);
@@ -838,81 +846,93 @@ export default function TimelineView({
       ) : tab === 'map' ? (
         <>
           <p className="progress timeline-note">
-            Map is manuscript order. Story order is separate, so a flashback can still sit where it belongs in the
-            chronology.
+            Events are placed by story day, earliest first. A flashback sorts to when it happens, not where the
+            chapter sits.
           </p>
-          <div className="tl-map-tools">
-            <div className="dw-filters">
-              <button
-                className={`dw-chip${mapActiveOnly ? '' : ' is-active'}`}
-                aria-pressed={!mapActiveOnly}
-                onClick={() => setMapActiveOnly(false)}
-              >
-                All chapters
-                <span className="dw-chip-count">{chapters.length}</span>
-              </button>
-              <button
-                className={`dw-chip${mapActiveOnly ? ' is-active' : ''}`}
-                aria-pressed={mapActiveOnly}
-                onClick={() => setMapActiveOnly(true)}
-              >
-                Events &amp; markers
-                <span className="dw-chip-count">{activeChapterCount}</span>
+          {chronology.span != null && (
+            <p className="tl-day-span">
+              Story days: Day {chronology.first} → Day {chronology.last} · {chronology.span} day
+              {Math.abs(chronology.span) === 1 ? '' : 's'}
+            </p>
+          )}
+          {events.length === 0 ? (
+            <div className="empty-state">
+              <h2>No story events yet.</h2>
+              <p>Record what happens and when; the map places each event by its story day.</p>
+              <button className="btn-primary" onClick={openNew}>
+                Add the first event
               </button>
             </div>
-          </div>
-          {chapters.length === 0 ? (
-            <div className="dw-empty">No chapters yet. Paste one from Read when you are ready.</div>
-          ) : mapChapters.length === 0 ? (
-            <div className="dw-empty">Nothing placed on the map yet.</div>
+          ) : chronology.dated.length === 0 ? (
+            <div className="dw-empty">No event has a story day yet. Add one in Story and it will appear here.</div>
           ) : (
-            <div className="tl-map">
-              {mapChapters.map((chapter) => {
-                const markers = markersByChapter.get(chapter.id) ?? [];
-                const eventCount = eventCountByChapter.get(chapter.id) ?? 0;
-                const words = chapter.word_count || 0;
+            <ol className="tl-chrono">
+              {chronology.dated.map((event) => {
+                const gap = chronology.gaps.get(event.id);
+                const chapter = chapterFor(event, chapters);
                 return (
-                  <div className="tl-chapter" key={chapter.id}>
-                    <button className="tl-chapter__open" onClick={() => onOpenChapter(chapter.id)}>
-                      <span className="tl-chapter__label">{chapterLabel(chapter)}</span>
-                      <span className="tl-chapter__bar" aria-hidden="true">
-                        <i style={{ width: `${Math.max(2, (words / maxWords) * 100)}%` }} />
-                      </span>
-                      <span className="tl-chapter__stats">
-                        {words.toLocaleString()} words
-                        {eventCount > 0 && ` · ${eventCount} event${eventCount === 1 ? '' : 's'}`}
-                      </span>
-                    </button>
-                    {markers.length > 0 && (
-                      <div className="tl-chapter__markers">
-                        {markers.slice(0, 4).map((marker) =>
-                          marker.action ? (
-                            <button
-                              type="button"
-                              className={`tl-marker tl-marker--${marker.kind}`}
-                              key={marker.key}
-                              title={marker.title}
-                              onClick={marker.action}
-                            >
-                              {marker.label}
-                            </button>
-                          ) : (
-                            <span
-                              className={`tl-marker tl-marker--${marker.kind}`}
-                              key={marker.key}
-                              title={marker.title}
-                            >
-                              {marker.label}
-                            </span>
-                          )
+                  <li className="tl-chrono__item" data-kind={event.kind} key={event.id}>
+                    <span className="tl-chrono__day">Day {event.story_day}</span>
+                    <span className="tl-chrono__rail" aria-hidden="true">
+                      <i />
+                    </span>
+                    <button
+                      type="button"
+                      className="tl-chrono__card"
+                      onClick={() => openEditor(event)}
+                      aria-label={`Edit ${event.title}`}
+                    >
+                      <span className="tl-chrono__meta">
+                        <span className="tl-kind">{kindLabel(event.kind)}</span>
+                        {event.story_time && <span className="tl-time">{event.story_time}</span>}
+                        {gap != null && gap !== 1 && (
+                          <span
+                            className={`tl-gap${gap < 0 ? ' is-back' : ''}`}
+                            title="Days since the previous dated event"
+                          >
+                            {dayGapLabel(gap)}
+                          </span>
                         )}
-                        {markers.length > 4 && <span className="tl-marker">+{markers.length - 4}</span>}
-                      </div>
-                    )}
-                  </div>
+                        <span className={`tl-anchor${chapter ? '' : ' is-unplaced'}`}>
+                          {anchorLabel(event, chapters)}
+                        </span>
+                      </span>
+                      <strong className="tl-chrono__title">{event.title}</strong>
+                      {event.entities.length > 0 && (
+                        <span className="tl-chrono__foot">
+                          {event.entities
+                            .slice(0, 3)
+                            .map((link) => link.name)
+                            .join(' · ')}
+                          {event.entities.length > 3 ? ` +${event.entities.length - 3}` : ''}
+                        </span>
+                      )}
+                    </button>
+                  </li>
                 );
               })}
-            </div>
+            </ol>
+          )}
+          {chronology.undated.length > 0 && (
+            <section className="tl-chrono-undated" aria-labelledby="tl-undated-title">
+              <h2 id="tl-undated-title">
+                No day yet <span className="tl-marker-lane__count">{chronology.undated.length}</span>
+              </h2>
+              <p className="progress">These stay in Story order until you give them a day.</p>
+              <div className="tl-chrono-undated__list">
+                {chronology.undated.map((event) => (
+                  <button
+                    type="button"
+                    className="tl-chrono-pill"
+                    key={event.id}
+                    onClick={() => openEditor(event)}
+                  >
+                    {event.title}
+                    <small>{anchorLabel(event, chapters)}</small>
+                  </button>
+                ))}
+              </div>
+            </section>
           )}
         </>
       ) : (
@@ -1049,11 +1069,7 @@ export default function TimelineView({
                     canDown={index < events.length - 1}
                     busy={busy}
                     chapters={chapters}
-                    onEdit={() => {
-                      editorReturnFocus.current =
-                        document.activeElement instanceof HTMLElement ? document.activeElement : null;
-                      setEditor(event);
-                    }}
+                    onEdit={() => openEditor(event)}
                     onDelete={() => void deleteEvent(event)}
                     onMove={(direction) => void moveEvent(event.id, direction)}
                     onOpenChapter={onOpenChapter}
