@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { api } from '../api';
 import { chapterLabel } from '../chapters';
 import { parseFields } from '../entityMedia';
@@ -121,6 +121,61 @@ function EventEditor({
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [asking, setAsking] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const lastFocus = useRef<HTMLElement | null>(null);
+
+  // The work is the event: a stray backdrop click or Escape asks first, as the
+  // paste dialog already does. Only fields the writer changed count as dirty.
+  const dirty = isNew
+    ? title.trim() !== '' ||
+      summary.trim() !== '' ||
+      storyTime.trim() !== '' ||
+      storyDay.trim() !== '' ||
+      chapterId != null ||
+      kind !== 'event' ||
+      links.length > 0
+    : title !== event.title ||
+      summary !== event.summary ||
+      chapterId !== event.chapter_id ||
+      storyTime !== event.story_time ||
+      storyDay !== (event.story_day == null ? '' : String(event.story_day)) ||
+      kind !== event.kind ||
+      links.map((link) => `${link.id}:${link.role}`).join('|') !==
+        event.entities.map((link) => `${link.entity_id}:${link.role}`).join('|');
+
+  const requestClose = () => {
+    if (saving || asking) return;
+    if (dirty) {
+      lastFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setAsking(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const keepEditing = () => {
+    setAsking(false);
+    requestAnimationFrame(() => lastFocus.current?.focus());
+  };
+
+  // Tab stays inside the dialog while it is open.
+  const trapTab = (ev: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (ev.key !== 'Tab') return;
+    const nodes = [
+      ...(dialogRef.current?.querySelectorAll<HTMLElement>('button, input, select, textarea') ?? []),
+    ].filter((node) => node.tabIndex !== -1 && !node.hasAttribute('disabled'));
+    if (nodes.length === 0) return;
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    if (ev.shiftKey && document.activeElement === first) {
+      ev.preventDefault();
+      last.focus();
+    } else if (!ev.shiftKey && document.activeElement === last) {
+      ev.preventDefault();
+      first.focus();
+    }
+  };
 
   const term = query.trim().toLowerCase();
   const hits = term
@@ -173,20 +228,23 @@ function EventEditor({
   };
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div
-        className="modal tl-editor"
-        onClick={(ev) => ev.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={isNew ? 'New story event' : 'Edit story event'}
-      >
-        <div className="modal-head">
-          <h2>{isNew ? 'New story event' : 'Edit story event'}</h2>
-          <button className="ghost" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        </div>
+    <>
+      <div className="overlay" onClick={requestClose}>
+        <div
+          className="modal tl-editor"
+          ref={dialogRef}
+          onClick={(ev) => ev.stopPropagation()}
+          onKeyDown={trapTab}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tl-editor-title"
+        >
+          <div className="modal-head">
+            <h2 id="tl-editor-title">{isNew ? 'New story event' : 'Edit story event'}</h2>
+            <button className="ghost" onClick={requestClose} aria-label="Close">
+              ✕
+            </button>
+          </div>
         <div className="modal-body">
           <div className="field">
             <label htmlFor="tl-title">Event</label>
@@ -312,15 +370,49 @@ function EventEditor({
           )}
         </div>
         <div className="modal-foot">
-          <button className="ghost" onClick={onClose} disabled={saving}>
+          <button className="ghost" onClick={requestClose} disabled={saving}>
             Cancel
           </button>
           <button className="btn-primary" onClick={save} disabled={saving}>
             {saving ? 'Saving…' : isNew ? 'Add event' : 'Save changes'}
           </button>
         </div>
+        </div>
       </div>
-    </div>
+
+      {asking && (
+        <div className="overlay" onClick={keepEditing}>
+          <div
+            className="modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="discard-event-title"
+            aria-describedby="discard-event-body"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2 id="discard-event-title">Discard this event?</h2>
+            </div>
+            <div className="modal-body">
+              <p id="discard-event-body" style={{ margin: 0 }}>
+                Nothing is saved. What you typed here cannot be recovered.
+              </p>
+            </div>
+            <div className="modal-foot">
+              <button
+                autoFocus
+                onClick={keepEditing}
+              >
+                Keep editing
+              </button>
+              <button className="danger" onClick={onClose}>
+                Discard event
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -447,6 +539,13 @@ export default function TimelineView({
   const [candidates, setCandidates] = useState<TimelineCandidate[] | null>(null);
   const [scanning, setScanning] = useState(false);
   const [draft, setDraft] = useState<EventDraft | null>(null);
+  const editorReturnFocus = useRef<HTMLElement | null>(null);
+
+  const closeEditor = () => {
+    setEditor(null);
+    setDraft(null);
+    requestAnimationFrame(() => editorReturnFocus.current?.focus());
+  };
 
   const chapterSig = chapters
     .map((c) => `${c.id}:${c.number}:${c.title}:${c.sort_order}:${c.word_count}`)
@@ -654,6 +753,7 @@ export default function TimelineView({
   };
 
   const openNew = () => {
+    editorReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setTab('story');
     setDraft(null);
     setEditor('new');
@@ -673,6 +773,7 @@ export default function TimelineView({
   };
 
   const useCandidate = (candidate: TimelineCandidate) => {
+    editorReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setDraft({
       title: candidate.title,
       summary: candidate.summary,
@@ -948,7 +1049,11 @@ export default function TimelineView({
                     canDown={index < events.length - 1}
                     busy={busy}
                     chapters={chapters}
-                    onEdit={() => setEditor(event)}
+                    onEdit={() => {
+                      editorReturnFocus.current =
+                        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                      setEditor(event);
+                    }}
                     onDelete={() => void deleteEvent(event)}
                     onMove={(direction) => void moveEvent(event.id, direction)}
                     onOpenChapter={onOpenChapter}
@@ -1023,13 +1128,9 @@ export default function TimelineView({
           draft={draft}
           chapters={chapters}
           entities={entities}
-          onClose={() => {
-            setEditor(null);
-            setDraft(null);
-          }}
+          onClose={closeEditor}
           onSaved={() => {
-            setEditor(null);
-            setDraft(null);
+            closeEditor();
             void load();
             if (scannedChapterId != null) void scanChapter(scannedChapterId);
           }}
