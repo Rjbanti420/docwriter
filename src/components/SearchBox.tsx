@@ -94,6 +94,12 @@ export default function SearchBox({
   }
 
   const showPop = open && query.length > 0;
+  const activeId =
+    showPop && hitCount > 0
+      ? active < chapterHits.length
+        ? `search-c-${chapterHits[active].id}`
+        : `search-e-${entityHits[active - chapterHits.length].id}`
+      : undefined;
 
   return (
     <div className="search" ref={rootRef}>
@@ -124,10 +130,15 @@ export default function SearchBox({
         aria-keyshortcuts="Control+K Meta+K"
         title="Search chapters and entities (Ctrl+K)"
         role="combobox"
-        aria-expanded={showPop && hitCount > 0}
+        aria-expanded={showPop}
         aria-controls="search-results"
+        aria-activedescendant={activeId}
+        aria-autocomplete="list"
         autoComplete="off"
       />
+      <span className="sr-only" role="status">
+        {showPop ? (hitCount ? `${hitCount} ${hitCount === 1 ? 'result' : 'results'}` : 'No matches') : ''}
+      </span>
       {showPop && (
         <div className="search-pop" id="search-results" role="listbox">
           {hitCount === 0 && <div className="search-empty">No matches</div>}
@@ -138,6 +149,7 @@ export default function SearchBox({
               key={`c${c.id}`}
               type="button"
               role="option"
+              id={`search-c-${c.id}`}
               aria-selected={active === i}
               className={`search-row${active === i ? ' active' : ''}`}
               onMouseEnter={() => setActive(i)}
@@ -158,6 +170,7 @@ export default function SearchBox({
                 key={`e${e.id}`}
                 type="button"
                 role="option"
+                id={`search-e-${e.id}`}
                 aria-selected={active === gi}
                 className={`search-row${active === gi ? ' active' : ''}`}
                 onMouseEnter={() => setActive(gi)}

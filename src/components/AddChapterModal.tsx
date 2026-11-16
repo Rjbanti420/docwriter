@@ -40,12 +40,24 @@ export default function AddChapterModal({
   const duplicate =
     cleanNumber !== '' &&
     chapters.some((c) => c.number.trim().toLowerCase() === cleanNumber.toLowerCase());
+  // The paste is the work: a stray backdrop click or Escape asks first.
+  const dirty = cleanNumber !== '' || title.trim() !== '' || text.trim() !== '';
+  const requestClose = () => {
+    if (dirty && !confirm('Discard this chapter? Nothing is saved.')) return;
+    onClose();
+  };
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal wide" onClick={(e) => e.stopPropagation()}>
+    <div className="overlay" onClick={requestClose}>
+      <div
+        className="modal wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-chapter-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
-          <h2>Paste a chapter</h2>
+          <h2 id="add-chapter-title">Paste a chapter</h2>
           <span className="progress">{words} words</span>
         </div>
         <div className="modal-body">
@@ -87,7 +99,7 @@ export default function AddChapterModal({
           </div>
         </div>
         <div className="modal-foot">
-          <button onClick={onClose}>Cancel</button>
+          <button onClick={requestClose}>Cancel</button>
           <button
             className="primary"
             disabled={!text.trim() || busy}

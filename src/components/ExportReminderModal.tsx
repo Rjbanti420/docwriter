@@ -1,25 +1,70 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 
 /**
  * The once-a-period export nudge. It has no open/close props of its own: App
- * mounts it only while the book's reminder state says a period has run out, and
- * either button settles that — exporting, or "Later".
+ * mounts it only while the book's reminder state says a period has run out.
+ * "Later" settles that period; closing without choosing leaves the reminder
+ * due, so a keypress the writer did not aim at it cannot dismiss the period.
  */
 export default function ExportReminderModal({
   onExport,
   onLater,
+  onClose,
 }: {
   /** Runs the export; resolves true when the file reached disk. */
   onExport: () => Promise<boolean>;
   onLater: () => void;
+  /** Dismisses this launch's reminder without recording a decision. */
+  onClose: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // A modal that opens by itself must take the keyboard, or its buttons are
+  // unreachable behind the page's own tab order.
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const focusables = () =>
+      [...box.querySelectorAll<HTMLElement>('button:not(:disabled)')].filter((el) =>
+        el.checkVisibility?.({ checkVisibilityCSS: true })
+      );
+    focusables()[0]?.focus();
+  }, []);
+
+  const trapTab = (ev: KeyboardEvent<HTMLDivElement>) => {
+    if (ev.key !== 'Tab' || !boxRef.current) return;
+    const items = [...boxRef.current.querySelectorAll<HTMLElement>('button:not(:disabled)')].filter(
+      (el) => el.checkVisibility?.({ checkVisibilityCSS: true })
+    );
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (ev.shiftKey && document.activeElement === first) {
+      ev.preventDefault();
+      last.focus();
+    } else if (!ev.shiftKey && document.activeElement === last) {
+      ev.preventDefault();
+      first.focus();
+    }
+  };
 
   return (
-    <div className="overlay" onClick={onLater}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className="overlay" onClick={onClose}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-reminder-title"
+        tabIndex={-1}
+        ref={boxRef}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={trapTab}
+      >
         <div className="modal-head">
-          <h2>Ready to export?</h2>
+          <h2 id="export-reminder-title">Ready to export?</h2>
+          <button className="ghost" aria-label="Close reminder" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
           <p style={{ marginTop: 0 }}>

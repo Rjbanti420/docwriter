@@ -26,6 +26,13 @@ function isTypingTarget(target: EventTarget | null): boolean {
   );
 }
 
+// A hidden overlay still sits in the DOM; it must never own a global key.
+function visibleOverlays(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('.overlay')].filter(
+    (el) => el.checkVisibility?.({ checkVisibilityCSS: true }) ?? true
+  );
+}
+
 export default function App() {
   const [types, setTypes] = useState<Type[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -65,6 +72,13 @@ export default function App() {
   const [meta, setMeta] = useState<ExportMeta | null>(null);
   const [nudgeOpen, setNudgeOpen] = useState(false);
   const [scanError, setScanError] = useState<{ id: number; message: string } | null>(null);
+  // A failed first load must say so: an empty book and an unreachable one are
+  // not the same screen, and only one of them offers "Paste a chapter".
+  const [loaded, setLoaded] = useState(false);
+  const [bootError, setBootError] = useState('');
+  const [chapterError, setChapterError] = useState('');
+  const addReturnRef = useRef<HTMLElement | null>(null);
+  const mainRef = useRef<HTMLElement>(null);
   // One reminder per launch, not one per re-render or per refresh.
   const nudged = useRef(false);
   // A save can outlive the view: only paint its result if the writer is still
@@ -131,6 +145,13 @@ export default function App() {
     }
   }, [meta]);
 
+  // Closing without choosing (✕, backdrop, Escape) is not "Later": it hides the
+  // reminder for this launch only, so no keypress can record a decision.
+  const closeNudge = useCallback(() => {
+    setNudgeOpen(false);
+    window.setTimeout(() => mainRef.current?.focus(), 0);
+  }, []);
+
   // ReadView owns the chapter draft and PlanningView owns the duel builder;
   // App only needs to know whether leaving would throw either away, so every
   // navigation path asks the same question.
@@ -183,9 +204,15 @@ export default function App() {
 
   const loadChapter = useCallback(async (id: number) => {
     const seq = ++loadSeq.current;
-    const d: ChapterDetail = await api.chapter(id);
-    if (seq !== loadSeq.current) return;
-    setDetail(d);
+    setChapterError('');
+    try {
+      const d: ChapterDetail = await api.chapter(id);
+      if (seq !== loadSeq.current) return;
+      setDetail(d);
+    } catch (err) {
+      if (seq !== loadSeq.current) return;
+      setChapterError(err instanceof Error ? err.message : String(err));
+    }
   }, []);
 
   // Any non-load writer (save, add, triage) invalidates a chapter read that is
@@ -208,8 +235,10 @@ export default function App() {
       });
   }, []);
 
-  useEffect(() => {
-    (async () => {
+  const boot = useCallback(async () => {
+    setBootError('');
+    setChapterError('');
+    try {
       const [t, ch, en, rv, ig, tr, md] = await Promise.all([
         api.types(),
         api.chapters(),
@@ -231,8 +260,31 @@ export default function App() {
         setActiveId(pick.id);
         await loadChapter(pick.id);
       }
-    })();
+      setLoaded(true);
+    } catch (err) {
+      setBootError(err instanceof Error ? err.message : String(err));
+    }
   }, [loadChapter]);
+
+  useEffect(() => {
+    void boot();
+  }, [boot]);
+
+  // The paste dialog is the book's front door: closing it returns the keyboard
+  // to the control that opened it, and the dialog itself asks before dropping text.
+  const openAdd = useCallback(() => {
+    addReturnRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setAddOpen(true);
+  }, []);
+
+  const closeAdd = useCallback(() => {
+    setAddOpen(false);
+    window.setTimeout(() => {
+      const el = addReturnRef.current;
+      if (el?.isConnected && el.checkVisibility?.({ checkVisibilityCSS: true })) el.focus();
+    }, 0);
+  }, []);
 
   const refresh = useCallback(async () => {
     await Promise.all([loadChapters(), loadEntities(), loadReview(), loadIgnored(), loadTrash()]);
@@ -529,16 +581,18 @@ export default function App() {
       const mod = ev.metaKey || ev.ctrlKey;
       if (mod && ev.key.toLowerCase() === 'k') {
         ev.preventDefault();
-        if (document.querySelector('.overlay')) return;
+        if (visibleOverlays().length) return;
         const input = document.querySelector<HTMLInputElement>('.search input');
         if (!input) return;
+        // Quick-open is a jump: the drawer's map has done its job.
+        setMenuOpen(false);
         input.focus();
         input.select();
         return;
       }
 
       if (ev.key === 'Escape') {
-        const overlays = document.querySelectorAll<HTMLElement>('.overlay');
+        const overlays = visibleOverlays();
         const top = overlays[overlays.length - 1];
         if (top) {
           ev.preventDefault();
@@ -569,7 +623,7 @@ export default function App() {
       if (ev.altKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
         if (isTypingTarget(ev.target)) return;
         ev.preventDefault();
-        if (document.querySelector('.overlay')) return;
+        if (visibleOverlays().length) return;
         const idx = chapters.findIndex((c) => c.id === activeId);
         if (idx < 0) return;
         const next = ev.key === 'ArrowLeft' ? idx - 1 : idx + 1;
@@ -692,7 +746,7 @@ export default function App() {
             aria-label="New chapter"
             title="Paste a chapter"
             onClick={() => {
-              if (confirmDiscard()) setAddOpen(true);
+              if (confirmDiscard()) openAdd();
             }}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -703,7 +757,11 @@ export default function App() {
         </div>
 
         <div className="dw-chapters">
-          {chapters.length === 0 && <div className="empty">No chapters yet.</div>}
+          {chapters.length === 0 && (
+            <div className="empty">
+              {bootError ? 'Could not load chapters.' : loaded ? 'No chapters yet.' : 'Loading…'}
+            </div>
+          )}
           {chapters.map((c) => (
             <button
               key={c.id}
@@ -751,7 +809,7 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="main">
+      <main className="main" ref={mainRef} tabIndex={-1}>
         <header className="topbar">
           <div className="crumbs">
             <strong>{topTitle}</strong>
@@ -770,9 +828,35 @@ export default function App() {
         ) : (
           <>
         {view === 'read' &&
-          (activeId && !detail ? (
+          (bootError ? (
             <div className="main-inner">
-              <div className="empty-state">Loading…</div>
+              <div className="empty-state" role="alert">
+                Could not open this book.
+                <div className="progress" style={{ marginTop: 12, maxWidth: 'var(--reading-max)' }}>
+                  {bootError}
+                </div>
+                <div style={{ marginTop: 16 }}>
+                  <button className="primary" onClick={() => void boot()}>Try again</button>
+                </div>
+              </div>
+            </div>
+          ) : !loaded || (activeId && !detail) ? (
+            <div className="main-inner">
+              <div className="empty-state">{loaded ? 'Loading…' : 'Opening your book…'}</div>
+            </div>
+          ) : chapterError && activeId ? (
+            <div className="main-inner">
+              <div className="empty-state" role="alert">
+                Could not open that chapter.
+                <div className="progress" style={{ marginTop: 12, maxWidth: 'var(--reading-max)' }}>
+                  {chapterError}
+                </div>
+                <div style={{ marginTop: 16 }}>
+                  <button className="primary" onClick={() => activeId && void loadChapter(activeId)}>
+                    Try again
+                  </button>
+                </div>
+              </div>
             </div>
           ) : (
             <ReadView
@@ -790,7 +874,7 @@ export default function App() {
               focusEntity={focusEntityId}
               onOpenEntity={(id) => setEntityId(id)}
               onOpenCandidate={openCandidate}
-              onAdd={() => setAddOpen(true)}
+              onAdd={openAdd}
             />
           ))}
 
@@ -883,11 +967,13 @@ export default function App() {
       <AddChapterModal
         open={addOpen}
         chapters={chapters}
-        onClose={() => setAddOpen(false)}
+        onClose={closeAdd}
         onSubmit={addChapter}
       />
 
-      {nudgeOpen && <ExportReminderModal onExport={exportBook} onLater={laterNudge} />}
+      {nudgeOpen && (
+        <ExportReminderModal onExport={exportBook} onLater={laterNudge} onClose={closeNudge} />
+      )}
 
       {triage && (
         <TriageModal
