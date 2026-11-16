@@ -71,34 +71,50 @@ function GunCard({
       </div>
       {gun.impact && <div className="plan-note plan-impact">Payoff: {gun.impact}</div>}
       {gun.explanation && <div className="plan-note">{gun.explanation}</div>}
+      {/* The outcomes are this card's work only when the chapter that pays it
+          off exists. Every other card keeps them one click away. */}
+      {state === 'ready' ? (
+        <div className="outcome-row">
+          <button className="btn-primary" onClick={() => onDecide('used')}>
+            Used
+          </button>
+          <button className="btn-secondary" onClick={() => onDecide('discussed')}>
+            Discussed — move on
+          </button>
+          <button className="ghost" onClick={onFire}>
+            Fired — closed
+          </button>
+        </div>
+      ) : state === 'active' || state === 'discussed' ? (
+        <details className="outcome-more">
+          <summary>Record an outcome</summary>
+          <div className="outcome-row">
+            <button className="btn-secondary" onClick={() => onDecide('used')}>
+              Used
+            </button>
+            <button className="btn-secondary" onClick={() => onDecide('discussed')}>
+              Discussed — move on
+            </button>
+            <button className="ghost" onClick={onFire}>
+              Fired — closed
+            </button>
+          </div>
+        </details>
+      ) : null}
       <div className="actions">
         {state === 'fired' ? (
           // Fired is the permanent close — nothing to reopen, only edit or delete.
           <span className="progress">Closed for good</span>
-        ) : (
-          <>
-            {state === 'used' ? (
-              <button className="btn-secondary" onClick={onReopen}>
-                Reopen — undo used
-              </button>
-            ) : (
-              <>
-                <button className="btn-primary" onClick={() => onDecide('used')}>
-                  Used
-                </button>
-                <button className="btn-secondary" onClick={() => onDecide('discussed')}>
-                  Discussed — move on
-                </button>
-              </>
-            )}
-            <button onClick={onFire}>Fired — closed</button>
-          </>
-        )}
+        ) : state === 'used' ? (
+          <button className="btn-secondary" onClick={onReopen}>
+            Reopen — undo used
+          </button>
+        ) : null}
         <div style={{ flex: 1 }} />
         <button className="ghost" onClick={onEdit}>
           Edit
         </button>
-        <button className="btn-danger" onClick={onDelete}>
+        <button className="danger-quiet" onClick={onDelete}>
           Delete
         </button>
       </div>
@@ -132,6 +148,29 @@ function GunEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  function dirty() {
+    return (
+      title !== (gun?.title ?? '') ||
+      impact !== (gun?.impact ?? '') ||
+      explanation !== (gun?.explanation ?? '') ||
+      appearanceId !== (gun?.appearance_chapter_id != null ? String(gun.appearance_chapter_id) : '') ||
+      plannedSel !==
+        (gun?.planned_chapter_id != null
+          ? String(gun.planned_chapter_id)
+          : gun?.planned_number
+            ? '__future__'
+            : '') ||
+      (plannedSel === '__future__' && futureNumber !== (gun?.planned_number ?? ''))
+    );
+  }
+
+  // Cancel, backdrop and Escape all reach here; only unsaved work asks first.
+  function requestClose() {
+    if (busy) return;
+    if (dirty() && !confirm('Discard this gun? Nothing is saved.')) return;
+    onClose();
+  }
+
   async function submit() {
     const clean = title.trim();
     if (!clean) return;
@@ -162,7 +201,7 @@ function GunEditor({
   }
 
   return (
-    <div className="overlay" onClick={onClose}>
+    <div className="overlay" onClick={requestClose}>
       <div
         className="modal"
         onClick={(ev) => ev.stopPropagation()}
@@ -388,6 +427,21 @@ function QuestionEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  function dirty() {
+    return (
+      text !== (question?.text ?? '') ||
+      answer !== (question?.answer ?? '') ||
+      sourceId !== (question?.source_chapter_id != null ? String(question.source_chapter_id) : '') ||
+      deliveredId !== (question?.delivered_chapter_id != null ? String(question.delivered_chapter_id) : '')
+    );
+  }
+
+  function requestClose() {
+    if (busy) return;
+    if (dirty() && !confirm('Discard this question? Nothing is saved.')) return;
+    onClose();
+  }
+
   async function submit() {
     const clean = text.trim();
     if (!clean) return;
@@ -411,7 +465,7 @@ function QuestionEditor({
   }
 
   return (
-    <div className="overlay" onClick={onClose}>
+    <div className="overlay" onClick={requestClose}>
       <div
         className="modal"
         onClick={(ev) => ev.stopPropagation()}
@@ -516,9 +570,14 @@ function ScanModal({
     const end = Math.max(from, to);
     setSel(chapters.slice(start - 1, end).map((c) => c.id));
   };
+  function requestClose() {
+    if (busy) return;
+    if (sel.length > 0 && !confirm('Discard the chapters you selected?')) return;
+    onClose();
+  }
 
   return (
-    <div className="overlay" onClick={onClose}>
+    <div className="overlay" onClick={requestClose}>
       <div className="modal" onClick={(ev) => ev.stopPropagation()} role="dialog" aria-modal="true">
         <div className="modal-head">
           <h2>Scan chapters for {guns ? 'guns' : 'questions'}</h2>
@@ -653,6 +712,12 @@ export default function PlanningView({
   const [loaded, setLoaded] = useState(false);
   const prompted = useRef(false);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [actionError, setActionError] = useState('');
+  // Closing a dialog must hand the keyboard back to the card that opened it, so
+  // remember the last thing focused outside any overlay.
+  const focusReturn = useRef<HTMLElement | null>(null);
+  const overlaysOpen = gunEditor !== null || questionEditor !== null || scanKind !== null || reviewOpen;
+  const hadOverlay = useRef(false);
 
   // App's sidebar guard cannot see the builder, so report its dirty flag up.
   useEffect(() => {
@@ -660,6 +725,29 @@ export default function PlanningView({
   }, [builderDirty, onDirtyChange]);
 
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
+
+  useEffect(() => {
+    const onFocus = (ev: FocusEvent) => {
+      const target = ev.target;
+      if (target instanceof HTMLElement && target !== document.body && !target.closest('.overlay')) {
+        focusReturn.current = target;
+      }
+    };
+    document.addEventListener('focusin', onFocus);
+    return () => document.removeEventListener('focusin', onFocus);
+  }, []);
+
+  useEffect(() => {
+    if (hadOverlay.current && !overlaysOpen) {
+      const opener = focusReturn.current;
+      focusReturn.current = null;
+      // On success the card may already be gone (a delete), so check first.
+      if (opener?.isConnected && opener.checkVisibility?.({ checkVisibilityCSS: true }) !== false) {
+        opener.focus({ preventScroll: true });
+      }
+    }
+    hadOverlay.current = overlaysOpen;
+  }, [overlaysOpen]);
 
   // Reload when the chapter list changes (a gun may become "ready").
   const chapterSig = chapters.map((c) => `${c.id}:${c.number}:${c.sort_order}`).join('|');
@@ -713,47 +801,66 @@ export default function PlanningView({
     onClearFocus();
   }, [focusGunId, loaded, guns, builderOpen, builderDirty, onClearFocus]);
 
-  async function decide(gun: Gun, decision: 'used' | 'discussed') {
-    await api.decideGun(gun.id, { decision });
-    await after();
+  // Every click that changes the plan reports its failure in one banner, and
+  // leaves the card as it was so the same button retries it.
+  async function run(action: () => Promise<void>) {
+    setActionError('');
+    try {
+      await action();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    }
   }
-  async function fire(gun: Gun) {
-    if (!confirm(`Close "${gun.title}" as fired? Firing cannot be undone.`)) return;
-    await api.fireGun(gun.id);
-    await after();
-  }
-  async function reopen(gun: Gun) {
-    await api.reopenGun(gun.id);
-    await after();
-  }
-  async function removeGun(gun: Gun) {
-    if (!confirm(`Delete "${gun.title}"? Its decision history goes with it.`)) return;
-    await api.deleteGun(gun.id);
-    await after();
-  }
-  async function removeQuestion(q: Question) {
-    if (!confirm('Delete this question?')) return;
-    await api.deleteQuestion(q.id);
-    await after();
-  }
-  async function acceptCandidate(cand: QuestionCandidate, text: string) {
-    await api.resolveQuestionCandidate(cand.id, { action: 'accept', text });
-    setNotice('Question added.');
-    await after();
-  }
-  async function rejectCandidate(cand: QuestionCandidate) {
-    await api.resolveQuestionCandidate(cand.id, { action: 'reject' });
-    await after();
-  }
-  async function acceptGunCandidate(cand: GunCandidate, title: string) {
-    await api.resolveGunCandidate(cand.id, { action: 'accept', title });
-    setNotice('Gun added.');
-    await after();
-  }
-  async function rejectGunCandidate(cand: GunCandidate) {
-    await api.resolveGunCandidate(cand.id, { action: 'reject' });
-    await after();
-  }
+  const decide = (gun: Gun, decision: 'used' | 'discussed') =>
+    run(async () => {
+      await api.decideGun(gun.id, { decision });
+      await after();
+    });
+  const fire = (gun: Gun) =>
+    run(async () => {
+      if (!confirm(`Close "${gun.title}" as fired? Firing cannot be undone.`)) return;
+      await api.fireGun(gun.id);
+      await after();
+    });
+  const reopen = (gun: Gun) =>
+    run(async () => {
+      await api.reopenGun(gun.id);
+      await after();
+    });
+  const removeGun = (gun: Gun) =>
+    run(async () => {
+      if (!confirm(`Delete "${gun.title}"? Its decision history goes with it.`)) return;
+      await api.deleteGun(gun.id);
+      await after();
+    });
+  const removeQuestion = (q: Question) =>
+    run(async () => {
+      if (!confirm('Delete this question?')) return;
+      await api.deleteQuestion(q.id);
+      await after();
+    });
+  const acceptCandidate = (cand: QuestionCandidate, text: string) =>
+    run(async () => {
+      await api.resolveQuestionCandidate(cand.id, { action: 'accept', text });
+      setNotice('Question added.');
+      await after();
+    });
+  const rejectCandidate = (cand: QuestionCandidate) =>
+    run(async () => {
+      await api.resolveQuestionCandidate(cand.id, { action: 'reject' });
+      await after();
+    });
+  const acceptGunCandidate = (cand: GunCandidate, title: string) =>
+    run(async () => {
+      await api.resolveGunCandidate(cand.id, { action: 'accept', title });
+      setNotice('Gun added.');
+      await after();
+    });
+  const rejectGunCandidate = (cand: GunCandidate) =>
+    run(async () => {
+      await api.resolveGunCandidate(cand.id, { action: 'reject' });
+      await after();
+    });
   async function scan(
     ids: number[],
     kind: 'questions' | 'guns',
@@ -920,14 +1027,27 @@ export default function PlanningView({
         </div>
       )}
 
+      {actionError && (
+        <div className="save-error" role="alert">
+          <div>
+            <strong>That didn’t go through.</strong> {actionError}
+          </div>
+          <button onClick={() => setActionError('')}>Dismiss</button>
+        </div>
+      )}
+
       {tab === 'guns' && (
         <div role="tabpanel" id="planning-panel-guns" aria-labelledby="planning-tab-guns">
           <p className="progress" style={{ marginTop: 0 }}>
-            Plant something early that will matter later. When a gun reaches its chapter you get an alert in
-            Review: <strong>Used</strong> pays it off but stays revisitable — you can reopen it if you change your
-            mind; <strong>Discussed — move on</strong> defers it to the next chapter; <strong>Fired</strong> closes
-            it for good.
+            Plant something early that will matter later. When its chapter arrives, Review alerts you.
           </p>
+          <details className="plan-help__more">
+            <summary>What the three outcomes mean</summary>
+            <p className="progress">
+              <strong>Used</strong> pays it off and stays revisitable, so you can reopen it. <strong>Discussed</strong>{' '}
+              defers it to the next chapter. <strong>Fired</strong> closes it for good.
+            </p>
+          </details>
           {gunCandidates.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <div className="group-head">
@@ -952,7 +1072,9 @@ export default function PlanningView({
               )}
             </div>
           )}
-          {!loaded ? null : guns.length === 0 ? (
+          {!loaded ? (
+            <p className="progress">Loading…</p>
+          ) : guns.length === 0 ? (
             <div className="empty-state">
               No guns yet. A locked chest, a scar, a debt — anything you plant that has to come back.
             </div>
@@ -1017,7 +1139,9 @@ export default function PlanningView({
             </div>
           )}
 
-          {!loaded ? null : questions.length === 0 ? (
+          {!loaded ? (
+            <p className="progress">Loading…</p>
+          ) : questions.length === 0 ? (
             <div className="dw-empty">
               No questions tracked yet. Scan a chapter to find the ones your prose raises, or add one by hand.
             </div>

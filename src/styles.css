@@ -2882,7 +2882,11 @@ textarea:focus {
 }
 
 /* 19. Planning — Chekhov's Guns (same card language as §18) ----------------- */
-/* Each gun state drives the 4px status bar via --dw-status. */
+/* Each gun state still drives --dw-status, which the status chip reads, but the
+   gun card has no 4px bar: the chip already says the same thing 20px away. */
+.gun-card::before {
+  content: none;
+}
 .gun-card[data-status='active'] {
   --dw-status: var(--color-accent);
 }
@@ -2904,6 +2908,32 @@ textarea:focus {
   margin-top: 4px;
   padding-top: 12px;
   border-top: 1px dashed var(--color-border);
+}
+.outcome-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.outcome-more {
+  margin-top: 6px;
+}
+.outcome-more > summary,
+.plan-help__more > summary {
+  /* Padding, not flex: `display: flex` removes the native disclosure marker. */
+  padding: 8px 0;
+  line-height: 18px;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+.plan-help__more {
+  margin: -6px 0 14px;
+}
+.plan-help__more > p {
+  max-width: 68ch;
+  margin: 8px 0 0;
 }
 .gun-card.is-fired .plan-title {
   color: var(--color-text-faint);
@@ -4691,7 +4721,11 @@ button.primary {
   border-color: var(--color-accent);
   color: var(--color-accent-ink);
 }
-.dw-chip.is-active .dw-chip-count { color: var(--color-accent-ink); }
+.dw-chip.is-active .dw-chip-count {
+  border-color: color-mix(in srgb, var(--color-accent-ink) 35%, transparent);
+  background: transparent;
+  color: var(--color-accent-ink);
+}
 .search input { height: 42px; box-shadow: var(--shadow-card); }
 .tabs button.active, .tabs button[aria-selected="true"] { color: var(--color-accent); }
 .count.hot { background: var(--color-accent); }

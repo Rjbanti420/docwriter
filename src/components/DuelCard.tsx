@@ -79,27 +79,27 @@ export default function DuelCard({
         </div>
       )}
 
-      <div className="duel-scoreboard">
-        {(['A', 'B'] as const).map((side) => (
-          <div key={side} className="duel-score">
-            {(breakdown?.[side]?.fighters ?? []).map((fighter, index) => (
-              <div className="duel-score__fighter" key={`${fighter.name}-${index}`}>
-                {fighterBreakdownLine(fighter)}
-              </div>
-            ))}
-            <div className="duel-score__side">
-              Side {side}
-              {breakdown?.[side]
-                ? `: ${sideTotalLine(breakdown[side])}`
-                : `: score ${outcome.scores?.[side] ?? 0}`}
-            </div>
-          </div>
-        ))}
-      </div>
-
       <details className="duel-narrative" open={narrativeOpen || undefined}>
         <summary>Read the account</summary>
         <p>{duel.narrative}</p>
+        {/* The arithmetic is how the result was reached, not the result. */}
+        <div className="duel-scoreboard">
+          {(['A', 'B'] as const).map((side) => (
+            <div key={side} className="duel-score">
+              {(breakdown?.[side]?.fighters ?? []).map((fighter, index) => (
+                <div className="duel-score__fighter" key={`${fighter.name}-${index}`}>
+                  {fighterBreakdownLine(fighter)}
+                </div>
+              ))}
+              <div className="duel-score__side">
+                Side {side}
+                {breakdown?.[side]
+                  ? `: ${sideTotalLine(breakdown[side])}`
+                  : `: score ${outcome.scores?.[side] ?? 0}`}
+              </div>
+            </div>
+          ))}
+        </div>
         {audit && <p className="duel-audit">{audit}</p>}
       </details>
 
