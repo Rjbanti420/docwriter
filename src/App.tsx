@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { api, ApiError } from './api';
 import { askNameConflict } from './nameConflict';
 import { applyDensity, applyFontReading, applyFontUi, applyReadingSize, applyTheme } from './appearance';
@@ -79,6 +80,8 @@ export default function App() {
   const [chapterError, setChapterError] = useState('');
   const addReturnRef = useRef<HTMLElement | null>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
   // One reminder per launch, not one per re-render or per refresh.
   const nudged = useRef(false);
   // A save can outlive the view: only paint its result if the writer is still
@@ -285,6 +288,37 @@ export default function App() {
       if (el?.isConnected && el.checkVisibility?.({ checkVisibilityCSS: true })) el.focus();
     }, 0);
   }, []);
+
+  // Below 760 the drawer covers half the page, so it behaves like the modal it
+  // looks like: the page behind it is inert, focus moves in, Tab stays in, and
+  // closing returns the keyboard to the toggle. The EntityPanel does the same.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const main = mainRef.current;
+    main?.setAttribute('inert', '');
+    drawerRef.current?.querySelector<HTMLElement>('button')?.focus();
+    return () => {
+      main?.removeAttribute('inert');
+      menuBtnRef.current?.focus();
+    };
+  }, [menuOpen]);
+
+  const trapDrawer = (ev: ReactKeyboardEvent<HTMLElement>) => {
+    if (ev.key !== 'Tab' || !drawerRef.current) return;
+    const items = [
+      ...drawerRef.current.querySelectorAll<HTMLElement>('button:not(:disabled)'),
+    ].filter((el) => el.checkVisibility?.({ checkVisibilityCSS: true }) ?? true);
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (ev.shiftKey && document.activeElement === first) {
+      ev.preventDefault();
+      last.focus();
+    } else if (!ev.shiftKey && document.activeElement === last) {
+      ev.preventDefault();
+      first.focus();
+    }
+  };
 
   const refresh = useCallback(async () => {
     await Promise.all([loadChapters(), loadEntities(), loadReview(), loadIgnored(), loadTrash()]);
@@ -640,10 +674,17 @@ export default function App() {
     : review.pending.length;
   const reviewBadge = pendingCount + review.alerts.filter((a) => a.state === 'unread').length;
 
+  // The product promise is that one book is one file the writer owns, so the
+  // rail names the file it is holding rather than inventing a title.
+  const bookName =
+    meta?.bookPath?.split(/[\\/]/).pop()?.replace(/\.(db|sqlite3?)$/i, '') || 'Your book';
+  const totalWords = chapters.reduce((n, c) => n + (c.word_count ?? 0), 0);
+
   return (
     <div className={`app${menuOpen ? ' menu-open' : ''}`}>
       <button
         className="menu-btn"
+        ref={menuBtnRef}
         aria-label="Toggle menu"
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen((v) => !v)}
@@ -654,10 +695,22 @@ export default function App() {
         className={`dw-scrim${menuOpen ? ' is-open' : ''}`}
         onClick={() => setMenuOpen(false)}
       />
-      <aside className={`dw-sidebar${menuOpen ? ' is-open' : ''}`} aria-label="Sidebar">
+      <aside
+        className={`dw-sidebar${menuOpen ? ' is-open' : ''}`}
+        aria-label="Sidebar"
+        ref={drawerRef}
+        onKeyDown={trapDrawer}
+      >
         <div className="dw-sidebar__top">
+          <div className="dw-brand">
+            <b>{bookName}</b>
+            <span>
+              {chapters.length} {chapters.length === 1 ? 'chapter' : 'chapters'} ·{' '}
+              {totalWords.toLocaleString('en-US')} words
+            </span>
+          </div>
           <button
-            className="dw-icon-btn"
+            className="dw-icon-btn dw-sidebar__close"
             aria-label="Close sidebar"
             onClick={() => setMenuOpen(false)}
           >
@@ -742,9 +795,8 @@ export default function App() {
         <div className="dw-section">
           <span className="dw-section__label">Chapters</span>
           <button
-            className="dw-icon-btn dw-icon-btn--ghost"
-            aria-label="New chapter"
-            title="Paste a chapter"
+            className="dw-paste"
+            aria-label="Paste a chapter"
             onClick={() => {
               if (confirmDiscard()) openAdd();
             }}
@@ -753,6 +805,7 @@ export default function App() {
               <path d="M5 12h14" />
               <path d="M12 5v14" />
             </svg>
+            <span>Paste</span>
           </button>
         </div>
 
@@ -972,7 +1025,14 @@ export default function App() {
       />
 
       {nudgeOpen && (
-        <ExportReminderModal onExport={exportBook} onLater={laterNudge} onClose={closeNudge} />
+        <ExportReminderModal
+          onExport={exportBook}
+          onLater={laterNudge}
+          onClose={closeNudge}
+          lastExportAt={meta?.lastExportAt ?? null}
+          today={meta?.today ?? ''}
+          nudge={meta?.nudge ?? 'daily'}
+        />
       )}
 
       {triage && (

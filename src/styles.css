@@ -441,6 +441,11 @@ textarea:focus {
   white-space: nowrap;
   color: var(--color-text);
 }
+.search-more {
+  padding: 8px 10px 4px;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
 .search-row-meta {
   flex: none;
   font-size: var(--text-xs);
@@ -514,8 +519,9 @@ textarea:focus {
   min-height: 60px;             /* keeps clear of the menu button */
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding: 12px 14px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 10px 20px;
 }
 .dw-sidebar__rule {
   height: 1px;
@@ -570,18 +576,34 @@ textarea:focus {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.dw-icon-btn--ghost {
-  width: 34px;
+/* the paste control: labelled, because a bare plus under CHAPTERS reads as
+   "add a section" to anyone who has not used the app before */
+.dw-sidebar .dw-paste {
   height: 34px;
-  border-radius: 10px;
-  border-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px 0 8px;
+  border-radius: 9px;
+  border: 1px solid var(--dw-sb-border);
   background: transparent;
-  box-shadow: none;
   color: var(--dw-sb-muted);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 120ms ease, color 120ms ease;
 }
-.dw-icon-btn--ghost:hover {
+.dw-sidebar .dw-paste:hover {
   background: var(--dw-sb-hover);
   color: var(--dw-sb-ink);
+}
+.dw-paste svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
 }
 
 /* main nav + chapter rows share the row look */
@@ -733,6 +755,9 @@ textarea:focus {
 }
 .menu-icon::after {
   top: 5px;
+}
+.app.menu-open .menu-btn {
+  display: none;
 }
 .app.menu-open .menu-icon {
   background: transparent;
@@ -7618,7 +7643,7 @@ button.tl-link:hover {
     z-index: 20;
     box-shadow: none;
   }
-  .dw-sidebar__top {
+  .dw-sidebar__close {
     display: none;
   }
   .dw-nav {

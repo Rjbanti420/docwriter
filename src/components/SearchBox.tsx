@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import { chapterLabel } from '../chapters';
 import type { Chapter, Entity } from '../types';
 
 const MAX_HITS = 6;
@@ -22,36 +23,37 @@ export default function SearchBox({
 
   const query = q.trim().toLowerCase();
 
-  const chapterHits = useMemo(
+  // Match the label the row actually shows ("Chapter 1 — The Gate"), or an
+  // untitled chapter is invisible to the writer's own word for it.
+  const chapterMatches = useMemo(
     () =>
       query
-        ? chapters
-            .filter(
-              (c) =>
-                (c.title || '').toLowerCase().includes(query) ||
-                String(c.number || '').toLowerCase().includes(query)
-            )
-            .slice(0, MAX_HITS)
+        ? chapters.filter(
+            (c) =>
+              chapterLabel(c).toLowerCase().includes(query) ||
+              String(c.number || '').toLowerCase().includes(query)
+          )
         : [],
     [query, chapters]
   );
 
-  const entityHits = useMemo(
+  const entityMatches = useMemo(
     () =>
       query
-        ? entities
-            .filter(
-              (e) =>
-                e.name.toLowerCase().includes(query) ||
-                (e.aliases ?? []).some((alias) => alias.toLowerCase().includes(query)) ||
-                (e.type_name || '').toLowerCase().includes(query)
-            )
-            .slice(0, MAX_HITS)
+        ? entities.filter(
+            (e) =>
+              e.name.toLowerCase().includes(query) ||
+              (e.aliases ?? []).some((alias) => alias.toLowerCase().includes(query)) ||
+              (e.type_name || '').toLowerCase().includes(query)
+          )
         : [],
     [query, entities]
   );
 
+  const chapterHits = chapterMatches.slice(0, MAX_HITS);
+  const entityHits = entityMatches.slice(0, MAX_HITS);
   const hitCount = chapterHits.length + entityHits.length;
+  const totalCount = chapterMatches.length + entityMatches.length;
 
   useEffect(() => setActive(0), [query]);
 
@@ -131,13 +133,19 @@ export default function SearchBox({
         title="Search chapters and entities (Ctrl+K)"
         role="combobox"
         aria-expanded={showPop}
-        aria-controls="search-results"
+        aria-controls={showPop ? 'search-results' : undefined}
         aria-activedescendant={activeId}
         aria-autocomplete="list"
         autoComplete="off"
       />
       <span className="sr-only" role="status">
-        {showPop ? (hitCount ? `${hitCount} ${hitCount === 1 ? 'result' : 'results'}` : 'No matches') : ''}
+        {showPop
+          ? totalCount === 0
+            ? 'No matches'
+            : totalCount > hitCount
+              ? `${hitCount} of ${totalCount} results. Keep typing to narrow.`
+              : `${totalCount} ${totalCount === 1 ? 'result' : 'results'}`
+          : ''}
       </span>
       {showPop && (
         <div className="search-pop" id="search-results" role="listbox">
@@ -181,6 +189,11 @@ export default function SearchBox({
               </button>
             );
           })}
+          {totalCount > hitCount && (
+            <div className="search-more">
+              Showing {hitCount} of {totalCount} matches — keep typing to narrow.
+            </div>
+          )}
         </div>
       )}
     </div>
