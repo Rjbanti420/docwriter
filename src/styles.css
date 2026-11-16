@@ -5405,6 +5405,7 @@ body {
    Keep the two visually distinct so a flashback cannot be mistaken for a
    reordered chapter. */
 .timeline-note {
+  max-width: 660px;
   margin: 0 0 14px;
   line-height: 1.5;
 }
@@ -5433,6 +5434,7 @@ body {
 }
 .tl-chapter__open {
   flex: 1;
+  min-height: 34px;
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(120px, 1.2fr) minmax(60px, 2fr) auto;
@@ -5483,6 +5485,7 @@ body {
 }
 .tl-marker {
   display: inline-flex;
+  min-height: 34px;
   align-items: center;
   padding: 2px 7px;
   border: 1px solid var(--color-border);
@@ -5575,6 +5578,7 @@ button.tl-marker:hover {
 }
 .tl-marker-group__chapter {
   flex: none;
+  min-height: 34px;
   width: 140px;
   padding: 0;
   text-align: left;
@@ -5601,6 +5605,7 @@ button.tl-marker:hover {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-width: 696px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -5644,7 +5649,7 @@ button.tl-marker:hover {
   border: 1px solid color-mix(in srgb, var(--tl-color) 28%, var(--color-border));
   border-radius: 50%;
   background: color-mix(in srgb, var(--tl-color) 10%, transparent);
-  color: var(--tl-color);
+  color: var(--color-text);
   font-family: var(--font-mono);
   font-size: 11.5px;
 }
@@ -5666,7 +5671,7 @@ button.tl-marker:hover {
   border: 1px solid color-mix(in srgb, var(--tl-color) 30%, var(--color-border));
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--tl-color) 10%, transparent);
-  color: var(--tl-color);
+  color: var(--color-text);
   font-size: 11px;
   font-weight: 600;
 }
@@ -5709,6 +5714,7 @@ button.tl-marker:hover {
   font-style: italic;
 }
 .tl-event h3 {
+  max-width: 660px;
   margin: 0 0 5px;
   font-family: var(--font-reading);
   font-size: 20px;
@@ -5716,9 +5722,10 @@ button.tl-marker:hover {
   line-height: 1.25;
 }
 .tl-event p {
+  max-width: 660px;
   margin: 0 0 8px;
   color: var(--color-text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   line-height: 1.55;
   white-space: pre-wrap;
 }
@@ -5732,7 +5739,8 @@ button.tl-marker:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 8px;
+  min-height: 34px;
+  padding: 0 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   background: var(--color-side);
@@ -5754,16 +5762,18 @@ button.tl-link:hover {
   border-radius: 50%;
 }
 .tl-link small {
-  color: var(--color-text-faint);
+  color: var(--color-text-secondary);
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .tl-links .tl-link button {
-  padding: 0 1px;
+  width: 34px;
+  height: 34px;
+  margin: -8px -10px -8px 0;
   border: 0;
   background: transparent;
-  color: var(--color-text-faint);
+  color: var(--color-text-secondary);
   line-height: 1;
 }
 .tl-links .tl-link button:hover {
@@ -5776,13 +5786,13 @@ button.tl-link:hover {
   margin-top: 8px;
 }
 .tl-event__actions .ghost {
-  min-width: 32px;
+  min-width: 34px;
   padding: 0 8px;
-  height: 32px;
+  height: 34px;
 }
 .tl-event__actions .btn-secondary,
 .tl-event__actions .btn-danger {
-  height: 32px;
+  height: 34px;
   padding: 0 11px;
   font-size: 12px;
 }
