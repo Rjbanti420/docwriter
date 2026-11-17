@@ -9,12 +9,15 @@ import TriageModal from './components/TriageModal';
 import ExportReminderModal from './components/ExportReminderModal';
 import EntityPanel from './components/EntityPanel';
 import SearchBox from './components/SearchBox';
+import BookMenu from './components/BookMenu';
 import ReadView from './views/ReadView';
 import ReviewView from './views/ReviewView';
 import BibleView from './views/BibleView';
 import PlanningView from './views/PlanningView';
 import TimelineView from './views/TimelineView';
 import SettingsView from './views/SettingsView';
+import { bindings, loadBindings, matchesAccelerator } from './shortcuts';
+import { openBookAt, pickBook } from './desktop';
 
 function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -53,6 +56,7 @@ export default function App() {
   const [triage, setTriage] = useState<{ items: Candidate[]; index: number } | null>(null);
   const [entityId, setEntityId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [bookExporting, setBookExporting] = useState(false);
   // Settings replaces the page, so closing it must hand the keyboard back to
   // the control that opened it.
   const settingsReturnRef = useRef<HTMLElement | null>(null);
@@ -165,6 +169,31 @@ export default function App() {
     return true;
   }, [dirty, duelDirty]);
 
+  // A book is one SQLite file, so opening it is the import: the whole database
+  // travels, not a rendering of it. The page asks about unsaved work before the
+  // window restarts, because the restart itself cannot ask.
+  const switchBook = useCallback(
+    async (kind: 'open' | 'new') => {
+      if (!confirmDiscard()) return;
+      const filePath = await pickBook(kind);
+      if (!filePath) return;
+      const error = await openBookAt(filePath);
+      if (error) alert(error);
+    },
+    [confirmDiscard]
+  );
+
+  const exportBookFile = useCallback(async () => {
+    setBookExporting(true);
+    try {
+      await api.backup();
+    } catch {
+      alert('Could not write the book file.');
+    } finally {
+      setBookExporting(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!dirty && !duelDirty) return;
     const warn = (e: BeforeUnloadEvent) => {
@@ -272,6 +301,12 @@ export default function App() {
   useEffect(() => {
     void boot();
   }, [boot]);
+
+  // The main process holds the bindings; this only asks for a copy so the page
+  // matches the same keys the window does.
+  useEffect(() => {
+    void loadBindings();
+  }, []);
 
   // The paste dialog is the book's front door: closing it returns the keyboard
   // to the control that opened it, and the dialog itself asks before dropping text.
@@ -612,8 +647,19 @@ export default function App() {
   // movement while reading, and Escape for whatever is on top.
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
-      const mod = ev.metaKey || ev.ctrlKey;
-      if (mod && ev.key.toLowerCase() === 'k') {
+      // Book switching is handled here, not in the window: the page is the only
+      // side that can ask about unsaved work before the restart.
+      if (matchesAccelerator(ev, bindings().openBook)) {
+        ev.preventDefault();
+        void switchBook('open');
+        return;
+      }
+      if (matchesAccelerator(ev, bindings().newBook)) {
+        ev.preventDefault();
+        void switchBook('new');
+        return;
+      }
+      if (matchesAccelerator(ev, bindings().quickOpen)) {
         ev.preventDefault();
         if (visibleOverlays().length) return;
         const input = document.querySelector<HTMLInputElement>('.search input');
@@ -654,20 +700,22 @@ export default function App() {
         return;
       }
 
-      if (ev.altKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
+      const back = matchesAccelerator(ev, bindings().prevChapter);
+      const forward = matchesAccelerator(ev, bindings().nextChapter);
+      if (back || forward) {
         if (isTypingTarget(ev.target)) return;
         ev.preventDefault();
         if (visibleOverlays().length) return;
         const idx = chapters.findIndex((c) => c.id === activeId);
         if (idx < 0) return;
-        const next = ev.key === 'ArrowLeft' ? idx - 1 : idx + 1;
+        const next = back ? idx - 1 : idx + 1;
         if (!chapters[next]) return;
         selectChapter(chapters[next].id);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [chapters, activeId, selectChapter, settingsOpen, menuOpen, entityId]);
+  }, [chapters, activeId, selectChapter, settingsOpen, menuOpen, entityId, switchBook]);
 
   const pendingCount = review.pendingTotals
     ? review.pendingTotals.primary + review.pendingTotals.demoted
@@ -867,12 +915,21 @@ export default function App() {
           <div className="crumbs">
             <strong>{topTitle}</strong>
           </div>
-          <SearchBox
-            chapters={chapters}
-            entities={entities}
-            onOpenChapter={openSearchChapter}
-            onOpenEntity={openSearchEntity}
-          />
+          <div className="topbar__tools">
+            <SearchBox
+              chapters={chapters}
+              entities={entities}
+              onOpenChapter={openSearchChapter}
+              onOpenEntity={openSearchEntity}
+            />
+            <BookMenu
+              exporting={bookExporting}
+              onOpenBook={() => void switchBook('open')}
+              onNewBook={() => void switchBook('new')}
+              onExportMarkdown={() => void exportBook()}
+              onExportBookFile={() => void exportBookFile()}
+            />
+          </div>
         </header>
         <div className="body">
           <div className="content">

@@ -8,6 +8,9 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    // server/keys.mjs is shared with the Electron main process; the page imports
+    // the same table so a binding shown in Settings is the binding that fires.
+    "allowJs": true,
     "noEmit": true,
     "isolatedModules": true,
     "resolveJsonModule": true

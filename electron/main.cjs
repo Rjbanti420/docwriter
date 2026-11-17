@@ -34,7 +34,7 @@ function writeSettings(patch) {
 
 // Where the book lives:
 //   1. DOCWRITER_DB env (explicit override)
-//   2. the book chosen via File -> Open/New Book
+//   2. the book chosen via the Book menu (Open book… / New book…)
 //   3. a data/docwriter.db next to the app in dev (so `npm run desktop`
 //      opens the book you have been working on)
 //   4. the per-user data dir (packaged default)
@@ -101,6 +101,50 @@ ipcMain.handle('docwriter:save-text', async (_event, name, text) => {
   return { saved: true, filePath };
 });
 
+// --- book switching ---------------------------------------------------------
+//
+// The page picks the file (so it can ask about unsaved work first), then asks
+// for the restart. Both paths stay inside the main process: the renderer never
+// receives a directory handle or a writable path it can invent.
+
+ipcMain.handle('docwriter:choose-book', () => pickBook());
+ipcMain.handle('docwriter:choose-new-book', () => pickNewBook());
+
+ipcMain.handle('docwriter:open-book-at', (_event, filePath) => {
+  const resolved = typeof filePath === 'string' ? path.resolve(filePath) : '';
+  if (!/\.db$/i.test(resolved)) return { ok: false, error: 'That is not a DocWriter book file.' };
+  try {
+    if (!fs.statSync(resolved).isFile()) return { ok: false, error: 'That is not a file.' };
+  } catch {
+    return { ok: false, error: 'That file is gone.' };
+  }
+  relaunchWithDb(resolved);
+  return { ok: true };
+});
+
+// --- keybindings ------------------------------------------------------------
+
+ipcMain.handle('docwriter:get-keys', () => keymap);
+
+ipcMain.handle('docwriter:set-key', (_event, id, accelerator) => {
+  if (!keys || !keys.KEY_ACTIONS.some((action) => action.id === id)) {
+    return { ok: false, error: 'Unknown shortcut.' };
+  }
+  if (typeof accelerator !== 'string') return { ok: false, error: 'Unknown key.' };
+  const checked = keys.validateKeymap({ ...keymap, [id]: accelerator }, process.platform === 'darwin');
+  if (!checked.ok) return { ok: false, error: checked.error };
+  keymap = checked.keys;
+  writeSettings({ keybindings: keymap });
+  return { ok: true, keys: keymap };
+});
+
+ipcMain.handle('docwriter:reset-keys', () => {
+  if (!keys) return { ok: false, keys: keymap };
+  keymap = { ...keys.DEFAULT_KEYS };
+  writeSettings({ keybindings: keymap });
+  return { ok: true, keys: keymap };
+});
+
 async function createWindow() {
   const url = DEV
     ? process.env.DOCWRITER_DEV_URL || 'http://localhost:5173'
@@ -113,7 +157,7 @@ async function createWindow() {
     minHeight: 620,
     backgroundColor: '#14120f',
     title: 'DocWriter',
-    autoHideMenuBar: false,
+    autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -122,6 +166,24 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
     },
   });
+
+  if (process.platform !== 'darwin') {
+    win.setMenuBarVisibility(false);
+    wireShortcuts(win);
+  }
+
+  // Optional memory log for measurement runs: DOCWRITER_MEM=1 prints Electron's
+  // own per-process metrics every 5 s. Nothing runs unless the env var is set.
+  if (process.env.DOCWRITER_MEM === '1') {
+    const timer = setInterval(() => {
+      if (!win) return clearInterval(timer);
+      const rows = app.getAppMetrics().map(
+        (m) => `${m.type}#${m.pid}=${Math.round(m.memory.workingSetSize / 1024)}MB`
+      );
+      console.log(`[mem] ${rows.join(' ')}`);
+    }, 5000);
+    win.on('closed', () => clearInterval(timer));
+  }
 
   win.loadURL(url);
   win.webContents.on('did-fail-load', (_e, code, desc, failedUrl) => {
@@ -142,6 +204,121 @@ function relaunchWithDb(dbPath) {
   app.exit(0);
 }
 
+// --- keyboard ---------------------------------------------------------------
+//
+// server/keys.mjs owns the table and the matcher (the page imports the same
+// file), so a binding shown in Settings is the binding this window obeys. It is
+// ESM and main is CJS, so it arrives through one dynamic import at boot.
+
+let keys = null;
+let keymap = {};
+
+async function loadKeys() {
+  keys = await import(pathToFileURL(path.join(projectRoot, 'server', 'keys.mjs')).href);
+  // Anything unreadable in the settings file falls back to the defaults as a
+  // whole: a half-applied keyboard is worse than a known one.
+  const checked = keys.validateKeymap(
+    { ...keys.DEFAULT_KEYS, ...(readSettings().keybindings ?? {}) },
+    process.platform === 'darwin'
+  );
+  keymap = checked.ok ? checked.keys : { ...keys.DEFAULT_KEYS };
+  return keymap;
+}
+
+async function pickBook() {
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: 'Open a DocWriter book',
+    filters: [{ name: 'DocWriter book', extensions: ['db'] }],
+    properties: ['openFile'],
+  });
+  return canceled || !filePaths[0] ? null : filePaths[0];
+}
+
+async function pickNewBook() {
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    title: 'Create a new book',
+    defaultPath: path.join(app.getPath('documents'), 'my-book.db'),
+    filters: [{ name: 'DocWriter book', extensions: ['db'] }],
+  });
+  return canceled || !filePath ? null : filePath;
+}
+
+// The macOS menu still calls these directly; the page goes through the two
+// pickers first so it can ask about unsaved work before the window restarts.
+async function openBook() {
+  const filePath = await pickBook();
+  if (filePath) relaunchWithDb(filePath);
+}
+
+async function newBook() {
+  const filePath = await pickNewBook();
+  if (filePath) relaunchWithDb(filePath);
+}
+
+function wireShortcuts(window) {
+  const zoomBy = (factor) => {
+    const wc = window.webContents;
+    wc.setZoomFactor(Math.min(3, Math.max(0.5, wc.getZoomFactor() * factor)));
+  };
+
+  // Only the actions the page cannot perform for itself run here. The rest fall
+  // through untouched, so the page's handler — and its unsaved-changes guard —
+  // sees the key exactly as typed.
+  const windowActions = {
+    quit: () => app.quit(),
+    zoomIn: () => zoomBy(1.1),
+    zoomOut: () => zoomBy(1 / 1.1),
+    zoomReset: () => window.webContents.setZoomFactor(1),
+    fullscreen: () => window.setFullScreen(!window.isFullScreen()),
+  };
+
+  window.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+
+    // Developer keys are not rebindable and never exist in a packaged build.
+    if (!app.isPackaged) {
+      const devLetter = input.key.toLowerCase();
+      if (input.key === 'F12' && !input.control && !input.alt) {
+        event.preventDefault();
+        window.webContents.toggleDevTools();
+        return;
+      }
+      if (input.control && !input.alt && !input.meta) {
+        if (devLetter === 'r' && input.shift) {
+          event.preventDefault();
+          window.webContents.reloadIgnoringCache();
+          return;
+        }
+        if (devLetter === 'r' && !input.shift) {
+          event.preventDefault();
+          window.webContents.reload();
+          return;
+        }
+        if (devLetter === 'i' && input.shift) {
+          event.preventDefault();
+          window.webContents.toggleDevTools();
+          return;
+        }
+      }
+    }
+
+    const action = keys?.findAction(
+      {
+        key: input.key,
+        ctrlKey: input.control,
+        metaKey: input.meta,
+        altKey: input.alt,
+        shiftKey: input.shift,
+      },
+      keymap
+    );
+    const run = action ? windowActions[action] : null;
+    if (!run) return;
+    event.preventDefault();
+    run();
+  });
+}
+
 function buildMenu() {
   const template = [
     {
@@ -150,26 +327,12 @@ function buildMenu() {
         {
           label: 'Open Book…',
           accelerator: 'CmdOrCtrl+O',
-          click: async () => {
-            const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-              title: 'Open a DocWriter book',
-              filters: [{ name: 'DocWriter book', extensions: ['db'] }],
-              properties: ['openFile'],
-            });
-            if (!canceled && filePaths[0]) relaunchWithDb(filePaths[0]);
-          },
+          click: openBook,
         },
         {
           label: 'New Book…',
           accelerator: 'CmdOrCtrl+N',
-          click: async () => {
-            const { canceled, filePath } = await dialog.showSaveDialog(win, {
-              title: 'Create a new book',
-              defaultPath: path.join(app.getPath('documents'), 'my-book.db'),
-              filters: [{ name: 'DocWriter book', extensions: ['db'] }],
-            });
-            if (!canceled && filePath) relaunchWithDb(filePath);
-          },
+          click: newBook,
         },
         { type: 'separator' },
         {
@@ -239,8 +402,10 @@ if (!app.requestSingleInstanceLock()) {
 
   app
     .whenReady()
-    .then(() => {
-      buildMenu();
+    .then(async () => {
+      await loadKeys();
+      if (process.platform === 'darwin') buildMenu();
+      else Menu.setApplicationMenu(null);
       return createWindow();
     })
     .catch((err) => {

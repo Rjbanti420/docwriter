@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import ReaderText from '../components/ReaderText';
 import { chapterNumber } from '../chapters';
 import type { Chapter, ChapterDetail, Entity } from '../types';
+import { bindings, matchesAccelerator } from '../shortcuts';
 
 const READ_SIZE_KEY = 'docwriter.readingSize';
 const MIN_READ = 15;
@@ -162,7 +163,7 @@ export default function ReadView({
   useEffect(() => {
     if (!editing) return;
     const onKey = (ev: KeyboardEvent) => {
-      if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 's') {
+      if (matchesAccelerator(ev, bindings().saveChapter)) {
         ev.preventDefault();
         if (!saving) void saveDraft();
         return;

@@ -1,7 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ExportMeta } from '../types';
 import { applyDensity, applyFontReading, applyFontUi, applyTheme } from '../appearance';
+import {
+  KEY_ACTIONS,
+  acceleratorFromEvent,
+  bindings,
+  formatAccelerator,
+  isMac,
+  loadBindings,
+  resetBindings,
+  setBinding,
+} from '../shortcuts';
+import { desktop, openBookAt, pickBook } from '../desktop';
 
 const THEME_KEY = 'docwriter.theme';
 const DENSITY_KEY = 'docwriter.density';
@@ -29,6 +40,11 @@ const READING_FONTS = [
 ];
 
 /** How often to be reminded to export. `off` is a first-class choice, not a hidden one. */
+const KEY_GROUPS = [...new Set(KEY_ACTIONS.map((action) => action.group))].map((group) => ({
+  group,
+  actions: KEY_ACTIONS.filter((action) => action.group === group),
+}));
+
 const NUDGE_CHOICES = [
   { id: 'off', label: 'No reminder' },
   { id: 'daily', label: 'Every day' },
@@ -48,8 +64,16 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
   const [backingUp, setBackingUp] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [keys, setKeys] = useState<Record<string, string>>(() => ({ ...bindings() }));
+  const [capturing, setCapturing] = useState<string | null>(null);
+  const [keyError, setKeyError] = useState('');
+  const [keyErrorFor, setKeyErrorFor] = useState<string | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const noticeTimer = useRef<number | null>(null);
+  // The profile saves when a field is left, and once more if the page is closed
+  // with an edit still unsaved. A ref, because the unmount cleanup cannot see
+  // later renders.
+  const profileNow = useRef({ name: '', email: '', dirty: false });
 
   // The reminder and appearance live in the book, so Settings reads them from
   // the API rather than localStorage — which the packaged app loses every launch.
@@ -62,7 +86,13 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
       if (m.fontReading) setFontReading(m.fontReading);
       if (m.profileName) setName(m.profileName);
       if (m.profileEmail) setEmail(m.profileEmail);
+      profileNow.current.name = m.profileName ?? '';
+      profileNow.current.email = m.profileEmail ?? '';
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    void loadBindings().then(() => setKeys({ ...bindings() }));
   }, []);
 
   useEffect(() => {
@@ -70,8 +100,14 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
     try { setDensity(localStorage.getItem(DENSITY_KEY) || 'comfortable'); } catch {}
     try { setFontUi(localStorage.getItem(FONT_UI_KEY) || 'Hanken Grotesk'); } catch {}
     try { setFontReading(localStorage.getItem(FONT_READING_KEY) || 'Spectral'); } catch {}
-    try { setName(localStorage.getItem('docwriter.profile.name') || ''); } catch {}
-    try { setEmail(localStorage.getItem('docwriter.profile.email') || ''); } catch {}
+    try {
+      const storedName = localStorage.getItem('docwriter.profile.name') || '';
+      const storedEmail = localStorage.getItem('docwriter.profile.email') || '';
+      setName(storedName);
+      setEmail(storedEmail);
+      profileNow.current.name = storedName;
+      profileNow.current.email = storedEmail;
+    } catch {}
   }, []);
 
   // Settings is a page, not a dialog, but it replaces the writer's place in the
@@ -80,6 +116,29 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
     titleRef.current?.focus();
     return () => {
       if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    };
+  }, []);
+
+  // The status pill sits under the top bar, whose height changes when it wraps.
+  useEffect(() => {
+    const bar = document.querySelector('.topbar');
+    if (!bar) return;
+    const track = () =>
+      document.documentElement.style.setProperty(
+        '--topbar-h',
+        `${Math.round(bar.getBoundingClientRect().height)}px`,
+      );
+    track();
+    const ro = new ResizeObserver(track);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, []);
+
+  // Leaving Settings must not drop a typed name the way a plain field would:
+  // the page saves it on the way out.
+  useEffect(() => {
+    return () => {
+      if (profileNow.current.dirty) void saveProfile(false);
     };
   }, []);
 
@@ -129,12 +188,26 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
     void remember({ font_reading: f });
   }
 
-  async function saveProfile() {
+  function changeProfile(field: 'name' | 'email', value: string) {
+    if (field === 'name') setName(value);
+    else setEmail(value);
+    profileNow.current[field] = value;
+    profileNow.current.dirty = true;
+  }
+
+  async function saveProfile(announce: boolean) {
+    const p = profileNow.current;
+    if (!p.dirty) return;
+    p.dirty = false;
     try {
-      localStorage.setItem('docwriter.profile.name', name);
-      localStorage.setItem('docwriter.profile.email', email);
+      localStorage.setItem('docwriter.profile.name', p.name);
+      localStorage.setItem('docwriter.profile.email', p.email);
     } catch {}
-    if (await remember({ profile_name: name, profile_email: email })) say('Profile saved.');
+    if (!(await remember({ profile_name: p.name, profile_email: p.email }))) {
+      p.dirty = true;
+      return;
+    }
+    if (announce) say('Profile saved.');
   }
 
   async function exportBook() {
@@ -167,6 +240,82 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
     }
   }
 
+  // Capturing a chord has to happen in the capture phase: the app's own key
+  // layer (and Escape closing Settings) must not act on the keys being recorded.
+  useEffect(() => {
+    if (!capturing) return;
+    const actionId = capturing;
+    const onKey = (ev: KeyboardEvent) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (ev.key === 'Escape') {
+        setCapturing(null);
+        setKeyError('');
+        setKeyErrorFor(null);
+        return;
+      }
+      const result = acceleratorFromEvent(ev);
+      if (!result) return; // only modifiers so far: keep waiting
+      if ('error' in result) {
+        setKeyError(result.error ?? 'That key cannot be used.');
+        setKeyErrorFor(actionId);
+        return;
+      }
+      void saveKey(actionId, result.value);
+    };
+    // A click anywhere else is a way out. Without this the page stays armed
+    // and the next stray keypress becomes a binding.
+    const onPointer = (ev: PointerEvent) => {
+      if ((ev.target as Element | null)?.closest(`[data-key-action="${actionId}"]`)) return;
+      setCapturing(null);
+      setKeyError('');
+      setKeyErrorFor(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('pointerdown', onPointer, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('pointerdown', onPointer, true);
+    };
+  }, [capturing]);
+
+  async function saveKey(id: string, accelerator: string) {
+    const result = await setBinding(id, accelerator);
+    if (!result.ok) {
+      setKeyError(result.error ?? 'Could not save that shortcut.');
+      setKeyErrorFor(id);
+      return;
+    }
+    setKeys({ ...bindings() });
+    setCapturing(null);
+    setKeyError('');
+    setKeyErrorFor(null);
+    say('Shortcut saved.');
+  }
+
+  async function resetKeys() {
+    const ok = confirm('Put every shortcut back to its default? Your custom keys will be forgotten.');
+    if (!ok) return;
+    const result = await resetBindings();
+    if (!result.ok) {
+      setKeyError(result.error ?? 'Could not reset the shortcuts.');
+      return;
+    }
+    setKeys({ ...bindings() });
+    setCapturing(null);
+    setKeyError('');
+    setKeyErrorFor(null);
+    say('Shortcuts reset to defaults.');
+  }
+
+  // Settings is entered through the app's own guard, so nothing is dirty here.
+  async function openAnotherBook() {
+    const filePath = await pickBook('open');
+    if (!filePath) return;
+    const problem = await openBookAt(filePath);
+    if (problem) setError(problem);
+  }
+
   async function changeNudge(nudge: string) {
     try {
       setMeta(await api.setMeta({ export_nudge: nudge }));
@@ -182,7 +331,7 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
         <div className="reader-head__titles">
           <h1 ref={titleRef} tabIndex={-1}>Settings</h1>
           <p className="reader-head__sub">
-            Look is saved as you choose it; your profile saves with the button.
+            Look, keyboard and profile are kept as you go.
           </p>
         </div>
         <div className="reader-head__actions">
@@ -199,7 +348,7 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
         </div>
       )}
       {notice && (
-        <p className="progress" role="status">{notice}</p>
+        <p className="progress notice" role="status">{notice}</p>
       )}
 
       <section className="card" style={{ marginBottom: 16 }}>
@@ -243,16 +392,28 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
       </section>
 
       <section className="card" style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>User</h2>
+        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Profile</h2>
         <div className="field">
           <label htmlFor="set-name">Name</label>
-          <input id="set-name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input
+            id="set-name"
+            value={name}
+            onChange={(e) => changeProfile('name', e.target.value)}
+            onBlur={() => void saveProfile(true)}
+          />
         </div>
         <div className="field">
           <label htmlFor="set-email">Email</label>
-          <input id="set-email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input
+            id="set-email"
+            value={email}
+            onChange={(e) => changeProfile('email', e.target.value)}
+            onBlur={() => void saveProfile(true)}
+          />
         </div>
-        <div className="actions"><button className="btn-secondary" onClick={saveProfile}>Save profile</button></div>
+        <p className="card-note" style={{ margin: '10px 0 0' }}>
+          Saved when you leave a field, and if you close the page mid-edit.
+        </p>
       </section>
 
       <section className="card" style={{ marginBottom: 16 }}>
@@ -275,7 +436,7 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
         </div>
       </section>
 
-      <section className="card">
+      <section className="card" style={{ marginBottom: 16 }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Backup</h2>
         <p className="card-note">
           Saves a complete, self-contained copy of this book — the whole database, including
@@ -284,12 +445,78 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
         <p className="card-note">
           This book is one file: <code className="book-path">{meta?.bookPath || '…'}</code>
         </p>
+        <p className="card-note">
+          To move a book to another computer, take that file with you and choose{' '}
+          <strong>Open book…</strong> there — every chapter, card and setting travels with it.
+        </p>
         <div className="actions" style={{ marginTop: 0 }}>
           <button className="btn-secondary" disabled={backingUp} onClick={downloadBackup}>
             {backingUp ? 'Preparing…' : 'Download a backup'}
           </button>
+          <button className="btn-secondary" disabled={!desktop()} onClick={() => void openAnotherBook()}>
+            Open book…
+          </button>
         </div>
       </section>
+
+      {/* Reference, not a preference: it stays folded until the writer asks. */}
+      <details className="card kbcard">
+        <summary className="kbcard__sum">
+          <h2 className="kbcard__title">Keyboard</h2>
+          <span className="kbcard__count">{KEY_ACTIONS.length} shortcuts</span>
+          <svg className="kbcard__chev" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </summary>
+        <div className="kbcard__body">
+          <p className="card-note">
+            The app’s own shortcuts. Keys that belong to a panel — Escape, Tab, the arrows inside a
+            list — stay with the panel. Choose a key, then press the combination you want; it saves
+            at once and Escape cancels.
+          </p>
+          {KEY_GROUPS.map(({ group, actions }) => (
+            <div className="kbset" key={group}>
+              <h3 className="kbset__title">{group}</h3>
+              {actions.map((action) => (
+                <Fragment key={action.id}>
+                  <div className="kbset__row">
+                    <span className="kbset__label">{action.label}</span>
+                    <button
+                      className={`kbset__key${capturing === action.id ? ' is-capturing' : ''}`}
+                      data-key-action={action.id}
+                      aria-label={
+                        capturing === action.id
+                          ? `Waiting for keys for ${action.label}. Press Escape to cancel.`
+                          : `Change ${action.label}, currently ${formatAccelerator(keys[action.id], isMac())}`
+                      }
+                      onClick={() => {
+                        setCapturing(action.id);
+                        setKeyError('');
+                        setKeyErrorFor(null);
+                      }}
+                    >
+                      {capturing === action.id ? 'Press keys…' : formatAccelerator(keys[action.id], isMac())}
+                    </button>
+                  </div>
+                  {capturing === action.id && (
+                    <p className="kbset__hint" role="status">
+                      Press the new combination · Esc to cancel
+                    </p>
+                  )}
+                  {keyError && keyErrorFor === action.id && (
+                    <p className="kbset__error" role="alert">{keyError}</p>
+                  )}
+                </Fragment>
+              ))}
+            </div>
+          ))}
+          <div className="actions">
+            <button className="btn-secondary" onClick={() => void resetKeys()}>
+              Reset to defaults
+            </button>
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
