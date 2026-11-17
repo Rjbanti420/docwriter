@@ -393,9 +393,10 @@ export default function App() {
     async (c: Candidate, action: string, extra?: Record<string, unknown>) => {
       let payload: Record<string, unknown> = { action, ...extra };
       let applied = action;
+      let answer: Record<string, unknown> = {};
       for (;;) {
         try {
-          await api.resolve(c.id, payload);
+          answer = (await api.resolve(c.id, payload)) as Record<string, unknown>;
           break;
         } catch (error) {
           if (!(error instanceof ApiError) || error.status !== 409 || action !== 'accept') throw error;
@@ -426,6 +427,7 @@ export default function App() {
         if (items.length === 0) return null;
         return { items, index: Math.min(t.index, items.length - 1) };
       });
+      return answer;
     },
     [loadChapters, loadReview, loadEntities, loadIgnored, detail, writeDetail]
   );
@@ -1098,6 +1100,7 @@ export default function App() {
           index={triage.index}
           types={types}
           onResolve={resolveCandidate}
+          onUnignore={unignore}
           onNavigate={(i) => setTriage((t) => (t ? { ...t, index: i } : t))}
           onClose={() => setTriage(null)}
         />

@@ -9,13 +9,15 @@ export default function TriageModal({
   index,
   types,
   onResolve,
+  onUnignore,
   onNavigate,
   onClose,
 }: {
   items: Candidate[];
   index: number;
   types: Type[];
-  onResolve: (candidate: Candidate, action: string, extra?: Record<string, unknown>) => void;
+  onResolve: (candidate: Candidate, action: string, extra?: Record<string, unknown>) => unknown;
+  onUnignore: (id: number) => Promise<unknown> | void;
   onNavigate: (index: number) => void;
   onClose: () => void;
 }) {
@@ -27,6 +29,8 @@ export default function TriageModal({
     () => types.find((t) => t.name === 'Character')?.id ?? types[0]?.id ?? null
   );
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  // Ignoring is permanent, so the last one keeps an Undo until the next ignore.
+  const [ignoredUndo, setIgnoredUndo] = useState<{ id: number; name: string } | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
 
@@ -84,6 +88,16 @@ export default function TriageModal({
   const toggleSelected = (id: number) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const toggleAll = () => setSelectedIds(allSelected ? [] : items.map((it) => it.id));
+  const ignoreOne = async (c: Candidate) => {
+    const answer = (await onResolve(c, 'ignore')) as { ignoredId?: number } | undefined;
+    if (typeof answer?.ignoredId === 'number') setIgnoredUndo({ id: answer.ignoredId, name: c.surface_text });
+  };
+  const undoIgnore = async () => {
+    const undo = ignoredUndo;
+    if (!undo) return;
+    setIgnoredUndo(null);
+    await onUnignore(undo.id);
+  };
   const bulkResolve = async (action: string, extra?: Record<string, unknown>) => {
     const chosen = items.filter((it) => selectedIds.includes(it.id));
     setSelectedIds([]);
@@ -112,7 +126,7 @@ export default function TriageModal({
         onResolve(item, 'later');
       } else if (e.key === 'x' || e.key === 'X') {
         e.preventDefault();
-        onResolve(item, 'ignore');
+        void ignoreOne(item);
       } else if (e.key === 'Escape') {
         onClose();
       } else if (/^[1-9]$/.test(e.key)) {
@@ -344,6 +358,14 @@ export default function TriageModal({
           )}
         </div>
         <div className="modal-foot">
+          {ignoredUndo && (
+            <span className="modal-undo">
+              {/* Announced on its own so the live region does not swallow the
+                  button's name. */}
+              <span role="status">Ignored “{ignoredUndo.name}”. </span>
+              <button onClick={() => void undoIgnore()}>Undo</button>
+            </span>
+          )}
           {view === 'grid' ? (
             <>
               <button onClick={onClose}>Close</button>
@@ -363,7 +385,7 @@ export default function TriageModal({
             </>
           ) : (
             <>
-              <button onClick={() => onResolve(item, 'ignore')}>Ignore</button>
+              <button onClick={() => void ignoreOne(item)}>Ignore for good</button>
               <button onClick={() => onResolve(item, 'later')}>Later</button>
               <button className="primary" onClick={() => onResolve(item, 'accept', { typeId })}>
                 Accept

@@ -7022,6 +7022,9 @@ button.tl-link:hover {
   background: color-mix(in srgb, var(--color-positive) 70%, var(--color-text-faint));
   transition: background 160ms ease;
 }
+.dw-ie__status[data-state='clean'] > i {
+  display: none;
+}
 .dw-ie__status[data-state='dirty'] {
   color: var(--color-caution);
 }
@@ -8106,4 +8109,22 @@ button.tl-link:hover {
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-card);
   color: var(--color-text-secondary);
+}
+
+/* The single ignore is permanent, so its Undo rides in the footer until the
+   next one. */
+.modal-undo {
+  margin-right: auto;
+  align-self: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+.modal-undo button {
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }

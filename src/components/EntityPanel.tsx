@@ -1585,7 +1585,9 @@ export default function EntityPanel({
           >
             <i aria-hidden="true" />
             <span id="statusTxt">
-              {saveError ? saveError : saved ? 'Saved' : dirty ? 'Unsaved changes' : 'All changes saved'}
+              {/* The Save button already carries the clean state; a standing
+                  "All changes saved" beside it told the same story twice. */}
+              {saveError ? saveError : saved ? 'Saved' : dirty ? 'Unsaved changes' : ''}
             </span>
           </span>
           <button

@@ -515,6 +515,30 @@ test('bulk triage resolves a whole selection in one request', async (t) => {
   assert.ok(deferred.every((c) => after.includes(c.id)), 'a deferred name comes back later');
 });
 
+test('restoring a rejected word returns it to Review, and an ignore reports its token', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '1', title: 'One', text: 'Grey Harbour burned. Grey Harbour fell.' },
+  });
+  const name = (await call(srv.base, '/api/review')).pending.find((c) => c.tier !== 'demoted');
+  assert.ok(name, 'expected a primary candidate');
+
+  const res = await call(srv.base, `/api/candidates/${name.id}/resolve`, {
+    method: 'POST',
+    body: { action: 'ignore' },
+  });
+  assert.equal(typeof res.ignoredId, 'number', 'the answer carries the token Undo needs');
+  const afterIgnore = (await call(srv.base, '/api/review')).pending.map((c) => c.id);
+  assert.ok(!afterIgnore.includes(name.id), 'an ignored name leaves Review');
+
+  await call(srv.base, `/api/ignored/${res.ignoredId}`, { method: 'DELETE' });
+  const afterUndo = (await call(srv.base, '/api/review')).pending.map((c) => c.id);
+  assert.ok(afterUndo.includes(name.id), 'a restored word can be triaged again');
+});
+
 test('accepting a tracked name in several chapters builds one reappearance alert', async (t) => {
   const srv = await startServer();
   t.after(srv.stop);

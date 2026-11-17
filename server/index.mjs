@@ -846,6 +846,9 @@ const deferCandidate = (candidate) =>
 const ignoreCandidate = (candidate) => {
   db.prepare('INSERT OR IGNORE INTO ignored_tokens (normalized) VALUES (?)').run(candidate.normalized);
   db.prepare("UPDATE candidates SET status = 'ignored' WHERE normalized = ? AND status IN ('pending','later')").run(candidate.normalized);
+  // The token id is what Undo needs; INSERT OR IGNORE leaves lastInsertRowid
+  // stale when the word was already rejected, so look it up either way.
+  return db.prepare('SELECT id FROM ignored_tokens WHERE normalized = ?').get(candidate.normalized)?.id ?? null;
 };
 
 // Bulk triage from Review's selection bar: one request — and so one transaction
@@ -880,8 +883,7 @@ app.post('/api/candidates/:id/resolve', (req, res) => {
   }
 
   if (action === 'ignore') {
-    ignoreCandidate(candidate);
-    return res.json({ ok: true });
+    return res.json({ ok: true, ignoredId: ignoreCandidate(candidate) });
   }
 
   if (action === 'merge') {
@@ -1450,7 +1452,16 @@ app.get('/api/ignored', (_req, res) => {
 });
 
 app.delete('/api/ignored/:id', (req, res) => {
-  db.prepare('DELETE FROM ignored_tokens WHERE id = ?').run(Number(req.params.id));
+  const id = Number(req.params.id);
+  const token = db.prepare('SELECT normalized FROM ignored_tokens WHERE id = ?').get(id);
+  db.prepare('DELETE FROM ignored_tokens WHERE id = ?').run(id);
+  // Restoring a rejected word means it can be triaged again, not just detected
+  // in some later chapter.
+  if (token) {
+    db.prepare("UPDATE candidates SET status = 'pending' WHERE normalized = ? AND status = 'ignored'").run(
+      token.normalized
+    );
+  }
   res.json({ ok: true });
 });
 
