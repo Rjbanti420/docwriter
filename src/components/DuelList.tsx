@@ -4,21 +4,23 @@ import type { Duel } from '../types';
 import DuelCard from './DuelCard';
 
 /** Saved duels, newest first. Everything on the card comes from the stored snapshot. */
-export default function DuelList() {
+export default function DuelList({ onCountChange }: { onCountChange?: (count: number) => void }) {
   const [duels, setDuels] = useState<Duel[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
     try {
-      setDuels(await api.duels());
+      const list = await api.duels();
+      setDuels(list);
+      onCountChange?.(list.length);
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoaded(true);
     }
-  }, []);
+  }, [onCountChange]);
 
   useEffect(() => {
     load();
@@ -45,7 +47,11 @@ export default function DuelList() {
     return <div className="dw-empty">Couldn’t load duels: {error}</div>;
   }
   if (duels.length === 0) {
-    return <div className="dw-empty">No duels yet. Saved fights will appear here.</div>;
+    return (
+      <div className="empty-state">
+        No duels yet. Any fight you run will be saved here with the account of how it went.
+      </div>
+    );
   }
 
   return (

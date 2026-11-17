@@ -698,6 +698,7 @@ export default function PlanningView({
   const [builderDirty, setBuilderDirty] = useState(false);
   const [guns, setGuns] = useState<Gun[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [duelCount, setDuelCount] = useState(0);
   const [candidates, setCandidates] = useState<QuestionCandidate[]>([]);
   const [gunCandidates, setGunCandidates] = useState<GunCandidate[]>([]);
   const [gunReview, setGunReview] = useState<GunReview | null>(null);
@@ -752,15 +753,17 @@ export default function PlanningView({
   // Reload when the chapter list changes (a gun may become "ready").
   const chapterSig = chapters.map((c) => `${c.id}:${c.number}:${c.sort_order}`).join('|');
   const load = useCallback(async () => {
-    const [g, q, c, gc, gr] = await Promise.all([
+    const [g, q, duels, c, gc, gr] = await Promise.all([
       api.guns(),
       api.questions(),
+      api.duels(),
       api.questionCandidates(),
       api.gunCandidates(),
       api.gunReview(),
     ]);
     setGuns(g);
     setQuestions(q);
+    setDuelCount(duels.length);
     setCandidates(c);
     setGunCandidates(gc);
     setGunReview(gr);
@@ -916,7 +919,7 @@ export default function PlanningView({
   const tabs: { id: Tab; label: string; count: number }[] = [
     { id: 'guns', label: "Chekhov's Guns", count: guns.length },
     { id: 'questions', label: 'Questions', count: questions.length },
-    { id: 'duels', label: 'Duels', count: 0 },
+    { id: 'duels', label: 'Duels', count: duelCount },
   ];
 
   function changeTab(next: Tab) {
@@ -1019,7 +1022,7 @@ export default function PlanningView({
       </div>
 
       {notice && (
-        <div className="lookalike" role="status">
+        <div className="plan-notice" role="status">
           {notice}{' '}
           <button className="ghost" style={{ padding: '0 4px' }} onClick={() => setNotice('')}>
             dismiss
@@ -1038,12 +1041,12 @@ export default function PlanningView({
 
       {tab === 'guns' && (
         <div role="tabpanel" id="planning-panel-guns" aria-labelledby="planning-tab-guns">
-          <p className="progress" style={{ marginTop: 0 }}>
+          <p className="card-note" style={{ marginTop: 0 }}>
             Plant something early that will matter later. When its chapter arrives, Review alerts you.
           </p>
           <details className="plan-help__more">
             <summary>What the three outcomes mean</summary>
-            <p className="progress">
+            <p className="card-note">
               <strong>Used</strong> pays it off and stays revisitable, so you can reopen it. <strong>Discussed</strong>{' '}
               defers it to the next chapter. <strong>Fired</strong> closes it for good.
             </p>
@@ -1099,12 +1102,18 @@ export default function PlanningView({
 
       {tab === 'duels' && (
         <div role="tabpanel" id="planning-panel-duels" aria-labelledby="planning-tab-duels">
+          {!builderOpen && (
+            <p className="card-note" style={{ marginTop: 0 }}>
+              Run a duel when two sides' strengths matter. The result and its account are kept here.
+            </p>
+          )}
           {builderOpen ? (
             <DuelBuilder
               entities={entities}
               types={types}
               onOpenEntity={onOpenEntity}
               onChanged={onChanged}
+              onSaved={() => setDuelCount((count) => count + 1)}
               onDirtyChange={setBuilderDirty}
               onBack={() => {
                 setBuilderOpen(false);
@@ -1112,13 +1121,23 @@ export default function PlanningView({
               }}
             />
           ) : (
-            <DuelList />
+            <DuelList onCountChange={setDuelCount} />
           )}
         </div>
       )}
 
       {tab === 'questions' && (
         <div role="tabpanel" id="planning-panel-questions" aria-labelledby="planning-tab-questions">
+          <p className="card-note" style={{ marginTop: 0 }}>
+            Every question your prose raises, and whether the page has answered it yet.
+          </p>
+          <details className="plan-help__more">
+            <summary>What the three states mean</summary>
+            <p className="card-note">
+              <strong>Open</strong> — no answer yet. <strong>Answered</strong> — you know it; the page
+              has not said it. <strong>Delivered</strong> — a chapter has paid it off.
+            </p>
+          </details>
           {candidates.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <div className="group-head">
@@ -1142,7 +1161,7 @@ export default function PlanningView({
           {!loaded ? (
             <p className="progress">Loading…</p>
           ) : questions.length === 0 ? (
-            <div className="dw-empty">
+            <div className="empty-state">
               No questions tracked yet. Scan a chapter to find the ones your prose raises, or add one by hand.
             </div>
           ) : (
@@ -1161,7 +1180,7 @@ export default function PlanningView({
                 ))}
               </div>
               {shownQuestions.length === 0 ? (
-                <div className="dw-empty">Nothing {filter} right now.</div>
+                <div className="empty-state">Nothing {filter} right now.</div>
               ) : (
                 <ul className="dw-list">
                   {shownQuestions.map((q) => (

@@ -300,6 +300,7 @@ export default function DuelBuilder({
   types,
   onOpenEntity,
   onChanged,
+  onSaved,
   onDirtyChange,
   onBack,
 }: {
@@ -307,6 +308,7 @@ export default function DuelBuilder({
   types: Type[];
   onOpenEntity: (id: number) => void;
   onChanged: () => void | Promise<void>;
+  onSaved?: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onBack: () => void;
 }) {
@@ -492,6 +494,7 @@ export default function DuelBuilder({
       const duel = await api.createDuel(buildDuelPayload({ ...state, ...choice }));
       setResult(duel);
       setGenerated(true);
+      onSaved?.();
     } catch (error) {
       const itemNames = new Map(items.map((item) => [item.id, item.name]));
       const abilityNames = new Map<string, string>();

@@ -32,6 +32,10 @@ interface LinkDraft {
   type_color?: string | null;
 }
 
+// Long enough to notice and reach; the toast pauses while it is hovered or
+// focused, so the window is never spent on someone reading it.
+const UNDO_WINDOW_MS = 15000;
+
 const KINDS: Array<{ id: TimelineKind; label: string }> = [
   { id: 'event', label: 'Event' },
   { id: 'birth', label: 'Birth' },
@@ -93,6 +97,7 @@ function EventEditor({
   entities,
   onClose,
   onSaved,
+  onDelete,
 }: {
   event: TimelineEvent | 'new';
   draft?: EventDraft | null;
@@ -100,6 +105,7 @@ function EventEditor({
   entities: Entity[];
   onClose: () => void;
   onSaved: () => void;
+  onDelete: (event: TimelineEvent) => void;
 }) {
   const isNew = event === 'new';
   const [title, setTitle] = useState(isNew ? draft?.title ?? '' : event.title);
@@ -282,6 +288,10 @@ function EventEditor({
                   </option>
                 ))}
               </select>
+              <p className="card-note">
+                A label for the scene — Battle, Reveal, Travel… It colours the day rail; nothing else
+                depends on it.
+              </p>
             </div>
           </div>
 
@@ -293,6 +303,7 @@ function EventEditor({
               onChange={(ev) => setStoryTime(ev.target.value)}
               placeholder="e.g. three winters before the siege"
             />
+            <p className="card-note">For readers. The story day below is what orders the list.</p>
           </div>
 
           <div className="field">
@@ -306,7 +317,7 @@ function EventEditor({
               onChange={(ev) => setStoryDay(ev.target.value)}
               placeholder="e.g. 12"
             />
-            <p className="progress">
+            <p className="card-note">
               Days since the story began. Leave blank if this event has no day yet; the app only counts
               the difference.
             </p>
@@ -370,6 +381,11 @@ function EventEditor({
           )}
         </div>
         <div className="modal-foot">
+          {!isNew && (
+            <button className="btn-danger" onClick={() => onDelete(event)} disabled={saving}>
+              Delete event
+            </button>
+          )}
           <button className="ghost" onClick={requestClose} disabled={saving}>
             Cancel
           </button>
@@ -430,7 +446,6 @@ function EventCard({
   busy,
   chapters,
   onEdit,
-  onDelete,
   onMove,
   onOpenChapter,
   onOpenEntity,
@@ -443,14 +458,13 @@ function EventCard({
   busy: boolean;
   chapters: Chapter[];
   onEdit: () => void;
-  onDelete: () => void;
   onMove: (direction: -1 | 1) => void;
   onOpenChapter: (id: number) => void;
   onOpenEntity: (id: number) => void;
 }) {
   const chapter = chapterFor(event, chapters);
   return (
-    <li className="tl-event" data-kind={event.kind}>
+    <li className="tl-event" data-kind={event.kind} data-event-id={event.id}>
       <span className="tl-event__order" aria-hidden="true">
         {order}
       </span>
@@ -459,14 +473,14 @@ function EventCard({
           <span className="tl-kind">{kindLabel(event.kind)}</span>
           {event.story_time && <span className="tl-time">{event.story_time}</span>}
           {event.story_day != null && <span className="tl-day">Day {event.story_day}</span>}
-          {dayGap != null && (
+          {dayGap != null && dayGap !== 1 && (
             <span className={`tl-gap${dayGap < 0 ? ' is-back' : ''}`} title="Days since the previous dated event">
               {dayGapLabel(dayGap)}
             </span>
           )}
           <span className={`tl-anchor${chapter ? '' : ' is-unplaced'}`}>{anchorLabel(event, chapters)}</span>
         </div>
-        <h3>{event.title}</h3>
+        <h2>{event.title}</h2>
         {event.summary && <p>{event.summary}</p>}
         {event.entities.length > 0 && (
           <div className="tl-links">
@@ -491,22 +505,48 @@ function EventCard({
               Open chapter
             </button>
           )}
-          <button className="btn-secondary" onClick={onEdit}>
+          <button className="btn-secondary" data-edit onClick={onEdit}>
             Edit
           </button>
-          <button className="ghost" onClick={() => onMove(-1)} disabled={busy || !canUp} aria-label="Move earlier">
-            ↑
-          </button>
-          <button className="ghost" onClick={() => onMove(1)} disabled={busy || !canDown} aria-label="Move later">
-            ↓
-          </button>
-          <button className="btn-danger" onClick={onDelete} disabled={busy}>
-            Delete
-          </button>
+          <span className="tl-event__move">
+            <span className="tl-event__move-label">Move</span>
+            <button
+              className="ghost"
+              onClick={() => onMove(-1)}
+              disabled={busy || !canUp}
+              aria-label="Move earlier"
+              title="Move earlier"
+            >
+              ↑
+            </button>
+            <button
+              className="ghost"
+              onClick={() => onMove(1)}
+              disabled={busy || !canDown}
+              aria-label="Move later"
+              title="Move later"
+            >
+              ↓
+            </button>
+          </span>
         </div>
       </div>
     </li>
   );
+}
+
+// Search matches the event and the cards it links to, the same haystack in both tabs.
+function eventMatches(event: TimelineEvent, term: string) {
+  if (!term) return true;
+  return [
+    event.title,
+    event.summary,
+    event.story_time,
+    ...event.entities.map((link) => link.name),
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(term);
 }
 
 export default function TimelineView({
@@ -523,6 +563,25 @@ export default function TimelineView({
   onOpenGun: (id: number) => void;
 }) {
   const [tab, setTab] = useState<Tab>('map');
+  // Tabs follow the tablist pattern: one roving stop, arrows/Home/End select.
+  const onTabKey = (ev: ReactKeyboardEvent<HTMLDivElement>) => {
+    const order: Tab[] = ['map', 'story'];
+    const index = order.indexOf(tab);
+    const next =
+      ev.key === 'ArrowRight'
+        ? order[(index + 1) % order.length]
+        : ev.key === 'ArrowLeft'
+          ? order[(index - 1 + order.length) % order.length]
+          : ev.key === 'Home'
+            ? order[0]
+            : ev.key === 'End'
+              ? order[order.length - 1]
+              : null;
+    if (!next) return;
+    ev.preventDefault();
+    setTab(next);
+    requestAnimationFrame(() => document.getElementById(`tl-tab-${next}`)?.focus());
+  };
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [guns, setGuns] = useState<Gun[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -530,9 +589,12 @@ export default function TimelineView({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [editor, setEditor] = useState<TimelineEvent | 'new' | null>(null);
+  const [deleting, setDeleting] = useState<TimelineEvent | null>(null);
   const [busy, setBusy] = useState(false);
+  const deleteReturnFocus = useRef<HTMLElement | null>(null);
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
+  const [mapQuery, setMapQuery] = useState('');
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestChapterId, setSuggestChapterId] = useState<number | null>(null);
   const [scannedChapterId, setScannedChapterId] = useState<number | null>(null);
@@ -540,6 +602,18 @@ export default function TimelineView({
   const [scanning, setScanning] = useState(false);
   const [draft, setDraft] = useState<EventDraft | null>(null);
   const editorReturnFocus = useRef<HTMLElement | null>(null);
+  // A deleted event is hidden at once but removed from the file only when the
+  // undo window closes, so Undo costs nothing and cannot lose its story order.
+  const [pendingDelete, setPendingDelete] = useState<TimelineEvent | null>(null);
+  const pendingRef = useRef<TimelineEvent | null>(null);
+  const undoTimer = useRef<number | null>(null);
+  const undoTick = useRef({ startedAt: 0, remaining: UNDO_WINDOW_MS });
+  const moveFocus = useRef<{ id: number; dir: -1 | 1 } | null>(null);
+
+  const liveEvents = useMemo(
+    () => events.filter((event) => event.id !== pendingDelete?.id),
+    [events, pendingDelete]
+  );
 
   const closeEditor = () => {
     setEditor(null);
@@ -575,6 +649,35 @@ export default function TimelineView({
   useEffect(() => {
     void load();
   }, [load, chapterSig, entitySig]);
+
+  // A moved row re-renders; keep the writer on the event they just moved.
+  useEffect(() => {
+    const target = moveFocus.current;
+    // While the reorder is saving both arrows are disabled; wait for that pass
+    // rather than dropping the writer on the Edit button.
+    if (!target || busy) return;
+    moveFocus.current = null;
+    const row = document.querySelector(`[data-event-id="${target.id}"]`);
+    const label = target.dir === -1 ? 'Move earlier' : 'Move later';
+    const opposite = target.dir === -1 ? 'Move later' : 'Move earlier';
+    const button =
+      row?.querySelector<HTMLElement>(`[aria-label="${label}"]:not([disabled])`) ??
+      row?.querySelector<HTMLElement>(`[aria-label="${opposite}"]:not([disabled])`) ??
+      row?.querySelector<HTMLElement>('[data-edit]');
+    button?.focus();
+  }, [events, busy]);
+
+  // Leaving the view with a delete still pending commits it: the undo window is
+  // a courtesy, not a place a removed event can be stranded.
+  useEffect(
+    () => () => {
+      if (undoTimer.current != null) window.clearTimeout(undoTimer.current);
+      const event = pendingRef.current;
+      pendingRef.current = null;
+      if (event) void api.deleteTimelineEvent(event.id);
+    },
+    []
+  );
 
   const markersByChapter = useMemo(() => {
     const map = new Map<number, MapMarker[]>();
@@ -658,33 +761,36 @@ export default function TimelineView({
 
   const totalWords = useMemo(() => chapters.reduce((sum, chapter) => sum + (chapter.word_count || 0), 0), [chapters]);
   const counts = useMemo(() => {
-    const next: Record<string, number> = { all: events.length };
+    const next: Record<string, number> = { all: liveEvents.length };
     for (const kind of KINDS) next[kind.id] = 0;
-    for (const event of events) next[event.kind] = (next[event.kind] ?? 0) + 1;
+    for (const event of liveEvents) next[event.kind] = (next[event.kind] ?? 0) + 1;
     return next;
-  }, [events]);
+  }, [liveEvents]);
+
+  const filtering = query.trim() !== '' || kindFilter !== 'all';
+  const clearFilters = () => {
+    setQuery('');
+    setKindFilter('all');
+  };
 
   const shownEvents = useMemo(() => {
     const term = query.trim().toLowerCase();
-    return events.filter((event) => {
-      if (kindFilter !== 'all' && event.kind !== kindFilter) return false;
-      if (!term) return true;
-      const haystack = [
-        event.title,
-        event.summary,
-        event.story_time,
-        ...event.entities.map((link) => link.name),
-      ]
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(term);
-    });
-  }, [events, kindFilter, query]);
+    return liveEvents.filter(
+      (event) => (kindFilter === 'all' || event.kind === kindFilter) && eventMatches(event, term)
+    );
+  }, [liveEvents, kindFilter, query]);
+
+  // The Map gets the same search as Story; a kind filter chosen there never
+  // leaks into this tab, where no kind chips are shown.
+  const mapShown = useMemo(() => {
+    const term = mapQuery.trim().toLowerCase();
+    return liveEvents.filter((event) => eventMatches(event, term));
+  }, [liveEvents, mapQuery]);
 
   // Gaps follow story order, the same explicit order the list shows. Only
   // dated events count; an undated event never gets a guessed place in the line.
   const dayTrack = useMemo(() => {
-    const dated = events.filter((event) => event.story_day != null);
+    const dated = liveEvents.filter((event) => event.story_day != null);
     const gaps = new Map<number, number>();
     for (let i = 1; i < dated.length; i += 1) {
       gaps.set(dated[i].id, (dated[i].story_day as number) - (dated[i - 1].story_day as number));
@@ -695,12 +801,13 @@ export default function TimelineView({
       last: dated.length > 1 ? (dated[dated.length - 1].story_day as number) : null,
       span: dated.length > 1 ? (dated[dated.length - 1].story_day as number) - (dated[0].story_day as number) : null,
     };
-  }, [events]);
+  }, [liveEvents]);
 
   // The Map is a chronology: earliest story day first. Events with no day wait
-  // below instead of being guessed into the line; ties keep the author's order.
+  // in their own section instead of being guessed into the line; ties keep the
+  // author's order. Search narrows both sections without moving anything.
   const chronology = useMemo(() => {
-    const dated = events
+    const dated = mapShown
       .filter((event) => event.story_day != null)
       .slice()
       .sort(
@@ -713,7 +820,7 @@ export default function TimelineView({
     }
     return {
       dated,
-      undated: events.filter((event) => event.story_day == null),
+      undated: mapShown.filter((event) => event.story_day == null),
       gaps,
       first: dated.length > 0 ? (dated[0].story_day as number) : null,
       last: dated.length > 1 ? (dated[dated.length - 1].story_day as number) : null,
@@ -722,7 +829,7 @@ export default function TimelineView({
           ? (dated[dated.length - 1].story_day as number) - (dated[0].story_day as number)
           : null,
     };
-  }, [events]);
+  }, [mapShown]);
 
   const openEditor = (event: TimelineEvent) => {
     editorReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -730,11 +837,12 @@ export default function TimelineView({
   };
 
   const moveEvent = async (id: number, direction: -1 | 1) => {
-    const index = events.findIndex((event) => event.id === id);
+    const index = liveEvents.findIndex((event) => event.id === id);
     const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= events.length) return;
-    const next = events.slice();
+    if (index < 0 || nextIndex < 0 || nextIndex >= liveEvents.length) return;
+    const next = liveEvents.slice();
     [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    moveFocus.current = { id, dir: direction };
     setEvents(next);
     setBusy(true);
     try {
@@ -747,17 +855,102 @@ export default function TimelineView({
     }
   };
 
-  const deleteEvent = async (event: TimelineEvent) => {
-    if (!confirm(`Delete “${event.title}”?`)) return;
+  // Deleting starts in the editor, where the event is in hand; the row keeps
+  // only the work actions, so a page of events carries no red wall.
+  const requestDelete = (event: TimelineEvent) => {
+    deleteReturnFocus.current = editorReturnFocus.current;
+    setEditor(null);
+    setDeleting(event);
+  };
+
+  const cancelDelete = () => {
+    setDeleting(null);
+    requestAnimationFrame(() => deleteReturnFocus.current?.focus());
+  };
+
+  const clearUndoTimer = () => {
+    if (undoTimer.current == null) return;
+    window.clearTimeout(undoTimer.current);
+    undoTimer.current = null;
+  };
+
+  // Reading the toast must not cost the writer the undo: the window only runs
+  // while the pointer and focus are elsewhere (WCAG 2.2.1).
+  const pauseUndoTimer = () => {
+    if (undoTimer.current == null) return;
+    window.clearTimeout(undoTimer.current);
+    undoTimer.current = null;
+    undoTick.current.remaining = Math.max(
+      0,
+      undoTick.current.remaining - (performance.now() - undoTick.current.startedAt)
+    );
+  };
+
+  const resumeUndoTimer = () => {
+    if (undoTimer.current != null || !pendingRef.current) return;
+    undoTick.current.startedAt = performance.now();
+    undoTimer.current = window.setTimeout(
+      () => void commitDelete(),
+      Math.max(400, undoTick.current.remaining)
+    );
+  };
+
+  const flushPendingDelete = async () => {
+    const event = pendingRef.current;
+    clearUndoTimer();
+    pendingRef.current = null;
+    setPendingDelete(null);
+    if (!event) return;
+    await api.deleteTimelineEvent(event.id);
+    // A second delete inside the window must not leave the first row behind.
+    setEvents((current) => current.filter((item) => item.id !== event.id));
+  };
+
+  const commitDelete = async () => {
+    if (!pendingRef.current) return;
     setBusy(true);
     try {
-      await api.deleteTimelineEvent(event.id);
+      await flushPendingDelete();
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      await load();
     } finally {
       setBusy(false);
     }
+  };
+
+  const confirmDelete = async () => {
+    const event = deleting;
+    if (!event) return;
+    setDeleting(null);
+    setBusy(true);
+    try {
+      if (pendingRef.current) await flushPendingDelete();
+      pendingRef.current = event;
+      setPendingDelete(event);
+      undoTick.current = { startedAt: performance.now(), remaining: UNDO_WINDOW_MS };
+      resumeUndoTimer();
+      requestAnimationFrame(() =>
+        document.querySelector<HTMLElement>('.tabs [role="tab"][aria-selected="true"]')?.focus()
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const undoDelete = () => {
+    const event = pendingRef.current;
+    clearUndoTimer();
+    pendingRef.current = null;
+    setPendingDelete(null);
+    if (!event) return;
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>(`[data-event-id="${event.id}"] [data-edit]`)?.focus()
+    );
   };
 
   const openNew = () => {
@@ -802,20 +995,23 @@ export default function TimelineView({
           <h1>Timeline</h1>
           <p className="reader-head__sub">
             {chapters.length} chapter{chapters.length === 1 ? '' : 's'} · {totalWords.toLocaleString()} words ·{' '}
-            {events.length} event{events.length === 1 ? '' : 's'}
+            {liveEvents.length} event{liveEvents.length === 1 ? '' : 's'}
           </p>
         </div>
         <div className="reader-head__actions">
           <button className="btn-primary" onClick={openNew}>
-            ＋ New event
+            + New event
           </button>
         </div>
       </div>
 
-      <div className="tabs" role="tablist" aria-label="Timeline views">
+      <div className="tabs" role="tablist" aria-label="Timeline views" onKeyDown={onTabKey}>
         <button
           role="tab"
+          id="tl-tab-map"
+          aria-controls="tl-panel-map"
           aria-selected={tab === 'map'}
+          tabIndex={tab === 'map' ? 0 : -1}
           className={tab === 'map' ? 'active' : ''}
           onClick={() => setTab('map')}
         >
@@ -823,12 +1019,15 @@ export default function TimelineView({
         </button>
         <button
           role="tab"
+          id="tl-tab-story"
+          aria-controls="tl-panel-story"
           aria-selected={tab === 'story'}
+          tabIndex={tab === 'story' ? 0 : -1}
           className={tab === 'story' ? 'active' : ''}
           onClick={() => setTab('story')}
         >
           Story
-          {events.length > 0 && <span className="dw-chip-count">{events.length}</span>}
+          {liveEvents.length > 0 && <span className="dw-chip-count">{liveEvents.length}</span>}
         </button>
       </div>
 
@@ -844,18 +1043,59 @@ export default function TimelineView({
       {!loaded && loading ? (
         <div className="empty-state">Loading timeline…</div>
       ) : tab === 'map' ? (
-        <>
-          <p className="progress timeline-note">
+        <div role="tabpanel" id="tl-panel-map" aria-labelledby="tl-tab-map">
+          <h2 className="sr-only">Story days</h2>
+          <p className="card-note timeline-note">
             Events are placed by story day, earliest first. A flashback sorts to when it happens, not where the
             chapter sits.
           </p>
-          {chronology.span != null && (
+          {mapQuery.trim() === '' && chronology.span != null && (
             <p className="tl-day-span">
               Story days: Day {chronology.first} → Day {chronology.last} · {chronology.span} day
               {Math.abs(chronology.span) === 1 ? '' : 's'}
             </p>
           )}
-          {events.length === 0 ? (
+          <div className="tl-story-tools">
+            <input
+              className="tl-search"
+              value={mapQuery}
+              onChange={(ev) => setMapQuery(ev.target.value)}
+              placeholder="Search events or linked cards…"
+              aria-label="Search story days"
+            />
+          </div>
+          {mapQuery.trim() !== '' && (
+            <div className="tl-search-status">
+              <span role="status">
+                {mapShown.length} of {liveEvents.length} event{liveEvents.length === 1 ? '' : 's'}
+              </span>
+              <button type="button" className="ghost" onClick={() => setMapQuery('')}>
+                Clear
+              </button>
+            </div>
+          )}
+          {chronology.undated.length > 0 && (
+            <section className="tl-chrono-undated" aria-labelledby="tl-undated-title">
+              <h2 id="tl-undated-title">
+                No day yet <span className="tl-marker-lane__count">{chronology.undated.length}</span>
+              </h2>
+              <p className="card-note">These stay in Story order until you give them a day.</p>
+              <div className="tl-chrono-undated__list">
+                {chronology.undated.map((event) => (
+                  <button
+                    type="button"
+                    className="tl-chrono-pill"
+                    key={event.id}
+                    onClick={() => openEditor(event)}
+                  >
+                    {event.title}
+                    <small>{anchorLabel(event, chapters)}</small>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+          {liveEvents.length === 0 ? (
             <div className="empty-state">
               <h2>No story events yet.</h2>
               <p>Record what happens and when; the map places each event by its story day.</p>
@@ -863,8 +1103,14 @@ export default function TimelineView({
                 Add the first event
               </button>
             </div>
+          ) : mapShown.length === 0 ? (
+            <div className="dw-empty">No events match that search.</div>
           ) : chronology.dated.length === 0 ? (
-            <div className="dw-empty">No event has a story day yet. Add one in Story and it will appear here.</div>
+            <div className="dw-empty">
+              {mapQuery.trim() !== ''
+                ? 'No dated events match that search.'
+                : 'No event has a story day yet. Add one in Story and it will appear here.'}
+            </div>
           ) : (
             <ol className="tl-chrono">
               {chronology.dated.map((event) => {
@@ -896,6 +1142,9 @@ export default function TimelineView({
                         <span className={`tl-anchor${chapter ? '' : ' is-unplaced'}`}>
                           {anchorLabel(event, chapters)}
                         </span>
+                        <span className="tl-chrono__edit" aria-hidden="true">
+                          Edit
+                        </span>
                       </span>
                       <strong className="tl-chrono__title">{event.title}</strong>
                       {event.entities.length > 0 && (
@@ -913,31 +1162,10 @@ export default function TimelineView({
               })}
             </ol>
           )}
-          {chronology.undated.length > 0 && (
-            <section className="tl-chrono-undated" aria-labelledby="tl-undated-title">
-              <h2 id="tl-undated-title">
-                No day yet <span className="tl-marker-lane__count">{chronology.undated.length}</span>
-              </h2>
-              <p className="progress">These stay in Story order until you give them a day.</p>
-              <div className="tl-chrono-undated__list">
-                {chronology.undated.map((event) => (
-                  <button
-                    type="button"
-                    className="tl-chrono-pill"
-                    key={event.id}
-                    onClick={() => openEditor(event)}
-                  >
-                    {event.title}
-                    <small>{anchorLabel(event, chapters)}</small>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-        </>
+        </div>
       ) : (
-        <>
-          <p className="progress timeline-note">
+        <div role="tabpanel" id="tl-panel-story" aria-labelledby="tl-tab-story">
+          <p className="card-note timeline-note">
             Events are explicit. Use ↑ and ↓ to set story order; the chapter is only where the scene appears.
           </p>
           {dayTrack.span != null && (
@@ -954,6 +1182,14 @@ export default function TimelineView({
               placeholder="Search events or linked cards…"
               aria-label="Search story events"
             />
+            <button
+              type="button"
+              className="btn-secondary tl-suggest__toggle"
+              aria-expanded={suggestOpen}
+              onClick={() => setSuggestOpen((open) => !open)}
+            >
+              Suggest from a chapter
+            </button>
             <div className="dw-filters">
               <button
                 className={`dw-chip${kindFilter === 'all' ? ' is-active' : ''}`}
@@ -975,20 +1211,34 @@ export default function TimelineView({
                 </button>
               ))}
             </div>
+            <label className="tl-kind-select">
+              <span className="sr-only">Filter by kind</span>
+              <select value={kindFilter} onChange={(ev) => setKindFilter(ev.target.value as KindFilter)}>
+                <option value="all">All kinds ({counts.all})</option>
+                {KINDS.map((kind) => (
+                  <option key={kind.id} value={kind.id}>
+                    {kind.label} ({counts[kind.id] ?? 0})
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
+          {filtering && (
+            <div className="tl-search-status">
+              <span role="status">
+                {shownEvents.length} of {liveEvents.length} event{liveEvents.length === 1 ? '' : 's'}
+              </span>
+              <button type="button" className="ghost" onClick={clearFilters}>
+                Clear
+              </button>
+            </div>
+          )}
+
           <div className="tl-suggest">
-            <button
-              type="button"
-              className="btn-secondary"
-              aria-expanded={suggestOpen}
-              onClick={() => setSuggestOpen((open) => !open)}
-            >
-              Suggest from a chapter
-            </button>
             {suggestOpen && (
               <div className="tl-suggest__panel">
-                <p className="progress">
+                <p className="card-note">
                   Only sentences that state a time are offered. Nothing is saved until you open an event and confirm
                   it.
                 </p>
@@ -1045,7 +1295,28 @@ export default function TimelineView({
             )}
           </div>
 
-          {events.length === 0 ? (
+          {chronology.undated.length > 0 && (
+            <section className="tl-chrono-undated" aria-labelledby="tl-undated-title">
+              <h2 id="tl-undated-title">
+                No day yet <span className="tl-marker-lane__count">{chronology.undated.length}</span>
+              </h2>
+              <p className="card-note">These stay in Story order until you give them a day.</p>
+              <div className="tl-chrono-undated__list">
+                {chronology.undated.map((event) => (
+                  <button
+                    type="button"
+                    className="tl-chrono-pill"
+                    key={event.id}
+                    onClick={() => openEditor(event)}
+                  >
+                    {event.title}
+                    <small>{anchorLabel(event, chapters)}</small>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+          {liveEvents.length === 0 ? (
             <div className="empty-state">
               <h2>No story events yet.</h2>
               <p>Record what happens, when it happens, and who or what it involves. Chapter order is not story order.</p>
@@ -1058,7 +1329,7 @@ export default function TimelineView({
           ) : (
             <ul className="tl-events">
               {shownEvents.map((event) => {
-                const index = events.findIndex((item) => item.id === event.id);
+                const index = liveEvents.findIndex((item) => item.id === event.id);
                 return (
                   <EventCard
                     key={event.id}
@@ -1066,11 +1337,10 @@ export default function TimelineView({
                     order={index + 1}
                     dayGap={dayTrack.gaps.get(event.id) ?? null}
                     canUp={index > 0}
-                    canDown={index < events.length - 1}
+                    canDown={index < liveEvents.length - 1}
                     busy={busy}
                     chapters={chapters}
                     onEdit={() => openEditor(event)}
-                    onDelete={() => void deleteEvent(event)}
                     onMove={(direction) => void moveEvent(event.id, direction)}
                     onOpenChapter={onOpenChapter}
                     onOpenEntity={onOpenEntity}
@@ -1089,7 +1359,7 @@ export default function TimelineView({
                 </span>
               )}
             </div>
-            <p className="progress timeline-note">
+            <p className="card-note timeline-note">
               Guns, questions and deaths stay in chapter order here. They are not story events and are not placed
               in story order.
             </p>
@@ -1134,7 +1404,81 @@ export default function TimelineView({
               </div>
             )}
           </section>
-        </>
+        </div>
+      )}
+
+      {pendingDelete && (
+        <div
+          className="tl-undo"
+          role="status"
+          onPointerEnter={pauseUndoTimer}
+          onPointerLeave={resumeUndoTimer}
+          onFocus={pauseUndoTimer}
+          onBlur={(ev) => {
+            if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) resumeUndoTimer();
+          }}
+          onKeyDown={(ev) => {
+            if (ev.key !== 'Escape') return;
+            ev.stopPropagation();
+            void commitDelete();
+          }}
+        >
+          <span>“{pendingDelete.title}” deleted.</span>
+          <button className="btn-secondary" onClick={undoDelete}>
+            Undo
+          </button>
+        </div>
+      )}
+
+      {deleting && (
+        <div className="overlay" onClick={cancelDelete}>
+          <div
+            className="modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-event-title"
+            aria-describedby="delete-event-body"
+            onClick={(ev) => ev.stopPropagation()}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Escape') {
+                ev.stopPropagation();
+                cancelDelete();
+                return;
+              }
+              if (ev.key !== 'Tab') return;
+              const nodes = [
+                ...ev.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled])'),
+              ];
+              const first = nodes[0];
+              const last = nodes[nodes.length - 1];
+              if (!first || !last) return;
+              if (ev.shiftKey && document.activeElement === first) {
+                ev.preventDefault();
+                last.focus();
+              } else if (!ev.shiftKey && document.activeElement === last) {
+                ev.preventDefault();
+                first.focus();
+              }
+            }}
+          >
+            <div className="modal-head">
+              <h2 id="delete-event-title">Delete this event?</h2>
+            </div>
+            <div className="modal-body">
+              <p id="delete-event-body" style={{ margin: 0 }}>
+                “{deleting.title}” is removed from the timeline. You will have a moment to undo.
+              </p>
+            </div>
+            <div className="modal-foot">
+              <button autoFocus onClick={cancelDelete}>
+                Keep event
+              </button>
+              <button className="danger" onClick={() => void confirmDelete()} disabled={busy}>
+                {busy ? 'Deleting…' : 'Delete event'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {editor && (
@@ -1145,6 +1489,7 @@ export default function TimelineView({
           chapters={chapters}
           entities={entities}
           onClose={closeEditor}
+          onDelete={requestDelete}
           onSaved={() => {
             closeEditor();
             void load();

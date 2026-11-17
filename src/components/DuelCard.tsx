@@ -5,6 +5,8 @@ import {
   fighterBreakdownLine,
   outcomeAudit,
   outcomeNotes,
+  points,
+  sideNames,
   sideTotalLine,
 } from '../duelcard';
 
@@ -27,6 +29,17 @@ export default function DuelCard({
   const notes = outcomeNotes(outcome, sides);
   const audit = outcomeAudit(outcome);
 
+  // The result as a sentence, before the rosters: a saved duel is a memory
+  // first and an audit second.
+  const winner = sideNames(sides, outcome.winnerSide);
+  const a = outcome.scores?.A;
+  const b = outcome.scores?.B;
+  const margin = Number.isFinite(a) && Number.isFinite(b) ? `, ${points(a)} to ${points(b)}` : '';
+  const bySkill = outcome.skillSide === outcome.winnerSide ? ', on skill' : '';
+  const result = outcome.chosenBy
+    ? `${winner} won by your choice.`
+    : `${winner} won${margin}${bySkill}.`;
+
   return (
     <div className="dw-card duel-card">
       <div>
@@ -35,6 +48,7 @@ export default function DuelCard({
           <span>Created {dateLabel(duel.created_at)}</span>
           {sides.terrain && <span>Terrain: {sides.terrain}</span>}
         </div>
+        <p className="duel-outcome">{result}</p>
       </div>
 
       <div className="duel-sides">
@@ -69,19 +83,18 @@ export default function DuelCard({
         ))}
       </div>
 
-      {notes.length > 0 && (
-        <div className="duel-notes">
-          {notes.map((note) => (
-            <div key={note} className="duel-note">
-              {note}
-            </div>
-          ))}
-        </div>
-      )}
-
       <details className="duel-narrative" open={narrativeOpen || undefined}>
         <summary>Read the account</summary>
         <p>{duel.narrative}</p>
+        {notes.length > 0 && (
+          <div className="duel-notes">
+            {notes.map((note) => (
+              <div key={note} className="duel-note">
+                {note}
+              </div>
+            ))}
+          </div>
+        )}
         {/* The arithmetic is how the result was reached, not the result. */}
         <div className="duel-scoreboard">
           {(['A', 'B'] as const).map((side) => (
@@ -106,7 +119,7 @@ export default function DuelCard({
       {onDelete && (
         <div className="actions">
           <div style={{ flex: 1 }} />
-          <button className="btn-danger" onClick={onDelete}>
+          <button className="danger-quiet" onClick={onDelete}>
             Delete
           </button>
         </div>

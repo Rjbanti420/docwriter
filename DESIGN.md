@@ -266,7 +266,7 @@ Corners round with size, on one continuous ladder rather than a 3-step scale: ha
 - **Hairlines and marks**: 2–4px for meters, rules, kbd caps and the mention ring.
 - **Controls** (buttons, inputs, selects): 8–12px, 34–44px tall.
 - **Cards and panels**: 14–20px; the entity editor goes to 26px and the manuscript page to 24px.
-- **Chips and status pills**: full round (`999px`), 34px tall.
+- **Chips and status pills**: full round (`999px`), 34px tall when they are controls. Read-only status tags (READY, OPEN, WINNER) may stay 22–24px tall with 11px text, because nothing is asked of the pointer.
 - **Icons**: 46px rounded square with a 14px radius (9px in compact rows), filled with a type-tinted gradient.
 - **Tabs**: top corners only, 10px, with a 3px underline in the active colour for the selected tab.
 
