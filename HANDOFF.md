@@ -1221,3 +1221,12 @@ deleted so nobody can publish a build that predates the Read/Settings polish or 
 target; their tags stay for the record. Tag `v1.1.0` is the first run of the two-OS matrix,
 and therefore also the first time `npm test` has run on Windows — if it is red, the fix goes
 in and the tag moves, since nothing is published yet.
+
+**The first Windows test run was red, and it was the tests, not the app.** The Linux job
+passed; `npm test` on `windows-latest` failed four cases in `backup.test.mjs`, all with
+`EPERM` from the cleanup hook. Cause: the helper registered `rmSync` and `db.close()` as two
+`t.after` hooks, and hooks run in the order they were added — so Windows tried to delete a
+folder that still held an open SQLite handle, and the copy the second test opens made it
+worse. One hook now closes every handle the test opened and then removes the folder; the
+second test hands its extra connections to that list instead of its own hook. Green on Linux
+(214/214), and the tag moved rather than a new patch number.
