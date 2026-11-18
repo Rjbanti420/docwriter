@@ -157,6 +157,8 @@ async function createWindow() {
     minHeight: 620,
     backgroundColor: '#14120f',
     title: 'DocWriter',
+    // Windows/taskbars that read the window icon rather than the desktop entry.
+    icon: path.join(projectRoot, 'build', 'icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,

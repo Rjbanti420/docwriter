@@ -5,6 +5,39 @@ A writing app for novelists/worldbuilders. You keep writing in Word (or anywhere
 names, and triages them into a typed, cross-linked **worldbible**. It gets quieter the
 more you use it: once a name is known, future mentions are linked silently.
 
+## Download and install
+
+DocWriter ships as a Linux desktop app (x64). Take the latest from
+[Releases](https://github.com/Rjbanti420/docwriter/releases).
+
+**AppImage — no install:**
+
+```bash
+chmod +x DocWriter-1.0.0.AppImage
+./DocWriter-1.0.0.AppImage
+```
+
+**.deb — installs a launcher entry (Debian/Ubuntu):**
+
+```bash
+sudo apt install ./DocWriter-1.0.0.deb
+```
+
+Everything runs on your machine: no account, no network calls, no telemetry.
+
+**Your book is one file.** First launch gives you an empty book at
+`~/.config/DocWriter/docwriter.db`. *Book → New book…* starts another, *Book → Open book…*
+switches to any file, and *Book → Export book file (.db)* writes a copy you can carry to
+another computer. Settings → Export writes Markdown for readers. The About dialog shows
+which file is open.
+
+### Known limits
+
+- Linux only for now: no Windows or macOS build, and no auto-update.
+- A few Review controls are smaller than the rest of the app's 34px floor.
+- "Compact" names both Bible card size and interface density in Settings.
+- Planning's summary line counts guns and questions, not duels.
+
 ## Stack
 
 - **Backend:** Node + Express + built-in `node:sqlite` (no native deps). API on `:5178`.
@@ -21,7 +54,12 @@ npm run dev      # starts API + web together
 Then open http://localhost:5173 — a demo chapter is pre-loaded so you can see the loop.
 
 Other scripts: `npm run build` (production bundle), `npm start` (serve the built app + API
-from `:5178` alone).
+from `:5178` alone), `npm run dist` (Linux AppImage).
+
+Releases: push a `v*` tag and `.github/workflows/release.yml` runs the tests, builds the
+AppImage **and** the `.deb`, and attaches them to a draft GitHub release. Building the
+`.deb` on Arch locally needs `libxcrypt-compat` for electron-builder's bundled `fpm`; the
+AppImage builds everywhere.
 
 Set `DOCWRITER_DB=/path/to/copy.db` to point the server at another project file (used by the
 tests so they never touch your real data).
@@ -88,3 +126,7 @@ text with rescan, chapter delete with gap/renumber and orphan-to-Trash, manual e
 - Type-specific custom fields in the UI (schema `fields` JSON exists, no editor yet).
 - Relationship/link editing and graph views (the `Link` seam isn't wired yet).
 - Global find-and-replace back into Word.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

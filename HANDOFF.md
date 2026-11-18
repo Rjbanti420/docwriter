@@ -1105,3 +1105,37 @@ Measured across the whole product before the fixes: 0 text under 11px, 0 contras
 **Known limits.** Pressing `X` on the last queued name closes the modal with the rest of the queue, so that Undo line goes with it; Recovery is still Review → Rejected → Restore, which now really re-queues. The undo line is lost on navigating away from the word. Not fixed, by choice: Review's card title (28px), "Why this name?" (15px) and checkbox (13px) are under the 34px floor; "Compact" still names both Bible card size and app density; Planning's summary line still omits duels; the organisation tiles remain violet against driftwood.
 
 **Changes uncommitted.** `server/index.mjs`, `server/api.test.mjs`, `src/App.tsx`, `src/components/TriageModal.tsx`, `src/components/EntityPanel.tsx`, `src/styles.css`.
+
+## 100) Public release prep — MIT, 1.0.0, AppImage and .deb
+The app is being published. The packaged Linux app was smoke-tested first: the old
+`DocWriter-0.1.0.AppImage` (built before §97) boots on a fresh book, serves over its own
+localhost port and shows the empty state, so packaging itself was never the risk.
+
+**What changed for the release.** `package.json` is now `1.0.0`, carries the `MIT` license,
+a maintainer identity for the `.deb`, `homepage`/`repository`, and builds
+`AppImage` + `deb`; `build/icon.png` is shipped in `files` so the window can use it, and
+`electron/main.cjs` sets `icon` on the BrowserWindow (taskbars that ignore the desktop
+entry otherwise showed the Electron logo). `LICENSE` is the MIT text. `README.md` gained a
+**Download and install** section — AppImage and `.deb` commands, the offline promise, where
+the book file lives and how to move it — plus the known limits and the license link. The
+rest of the README is still the developer notes it already was.
+
+**Known limits carried into the release notes.** Linux only, no auto-update; Review's
+card targets stay under the 34px floor; "Compact" still means two things; Planning's
+summary omits duels. The AppImage's generated `.desktop` runs `AppRun --no-sandbox %U`
+(electron-builder's default) — acceptable for an offline local app, but it is the sandbox
+being opted out of for desktop-launched runs.
+
+**The .deb cannot be built on this machine.** electron-builder's bundled `fpm` is a
+packed Ruby that wants `libcrypt.so.1`; Arch ships `libcrypt.so.2` only, and a symlink
+fails on the versioned symbols (`GLIBC_2.2.5' not found`). `pacman -S libxcrypt-compat`
+fixes it locally, but releases are built on `ubuntu-latest` instead: `.github/workflows/release.yml`
+runs `npm ci` → `npm test` → `npm run build` → `electron-builder --linux --publish always`
+on a `v*` tag, which attaches the AppImage **and** the `.deb` to a draft release (draft is
+electron-builder's default release type). `npm run dist` now builds only the AppImage so it
+stays usable on Arch. The workflow needs no secrets beyond the built-in `GITHUB_TOKEN`
+(`contents: write`).
+
+**Not done yet.** No tag, no GitHub release, nothing committed — the rim fix from the
+Read view is still in the working tree for review. Auto-update would only need
+`electron-updater` plus a publish block; `resources/app-update.yml` is already generated.
