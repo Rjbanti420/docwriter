@@ -1212,3 +1212,12 @@ read-only, nothing writes it, and on Windows it simply returns an empty list.
 
 Deferred on purpose: code signing (Apple's $99 for macOS, a Windows cert or the free Store
 listing later), arm64, and auto-update.
+
+## 103) 1.1.0 — the first release with a Windows download
+Version 1.1.0, because Windows is a platform, not a patch. `package.json` and the lock are
+the only places the number lives (`app.getVersion()` feeds the About dialog), and README's
+five hardcoded artifact names moved with it. The unpublished 1.0.0 and 1.0.1 drafts were
+deleted so nobody can publish a build that predates the Read/Settings polish or the Windows
+target; their tags stay for the record. Tag `v1.1.0` is the first run of the two-OS matrix,
+and therefore also the first time `npm test` has run on Windows — if it is red, the fix goes
+in and the tag moves, since nothing is published yet.

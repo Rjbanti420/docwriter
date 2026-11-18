@@ -12,7 +12,7 @@ more you use it: once a name is known, future mentions are linked silently.
 DocWriter ships for Windows and Linux (x64). Take the latest from
 [Releases](https://github.com/Rjbanti420/docwriter/releases).
 
-**Windows — installer:** run `DocWriter-1.0.1-win-x64.exe`. It is not code-signed, so
+**Windows — installer:** run `DocWriter-1.1.0-win-x64.exe`. It is not code-signed, so
 Windows shows "Windows protected your PC" the first time: **More info → Run anyway**. If you
 would rather not run an installer, the `-win-x64.zip` unpacks to a folder with
 `DocWriter.exe` in it.
@@ -20,18 +20,18 @@ would rather not run an installer, the `-win-x64.zip` unpacks to a folder with
 **AppImage — no install:**
 
 ```bash
-chmod +x DocWriter-1.0.1.AppImage
-./DocWriter-1.0.1.AppImage
+chmod +x DocWriter-1.1.0.AppImage
+./DocWriter-1.1.0.AppImage
 ```
 
 **.deb — installs a launcher entry (Debian/Ubuntu):**
 
 ```bash
-sudo apt install ./docwriter_1.0.1_amd64.deb
+sudo apt install ./docwriter_1.1.0_amd64.deb
 ```
 
 Everything runs on your machine: no account, no network calls, no telemetry. `SHA256SUMS.txt`
-on the release covers every download — `certutil -hashfile DocWriter-1.0.1-win-x64.exe SHA256`
+on the release covers every download — `certutil -hashfile DocWriter-1.1.0-win-x64.exe SHA256`
 on Windows, `sha256sum -c` on Linux.
 
 **Your book is one file.** First launch gives you an empty book at
