@@ -1136,6 +1136,13 @@ electron-builder's default release type). `npm run dist` now builds only the App
 stays usable on Arch. The workflow needs no secrets beyond the built-in `GITHUB_TOKEN`
 (`contents: write`).
 
-**Not done yet.** No tag, no GitHub release, nothing committed — the rim fix from the
-Read view is still in the working tree for review. Auto-update would only need
-`electron-updater` plus a publish block; `resources/app-update.yml` is already generated.
+**Shipped.** `v1.0.0` is tagged and pushed (`f3aa088`), the workflow run passed, and the
+draft release carries `DocWriter-1.0.0.AppImage`, `docwriter_1.0.0_amd64.deb` and
+`latest-linux.yml`. The tag push itself produced no run — the workflow was registered
+seconds after the tag and GitHub did not match it — so the first run was started with
+`gh workflow run release.yml --ref v1.0.0`; later tags will trigger normally. The `.deb`
+was unpacked and checked: control carries MIT/maintainer/deps, `postinst` links
+`/usr/bin/docwriter`, the desktop entry runs `/opt/DocWriter/docwriter` (no `--no-sandbox`,
+unlike the AppImage's), and `resources/app/package.json` is 1.0.0. Publishing the draft is
+the owner's click. Auto-update would only need `electron-updater` plus a publish block;
+`resources/app-update.yml` is already generated.
