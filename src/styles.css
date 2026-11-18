@@ -965,16 +965,6 @@ textarea:focus {
   justify-content: space-between;
   gap: 8px;
 }
-.mark-legend {
-  margin: 0;
-  text-align: center;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--color-text-secondary);
-}
-.mark-legend.is-hidden {
-  visibility: hidden;
-}
 .paper-title {
   margin: 0;
   font-family: var(--font-reading);
@@ -4953,6 +4943,8 @@ button.primary {
   margin-bottom: calc(34px * var(--density));
 }
 .paper-meta { justify-content: center; gap: 18px; }
+/* The kicker is the page's only label; give it enough size to hold the top. */
+.paper-meta .label-mono { font-size: 14px; }
 .paper-title {
   font-style: italic;
   font-weight: 500;
@@ -8031,6 +8023,55 @@ button.tl-link:hover {
 .bookmenu__row:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
+}
+
+/* A card's explanation lives behind a small "?" instead of in the card face.
+   Opening it drops the note into the card above the controls. */
+.set-head {
+  position: relative;
+  margin-bottom: 10px;
+}
+.set-head > h2 {
+  padding-right: 40px;
+}
+/* The "?" hangs at the card's top-right; the note it opens stays in flow. */
+.card-help > summary {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+.card-help > summary::-webkit-details-marker {
+  display: none;
+}
+.card-help > summary:hover {
+  color: var(--color-text);
+}
+.card-help[open] > summary {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.card-help__body {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-base);
+}
+.card-help__body > .card-note:last-child {
+  margin-bottom: 0;
 }
 
 /* The keyboard list is reference, so it folds down to one row until asked for.

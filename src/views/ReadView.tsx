@@ -326,19 +326,8 @@ export default function ReadView({
                   ) : (
                     <h1 className="label-mono">Chapter {chapterNumber(chapter)}</h1>
                   )}
-                  <span className="progress">{chapter.word_count.toLocaleString('en-US')} words</span>
                 </div>
                 {chapter.title ? <h1 className="paper-title">{chapter.title}</h1> : null}
-                {detail!.candidates.length > 0 ? (
-                  // Kept in the layout while editing so the prose does not jump
-                  // a line when Edit is pressed.
-                  <p
-                    className={`mark-legend${editing ? ' is-hidden' : ''}`}
-                    aria-hidden={editing || undefined}
-                  >
-                    Solid underlines are names in your Bible. Dotted ones are new — open one to add it.
-                  </p>
-                ) : null}
               </div>
               {editing ? (
                 <textarea
@@ -366,7 +355,10 @@ export default function ReadView({
               )}
               {!editing && (
                 <div className="chapter-end">
-                  <span>End of Chapter {chapterNumber(chapter)}</span>
+                  <span>
+                    End of Chapter {chapterNumber(chapter)} ·{' '}
+                    {chapter.word_count.toLocaleString('en-US')} words
+                  </span>
                   {idx >= chapters.length - 1 ? (
                     <button onClick={toTop}>Back to top</button>
                   ) : (

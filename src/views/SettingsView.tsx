@@ -424,17 +424,28 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
       </section>
 
       <section className="card" style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Export</h2>
-        <p className="card-note">
-          Writes the whole book to one Markdown file — every chapter’s current draft, the Bible and
-          Planning. Images, Trash and the Review queue stay behind.
-          {meta?.lastExportAt && <> Last exported {meta.lastExportAt}.</>}
-        </p>
+        <div className="set-head">
+          <h2 style={{ margin: 0, fontSize: 16 }}>Export</h2>
+          <details className="card-help">
+            <summary aria-label="About export">?</summary>
+            <div className="card-help__body">
+              <p className="card-note">
+                Writes the whole book to one Markdown file — every chapter’s current draft, the
+                Bible and Planning. Images, Trash and the Review queue stay behind.
+              </p>
+            </div>
+          </details>
+        </div>
         <div className="actions" style={{ marginTop: 0 }}>
           <button className="primary" disabled={exporting} onClick={exportBook}>
             {exporting ? 'Exporting…' : 'Export as Markdown'}
           </button>
         </div>
+        {meta && (
+          <p className="card-note" style={{ margin: '10px 0 0' }}>
+            {meta.lastExportAt ? `Last exported ${meta.lastExportAt}.` : 'Not exported yet.'}
+          </p>
+        )}
         <div className="field" style={{ marginTop: 12, marginBottom: 0 }}>
           <label htmlFor="set-nudge">Remind me to export</label>
           <select id="set-nudge" value={meta?.nudge ?? 'daily'} disabled={!meta} onChange={(e) => changeNudge(e.target.value)}>
@@ -444,25 +455,32 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
       </section>
 
       <section className="card" style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Backup</h2>
-        <p className="card-note">
-          Saves a complete, self-contained copy of this book — the whole database, including
-          everything written since the last checkpoint.
-        </p>
-        <p className="card-note">
-          This book is one file: <code className="book-path">{meta?.bookPath || '…'}</code>
-        </p>
-        <p className="card-note">
-          {backupState?.backups.length
-            ? `An automatic snapshot is taken daily into ${backupState.dir} — the newest is ${new Date(
-                backupState.backups[0].mtime
-              ).toLocaleDateString()}, and the last five are kept.`
-            : 'Automatic snapshots start with your first chapter, and the last five are kept.'}
-        </p>
-        <p className="card-note">
-          To move a book to another computer, take that file with you and choose{' '}
-          <strong>Open book…</strong> there — every chapter, card and setting travels with it.
-        </p>
+        <div className="set-head">
+          <h2 style={{ margin: 0, fontSize: 16 }}>Backup</h2>
+          <details className="card-help">
+            <summary aria-label="About backups">?</summary>
+            <div className="card-help__body">
+              <p className="card-note">
+                Saves a complete, self-contained copy of this book — the whole database, including
+                everything written since the last checkpoint.
+              </p>
+              <p className="card-note">
+                This book is one file: <code className="book-path">{meta?.bookPath || '…'}</code>
+              </p>
+              <p className="card-note">
+                {backupState?.backups.length
+                  ? `An automatic snapshot is taken daily into ${backupState.dir} — the newest is ${new Date(
+                      backupState.backups[0].mtime
+                    ).toLocaleDateString()}, and the last five are kept.`
+                  : 'Automatic snapshots start with your first chapter, and the last five are kept.'}
+              </p>
+              <p className="card-note">
+                To move a book to another computer, take that file with you and choose{' '}
+                <strong>Open book…</strong> there — every chapter, card and setting travels with it.
+              </p>
+            </div>
+          </details>
+        </div>
         <div className="actions" style={{ marginTop: 0 }}>
           <button className="btn-secondary" disabled={backingUp} onClick={downloadBackup}>
             {backingUp ? 'Preparing…' : 'Download a backup'}
