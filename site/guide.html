@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How it works — DocWriter</title>
+    <meta
+      name="description"
+      content="First run, where the book file lives, how to back it up or export it, every keyboard shortcut, and the known limits of DocWriter for Windows and Linux."
+    />
+    <meta name="theme-color" content="#e8e4db" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <div class="wrap masthead__inner">
+        <a class="brand" href="./index.html">DocWriter</a>
+        <nav class="nav" aria-label="Primary">
+          <ul>
+            <li><a href="./index.html#loop">Loop</a></li>
+            <li><a href="./index.html#features">Features</a></li>
+            <li><a href="./guide.html" aria-current="page">Guide</a></li>
+          </ul>
+        </nav>
+        <a class="pill-link" href="https://github.com/Rjbanti420/docwriter/releases" target="_blank" rel="noopener">
+          Download<span class="sr-only"> (opens the GitHub releases page in a new tab)</span>
+        </a>
+      </div>
+    </header>
+
+    <main id="main" class="doc">
+      <div class="wrap">
+        <header class="page-head">
+          <p class="kicker">Guide</p>
+          <h1>How it works</h1>
+        </header>
+
+        <nav class="toc" aria-label="On this page">
+          <p class="toc__label">On this page</p>
+          <ul>
+            <li><a href="#first-run">First run</a></li>
+            <li><a href="#book-file">Your book is one file</a></li>
+            <li><a href="#back-up">Back up and export</a></li>
+            <li><a href="#keyboard">Keyboard</a></li>
+            <li><a href="#limits">Known limits</a></li>
+          </ul>
+        </nav>
+
+        <div class="doc-body">
+          <p>
+            DocWriter is a companion, not a word processor. The manuscript stays in the editor you already use; you
+            paste one chapter at a time and the bible is built from that text. Everything is stored on your machine.
+          </p>
+
+          <h2 id="first-run">First run</h2>
+          <p>
+            Take the latest Windows installer from
+            <a href="https://github.com/Rjbanti420/docwriter/releases" target="_blank" rel="noopener"
+              >Releases<span class="sr-only"> (opens GitHub in a new tab)</span></a
+            >: <code>DocWriter-&lt;version&gt;-win-x64.exe</code> installs, and the matching
+            <code>-win-x64.zip</code> unzips to a folder you can run in place. The build is not code-signed, so
+            Windows shows “Windows protected your PC” the first time — choose <strong>More info</strong> then
+            <strong>Run anyway</strong>.
+          </p>
+          <p>
+            On Linux, the AppImage runs without installing, and the .deb installs a launcher entry on Debian and
+            Ubuntu.
+          </p>
+          <div class="codeblock">
+            <code>chmod +x DocWriter-*.AppImage
+./DocWriter-*.AppImage</code>
+          </div>
+          <p>
+            First launch gives you an empty book, ready for a first chapter. There is nothing to sign in to: no
+            account, no sync, and no network calls beyond the localhost port the app serves itself.
+          </p>
+
+          <h2 id="book-file">Your book is one file</h2>
+          <p>
+            A book is a single SQLite file — <code>~/.config/DocWriter/docwriter.db</code> on Linux,
+            <code>%APPDATA%\DocWriter\docwriter.db</code> on Windows. Chapters, cards, mentions and settings all live
+            inside it. The About dialog names the file that is currently open.
+          </p>
+          <p>
+            <strong>Book → Open book…</strong> points the window at any .db file, so a book can be kept wherever you
+            like and moved whenever you like.
+          </p>
+
+          <h2 id="back-up">Back up and export</h2>
+          <p>
+            <strong>Book → Export book file (.db)</strong> writes a full copy of the open book; on another computer,
+            <strong>Book → Open book…</strong> opens that copy. Nothing is re-rendered or converted on the way, so
+            everything travels.
+          </p>
+          <p>
+            <strong>Book → Export as Markdown</strong> writes the book as Markdown for readers. Settings → Export
+            writes Markdown too.
+          </p>
+
+          <h2 id="keyboard">Keyboard</h2>
+          <p>
+            Triage and the reader are keyboard-first by design. Triage keys apply while the triage dialog is open;
+            Alt+Left and Alt+Right move between chapters from anywhere in the app.
+          </p>
+
+          <h3 class="kb-group">In triage</h3>
+          <ul class="keylist">
+            <li>
+              <span class="keylist__keys"><kbd>Enter</kbd></span>
+              <span class="keylist__what">Accept the name as shown.</span>
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>1–9</kbd></span>
+              <span class="keylist__what">Accept the name as one of the five types.</span>
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>←</kbd> <kbd>→</kbd></span>
+              <span class="keylist__what">Change which type it will be accepted as.</span>
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>L</kbd></span>
+              <span class="keylist__what">Later: the name waits in Review › New names.</span>
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>X</kbd></span>
+              <span class="keylist__what"
+                >Ignore: the name stays silent, and Review › Rejected can restore it.</span
+              >
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>Esc</kbd></span>
+              <span class="keylist__what">Close triage.</span>
+            </li>
+          </ul>
+
+          <p>
+            These eleven are the app's own shortcuts, and each one can be changed in Settings → Keyboard. They are
+            listed there in the same three groups.
+          </p>
+
+          <h3 class="kb-group">Book</h3>
+          <ul class="keylist">
+            <li>
+              <span class="keylist__keys"><kbd>Ctrl+O</kbd></span>
+              <span class="keylist__what">Open book.</span>
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>Ctrl+N</kbd></span>
+              <span class="keylist__what">New book.</span>
+            </li>
+          </ul>
+
+          <h3 class="kb-group">Chapter</h3>
+          <ul class="keylist">
+            <li>
+              <span class="keylist__keys"><kbd>Ctrl+K</kbd></span>
+              <span class="keylist__what">Quick open.</span>
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>Alt+Left</kbd></span>
+              <span class="keylist__what">Previous chapter.</span>
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>Alt+Right</kbd></span>
+              <span class="keylist__what">Next chapter.</span>
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>Ctrl+S</kbd></span>
+              <span class="keylist__what">Save chapter.</span>
+            </li>
+          </ul>
+
+          <h3 class="kb-group">Window</h3>
+          <ul class="keylist">
+            <li>
+              <span class="keylist__keys"><kbd>Ctrl+=</kbd></span>
+              <span class="keylist__what">Zoom in.</span>
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>Ctrl+-</kbd></span>
+              <span class="keylist__what">Zoom out.</span>
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>Ctrl+0</kbd></span>
+              <span class="keylist__what">Actual size.</span>
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>F11</kbd></span>
+              <span class="keylist__what">Full screen.</span>
+            </li>
+            <li>
+              <span class="keylist__keys"><kbd>Ctrl+Q</kbd></span>
+              <span class="keylist__what">Quit DocWriter.</span>
+            </li>
+          </ul>
+
+          <p class="keynote">
+            All eleven are listed under Settings → Keyboard, where each one can be rebound or put back to its default.
+            A chord needs Ctrl, Alt or an F-key, and a combination already in use is refused with the name of the
+            shortcut that owns it. Copy, paste, undo and reload are refused at the capture box, because shadowing them
+            would break editing. Escape, Tab and the arrows inside a list belong to whatever has focus, and are not
+            rebindable.
+          </p>
+
+          <h2 id="limits">Known limits</h2>
+          <ul class="limits">
+            <li>
+              The Windows build is unsigned, so SmartScreen warns once on first run. There is no macOS build yet, and
+              no auto-update — each release is a fresh download.
+            </li>
+            <li>
+              The desktop entry generated for the AppImage runs <code>AppRun --no-sandbox %U</code>. That is Electron's
+              sandbox opted out of for desktop-launched runs — acceptable for an offline local app, and still what the
+              file says.
+            </li>
+          </ul>
+
+          <a class="back" href="./index.html">← Back to the overview</a>
+        </div>
+      </div>
+    </main>
+
+    <footer class="site-foot">
+      <div class="wrap">
+        <div class="site-foot__grid">
+          <div>
+            <span class="brand">DocWriter</span>
+            <p class="foot-note">
+              An offline writing companion. The draft stays where it is; the bible lives in one file you own.
+            </p>
+          </div>
+          <nav class="foot-nav" aria-label="Footer">
+            <ul>
+              <li><a href="./index.html">Overview</a></li>
+              <li>
+                <a href="https://github.com/Rjbanti420/docwriter/releases" target="_blank" rel="noopener">
+                  Release notes<span class="sr-only"> (opens GitHub in a new tab)</span>
+                </a>
+              </li>
+              <li>
+                <a href="https://github.com/Rjbanti420/docwriter" target="_blank" rel="noopener">
+                  GitHub<span class="sr-only"> (opens GitHub in a new tab)</span>
+                </a>
+              </li>
+              <li>
+                <a href="https://github.com/Rjbanti420/docwriter/blob/master/LICENSE" target="_blank" rel="noopener">
+                  MIT license<span class="sr-only"> (opens GitHub in a new tab)</span>
+                </a>
+              </li>
+            </ul>
+          </nav>
+        </div>
+        <p class="fineprint">No account. No sync. No telemetry. One SQLite file per book. · Windows x64 and Linux x64</p>
+      </div>
+    </footer>
+  </body>
+</html>

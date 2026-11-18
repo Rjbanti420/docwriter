@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DocWriter — paste a chapter, keep the bible</title>
+    <meta
+      name="description"
+      content="An offline writing companion for novelists. Paste a chapter and DocWriter turns its names, places and things into a typed, cross-linked story bible, stored in one file on your machine. Windows installer and Linux AppImage/.deb; no account, no sync, no telemetry."
+    />
+    <meta name="theme-color" content="#e8e4db" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <div class="wrap masthead__inner">
+        <a class="brand" href="./index.html">DocWriter</a>
+        <nav class="nav" aria-label="Primary">
+          <ul>
+            <li><a href="#loop">Loop</a></li>
+            <li><a href="#features">Features</a></li>
+            <li><a href="./guide.html">Guide</a></li>
+          </ul>
+        </nav>
+        <a class="pill-link" href="https://github.com/Rjbanti420/docwriter/releases" target="_blank" rel="noopener">
+          Download<span class="sr-only"> (opens the GitHub releases page in a new tab)</span>
+        </a>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="wrap hero__grid">
+          <div class="hero__copy">
+            <h1 id="hero-title">DocWriter</h1>
+            <p class="hero__promise">Paste a chapter. Triage the names. Keep the bible in one file you own.</p>
+            <div class="actions">
+              <a class="btn btn--primary" href="https://github.com/Rjbanti420/docwriter/releases" target="_blank" rel="noopener">
+                Download for Windows<span class="sr-only"> (opens the GitHub releases page in a new tab)</span>
+              </a>
+              <a class="btn" href="#loop">See how it works</a>
+            </div>
+            <p class="hero__meta">Also for Linux · MIT · No account, no telemetry</p>
+          </div>
+
+          <figure class="hero__figure">
+            <div class="frame">
+              <img
+                src="./src/assets/screens/read-sepia-1440.png"
+                width="920"
+                height="510"
+                fetchpriority="high"
+                decoding="async"
+                alt="DocWriter's Read view in the Sepia theme: a chapter of prose with character and place names underlined in their type colours."
+              />
+            </div>
+            <figcaption>
+              The Read view in Sepia. Known names carry an underline in their type's colour; names still waiting for a
+              decision stay dotted.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section section--ruled" id="problem" aria-labelledby="problem-title">
+        <div class="wrap split">
+          <p class="kicker split__label">The problem</p>
+          <div class="prose">
+            <h2 class="h2" id="problem-title">The story outgrows the notes.</h2>
+            <p>
+              Three chapters in, the names start to drift. Was the harbourmaster Halden or Haldane? Which of the six
+              notes files has the scene where the ferry burns? You mean to write it all down, and then you would
+              rather be writing <em>the book</em>.
+            </p>
+            <p>
+              You also do not want to move the manuscript. It lives in Word, or Scrivener, or a folder of text files —
+              wherever it has become home. No note-taking app has ever been worth moving the book out for.
+            </p>
+            <p>
+              So DocWriter asks for one thing: paste the chapter. It reads the names out of prose you already wrote and
+              keeps the record beside it — not in an account, not in the cloud, in a file on your own disk.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--ruled" id="loop" aria-labelledby="loop-title">
+        <div class="wrap">
+          <p class="kicker">The loop</p>
+          <h2 class="h2" id="loop-title">Four steps, then back to the draft.</h2>
+          <p class="lede">
+            Every chapter takes the same short trip. The first time a name appears DocWriter asks about it; after that
+            it links the name silently and stays out of the way.
+          </p>
+
+          <ol class="steps">
+            <li class="step" data-reveal>
+              <figure class="step__media frame">
+                <img
+                  src="./src/assets/screens/paste-sepia-1440.png"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  decoding="async"
+                  alt="Pasting a chapter into DocWriter in the Sepia theme, with the chapter's text in the paste field."
+                />
+              </figure>
+              <div class="step__text">
+                <span class="step__num">01 — Paste</span>
+                <h3>Paste a chapter</h3>
+                <p>
+                  Paste the chapter into DocWriter; the text is stored as a revision and scanned for capitalised name
+                  candidates.
+                </p>
+              </div>
+            </li>
+
+            <li class="step" data-reveal>
+              <figure class="step__media frame">
+                <img
+                  src="./src/assets/screens/triage-sepia-1440.png"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  decoding="async"
+                  alt="The triage dialog over a chapter in Sepia, showing a detected name with the sentence around it, the type choices, and the key legend along the bottom."
+                />
+              </figure>
+              <div class="step__text">
+                <span class="step__num">02 — Triage</span>
+                <h3>Triage the queue</h3>
+                <p>
+                  Each candidate arrives with the sentence around it — Enter keeps it, 1–9 keeps it as a type, L leaves
+                  it for later and X ignores it.
+                </p>
+                <ul class="keys">
+                  <li><kbd>Enter</kbd> keep</li>
+                  <li><kbd>1–9</kbd> as a type</li>
+                  <li><kbd>←</kbd><kbd>→</kbd> change type</li>
+                  <li><kbd>L</kbd> later</li>
+                  <li><kbd>X</kbd> ignore</li>
+                  <li><kbd>Esc</kbd> close</li>
+                </ul>
+              </div>
+            </li>
+
+            <li class="step" data-reveal>
+              <figure class="step__media frame">
+                <img
+                  src="./src/assets/screens/cards-sepia-1440.png"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  decoding="async"
+                  alt="The Bible in Sepia: typed entity cards for characters, places and items, each with its type's colour and name."
+                />
+              </figure>
+              <div class="step__text">
+                <span class="step__num">03 — Cards</span>
+                <h3>Typed cards</h3>
+                <p>
+                  Keeping a name makes a card — Character, Location, Country, Organisation or Item — with any aliases
+                  and every appearance kept on a mention trail.
+                </p>
+              </div>
+            </li>
+
+            <li class="step" data-reveal>
+              <figure class="step__media frame">
+                <img
+                  src="./src/assets/screens/read-sepia-760.png"
+                  width="760"
+                  height="900"
+                  loading="lazy"
+                  decoding="async"
+                  alt="The reader at 760 pixels wide in Sepia: a single column of chapter prose with linked names underlined."
+                />
+              </figure>
+              <div class="step__text">
+                <span class="step__num">04 — Read</span>
+                <h3>Read with names linked</h3>
+                <p>
+                  The reader shows the chapter with known names underlined in their type's colour, and names still to
+                  triage left dotted.
+                </p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section section--ruled" id="features" aria-labelledby="features-title">
+        <div class="wrap">
+          <p class="kicker">Features</p>
+          <h2 class="h2" id="features-title">Everything it does, and nothing else.</h2>
+          <p class="lede">
+            No dashboard to feed, no second place to keep your notes. Each of these is in the app as it ships.
+          </p>
+
+          <ul class="index">
+            <li class="index__row" data-reveal>
+              <h3 class="index__name">Offline &amp; local</h3>
+              <p class="index__body">
+                No account, no sync, no telemetry, and no network calls beyond the localhost port the app serves
+                itself. One SQLite file per book, on your disk.
+              </p>
+            </li>
+
+            <li class="index__row" data-reveal>
+              <h3 class="index__name">One file per book</h3>
+              <p class="index__body">
+                The Book menu holds four rows: New book…, Open book…, Export book file (.db) and Export as Markdown.
+                About shows which file is open; Settings → Export writes Markdown for readers.
+              </p>
+            </li>
+
+            <li class="index__row" data-reveal>
+              <h3 class="index__name">Paste-to-scan detection</h3>
+              <p class="index__body">
+                Capitalised words become candidates. A bundled dictionary of about 275,000 words demotes the plainly
+                common ones — a demotion, never a hard drop, so Grace and Rose survive. Dialogue attribution, type
+                keywords and repetition promote the rest; weak names wait behind “Show more low-confidence”.
+              </p>
+            </li>
+
+            <li class="index__row" data-reveal>
+              <h3 class="index__name">Triage</h3>
+              <p class="index__body">
+                A candidate arrives with the sentence around it, the whole key legend, and a same-thing/different
+                question when a name looks like one you already have. Same thing stores it as an alias; ignoring leaves
+                an Undo line behind.
+              </p>
+            </li>
+
+            <li class="index__row" data-reveal>
+              <h3 class="index__name">Typed cards</h3>
+              <p class="index__body">
+                Five types, aliases, a mention trail per card, and optional tracking — off, reappearance or absence —
+                against a gap threshold you set. A card that loses its last mention goes to Trash, not away.
+              </p>
+            </li>
+
+            <li class="index__row index__row--plate" data-reveal>
+              <h3 class="index__name">Planning</h3>
+              <p class="index__body">Chekhov's guns, the questions the prose raises, and duels.</p>
+              <figure class="index__plate frame frame--plate">
+                <img
+                  src="./src/assets/screens/planning-sepia-1440.png"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  decoding="async"
+                  alt="DocWriter's Planning view in Sepia, showing Chekhov's guns as cards."
+                />
+              </figure>
+            </li>
+
+            <li class="index__row index__row--plate" data-reveal>
+              <h3 class="index__name">Timeline</h3>
+              <p class="index__body">
+                The Map's story-day rail, and the authored Story chronology with its Day N badges.
+              </p>
+              <figure class="index__plate frame frame--plate">
+                <img
+                  src="./src/assets/screens/timeline-sepia-1440.png"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  decoding="async"
+                  alt="The Timeline's Map in Sepia: a story-day rail of events, each with its day, story time and chapter anchor."
+                />
+              </figure>
+            </li>
+
+            <li class="index__row index__row--plate" data-reveal>
+              <h3 class="index__name">Settings</h3>
+              <p class="index__body">
+                Theme, density, profile, export, backup, and the keyboard — eleven shortcuts you can rebind.
+              </p>
+              <figure class="index__plate frame frame--plate">
+                <img
+                  src="./src/assets/screens/settings-sepia-1440.png"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  decoding="async"
+                  alt="The Settings page in Sepia, showing the Look, Profile and Export cards."
+                />
+              </figure>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="band" id="lights" aria-labelledby="lights-title">
+        <div class="wrap">
+          <p class="kicker">Three lights</p>
+          <h2 class="h2" id="lights-title">Sepia to read by. Mocha at night.</h2>
+          <p class="lede">
+            Three themes ship with the app and are set per book. The reader above is Sepia; here it is in the other
+            two.
+          </p>
+
+          <div class="lights">
+            <figure class="light" data-reveal>
+              <div class="frame">
+                <img
+                  src="./src/assets/screens/read-light-1440.png"
+                  width="870"
+                  height="350"
+                  loading="lazy"
+                  decoding="async"
+                  alt="The same chapter in the Light theme: dark ink on a pale fog background, with linked names underlined."
+                />
+              </div>
+              <figcaption>Light</figcaption>
+            </figure>
+
+            <figure class="light" data-reveal>
+              <div class="frame">
+                <img
+                  src="./src/assets/screens/read-mocha-1440.png"
+                  width="870"
+                  height="350"
+                  loading="lazy"
+                  decoding="async"
+                  alt="The same chapter in the Mocha theme: pale ink on dark harbor surfaces, with linked names underlined."
+                />
+              </div>
+              <figcaption>Mocha</figcaption>
+            </figure>
+          </div>
+          <p class="lights__note">Same paragraph in both: compare the ink and the page surface, not the words.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-foot">
+      <div class="wrap">
+        <div class="site-foot__grid">
+          <div>
+            <span class="brand">DocWriter</span>
+            <p class="foot-note">
+              An offline writing companion. The draft stays where it is; the bible lives in one file you own.
+            </p>
+          </div>
+          <nav class="foot-nav" aria-label="Footer">
+            <ul>
+              <li><a href="./guide.html">How it works</a></li>
+              <li>
+                <a href="https://github.com/Rjbanti420/docwriter/releases" target="_blank" rel="noopener">
+                  Release notes<span class="sr-only"> (opens GitHub in a new tab)</span>
+                </a>
+              </li>
+              <li>
+                <a href="https://github.com/Rjbanti420/docwriter" target="_blank" rel="noopener">
+                  GitHub<span class="sr-only"> (opens GitHub in a new tab)</span>
+                </a>
+              </li>
+              <li>
+                <a href="https://github.com/Rjbanti420/docwriter/blob/master/LICENSE" target="_blank" rel="noopener">
+                  MIT license<span class="sr-only"> (opens GitHub in a new tab)</span>
+                </a>
+              </li>
+            </ul>
+          </nav>
+        </div>
+        <p class="fineprint">No account. No sync. No telemetry. One SQLite file per book. · Windows x64 and Linux x64</p>
+      </div>
+    </footer>
+  </body>
+</html>
