@@ -5,7 +5,7 @@ two pages, no server, no forms, no analytics. Nothing here runs at runtime.
 
 - `index.html` — one page with anchor nav: hero, the problem, the four-step loop, features, footer.
 - `guide.html` — first run, where the book file lives, backup/export, the full keyboard table, known limits.
-- Deploy target: the custom domain **`www.docwriter.app`** (`public/CNAME`). The Vite base path defaults to `/` and is configurable via `VITE_BASE` for a subpath mirror.
+- Deploy target: **GitHub Pages** at `https://rjbanti420.github.io/docwriter/`, built by `.github/workflows/site.yml` with `VITE_BASE=/docwriter/`. The custom domain `www.docwriter.app` is not live (no DNS records) — see *Deploy* below for what changes when it is.
 
 ## Preview
 
@@ -35,31 +35,22 @@ To check a subpath deploy locally:
 VITE_BASE=/docwriter/ npm run build
 ```
 
-## Deploy to GitHub Pages
+## Deploy
 
-The Pages source is the `gh-pages` branch; the custom domain is set by the
-`CNAME` file copied from `public/` into `dist/` on every build. From the repo root:
+`.github/workflows/site.yml` builds `site/` and publishes it to GitHub Pages on
+every push that touches `site/**` (and on demand via *Run workflow*). Pages'
+source is **GitHub Actions**; there is no `gh-pages` branch and no CNAME file,
+because the site is served from the project subpath `rjbanti420.github.io/docwriter/`.
 
-```bash
-cd /home/rj/docwriter
-npm --prefix site install
-npm --prefix site run build
-npx --yes gh-pages@6 -d site/dist
-```
+The base path lives in the workflow (`VITE_BASE=/docwriter/`), not in
+`vite.config.ts` — the config still defaults to `/`, so a build without that
+variable is ready for a domain-root deploy.
 
-`gh-pages` creates or updates the `gh-pages` branch at `origin` and pushes it.
-In the GitHub repo, set **Settings → Pages → Build and deployment → Source** to
-"Deploy from a branch", branch `gh-pages`, folder `/ (root)`. Keep the custom
-domain `www.docwriter.app` in the Pages settings and leave "Enforce HTTPS" on.
-
-If you prefer to publish without `npx`:
-
-```bash
-git worktree add -B gh-pages /tmp/docwriter-pages
-cp -R site/dist/. /tmp/docwriter-pages/
-cd /tmp/docwriter-pages
-git add -A && git commit -m "Deploy DocWriter site" && git push -f origin gh-pages
-```
+**When `www.docwriter.app` exists:** add a `public/CNAME` containing the domain,
+set `VITE_BASE` to `/` in the workflow, and point DNS at Pages
+(`185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`, plus
+a `www` CNAME to `rjbanti420.github.io`). Until then the CNAME file would make
+every visitor 404, which is why it was removed.
 
 ## Where the screenshots came from
 
@@ -76,7 +67,7 @@ names the book from its filename. No app source file was changed.
 
 | File | View | Theme | Width |
 | --- | --- | --- | --- |
-| `read-sepia-1440.png` | Read (hero, cropped to the reading column) | Sepia | 920×510 crop |
+| `read-sepia-1440.png` | Read (hero, cropped to the reading column) | Sepia | 1840×1020, shown at 920×510 |
 | `read-sepia-760.png` | Read | Sepia | 760 |
 | `read-light-1440.png` | Read (theme strip, same paragraph as Mocha) | Light | 870×350 crop |
 | `read-mocha-1440.png` | Read (theme strip, same paragraph as Light) | Mocha | 870×350 crop |
@@ -89,19 +80,23 @@ names the book from its filename. No app source file was changed.
 
 The three Read images were cropped from their original 1440×900 viewport captures
 after a design critique found them too small to read at display size: the hero is
-cropped to the manuscript page (legend, drop cap, dotted and solid linked names),
+cropped to the manuscript page (kicker, drop cap, dotted and solid linked names),
 and the Light/Mocha pair is cropped to the identical paragraph so the two themes
 can be compared directly. Cropping also cut their combined weight from ~410 KB to
 ~121 KB.
 
-To re-capture them, run the app on `:5173` with a disposable `DOCWRITER_DB`,
-dismiss the export reminder, set `data-theme` to the wanted theme, and capture
-the viewport with `Page.captureScreenshot`, then re-apply the crops above.
+To re-capture them, run the app with a disposable `DOCWRITER_DB` (`npm run build`
+plus `PORT=5181 DOCWRITER_DB=… node server/index.mjs` is enough — no dev server
+needed), dismiss the export reminder, set the theme in the book's `meta` table
+before starting, and capture with `Page.captureScreenshot`. The hero is a
+`deviceScaleFactor: 2` capture cropped to the `.paper` column, which is why it is
+1840 px wide for a 920 px slot. The other images are `deviceScaleFactor: 1` whole
+viewports.
 
 ## Deliberately left out
 
 - No testimonials, benchmarks, pricing, AI claims or comparison to other products.
 - No feature that is not in `PRODUCT.md`, `README.md` or `HANDOFF.md` §97–100, or visible in the app.
 - No relationship graph or link editor: removed from the app's UI, so not advertised.
-- No Windows/macOS build, no auto-update, no account or sync: stated as limits on the guide page.
+- No macOS build, no auto-update, no account or sync: stated as limits on the guide page.
 - No analytics, tracking or web fonts beyond the four families the app already ships.
