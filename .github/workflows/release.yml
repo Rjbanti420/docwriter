@@ -42,6 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # There is no checkout here, so gh has no git remote to infer from.
+      GH_REPO: ${{ github.repository }}
     steps:
       - run: |
           gh release download "$GITHUB_REF_NAME" --dir assets
