@@ -1230,3 +1230,12 @@ folder that still held an open SQLite handle, and the copy the second test opens
 worse. One hook now closes every handle the test opened and then removes the folder; the
 second test hands its extra connections to that list instead of its own hook. Green on Linux
 (214/214), and the tag moved rather than a new patch number.
+
+**The checksum job failed once before it worked, and the run that followed was green on all
+three jobs.** `gh release download` died with `fatal: not a git repository`: that job has no
+checkout, so `gh` had nothing to infer the repository from, and `GITHUB_REPOSITORY` is not a
+variable it reads. `GH_REPO: ${{ github.repository }}` fixed it. `SHA256SUMS.txt` now covers
+the two Windows files, the AppImage and the `.deb`, and the draft carries all five artifacts
+with notes attached — still a draft, since publishing is the owner's click.
+
+`v1.1.0` points at `3fff52f`; master is one docs commit ahead of it, which is deliberate.
