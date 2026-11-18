@@ -154,7 +154,7 @@ export default function BibleView({
             onClick={() => setCompact((v) => !v)}
             title={compact ? 'Show full cards' : 'Show compact rows'}
           >
-            {compact ? 'Cards' : 'Compact'}
+            {compact ? 'Card size: Roomy' : 'Card size: Compact'}
           </button>
           {selectMode ? (
             <>

@@ -1,4 +1,5 @@
 import type {
+  BackupState,
   Chapter,
   Duel,
   DuelCreatePayload,
@@ -208,6 +209,8 @@ export const api = {
     }
     return saved;
   },
+  /** Snapshots kept beside the book, newest first. */
+  backups: () => req<BackupState>('/backups'),
   // The backup is a whole SQLite file, not JSON, so it bypasses req() and saves
   // the bytes straight to disk.
   backup: async () => {

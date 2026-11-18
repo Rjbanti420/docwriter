@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { randomInt } from 'node:crypto';
 import { db, dbPath, migrate } from './db.mjs';
+import { backupBook, backupsDir, listBackups } from './backup.mjs';
 import { detect, normalizeKey, findLookalike, buildLookalikeIndex } from './detect.mjs';
 import { mergeFields, newAliasList, repointReferences } from './entitymerge.mjs';
 import {
@@ -33,6 +34,14 @@ const ENGLISH_WORDS = new Set(require('an-array-of-english-words'));
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 migrate();
+
+// The writer never has to remember a backup: the day's snapshot is taken on
+// the way up, beside the book. A failure here must not stop the app opening.
+try {
+  backupBook(db, dbPath);
+} catch (e) {
+  console.error('[backup] startup snapshot failed:', e);
+}
 
 const app = express();
 
@@ -2311,6 +2320,17 @@ app.get('/api/backup', (_req, res) => {
     rmSync(target, { force: true });
     if (err && !res.headersSent) res.status(500).json({ error: String(err) });
   });
+});
+
+// Snapshots kept beside the book. Reading this is also the cheapest moment to
+// make sure today has one, so Settings always reports a real file.
+app.get('/api/backups', (_req, res) => {
+  try {
+    backupBook(db, dbPath);
+    res.json({ dir: backupsDir(dbPath), backups: listBackups(dbPath) });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
 });
 
 // ---------- Markdown export ----------

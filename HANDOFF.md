@@ -1146,3 +1146,38 @@ was unpacked and checked: control carries MIT/maintainer/deps, `postinst` links
 unlike the AppImage's), and `resources/app/package.json` is 1.0.0. Publishing the draft is
 the owner's click. Auto-update would only need `electron-updater` plus a publish block;
 `resources/app-update.yml` is already generated.
+
+## 101) 1.0.1 — backups, a first-run proof, and the last four polish items
+The first release asked the writer to remember two things: to export, and to know what the
+app was for before using it. Both are now the app's job.
+
+**Backups are automatic.** `server/backup.mjs` takes one snapshot a day beside the book —
+`backups/<book>-YYYY-MM-DD.db` — using `VACUUM INTO`, the same call `/api/backup` already
+made, because a plain file copy drops the `-wal` and with it the day's writing. It runs on
+startup and again whenever `GET /api/backups` is read (Settings → Backup asks), so a
+long-running window is never reporting a stale file. Nothing is written for a book with no
+chapters; the last five snapshots are kept. Files carry the book's own name: two books in
+one folder must not see each other's copies (the first version got this wrong, and a test
+now pins it). A failed snapshot logs and lets the app open.
+
+**A blank book now proves itself.** The Read empty state offers **Try a sample chapter**
+beside Paste: `src/sample.ts` holds a 122-word scene ("The Drowned Bell", four names, one
+dialogue attribution), App adds it through the ordinary `addChapter` path, and triage opens
+on what was found. No special-casing in the views beyond the second callback, and the same
+path a pasted chapter takes — so the first click exercises the real loop. README now leads
+with `docs/read.png` and shows `docs/review.png` in the loop; both are the sample chapter in
+Sepia at 1280×820.
+
+**The measured leftovers are closed.** Review's name button is a 34px target, "Why this
+name?" is a 34px summary (8+18+8, text still 12px), and each row checkbox is wrapped in a
+34px label whose negative margins keep the column width, so names did not move; the same
+`min-height` on `.dw-check` covers every Select-all. Bible's toggle now reads "Card size:
+Compact / Roomy", which leaves "Compact" meaning only interface density in Settings.
+Planning's summary counts duels. Organisation's `#7c3aed` violet became the palette's
+`#35597e` harbour blue, and a migration moves existing books only when the colour is still
+that untouched default.
+
+**Version** is 1.0.1 in `package.json` and the lock. README install commands and the
+known-limits list are updated to match (the three fixed limits are gone; Linux-only and the
+AppImage's FUSE requirement remain). Deferred on purpose: auto-update, Windows, macOS, and
+the permanent-ignore undo in the triage modal (a Review restore already exists).

@@ -1843,6 +1843,10 @@ textarea:focus {
   font-weight: 600;
 }
 .cand-name-btn {
+  /* Pointer work is the whole job here: the name is the row's main target. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
   padding: 0;
   border: 0;
   background: none;
@@ -1860,9 +1864,12 @@ textarea:focus {
   font-weight: 400;
 }
 .cand-why {
-  margin-top: 8px;
+  margin-top: 0;
 }
 .cand-why summary {
+  /* 34px hit row (8 + 18 + 8); the padding is the target, the text stays 12px. */
+  padding: 8px 0;
+  line-height: 18px;
   font-size: 12px;
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -3028,6 +3035,7 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-height: 34px;
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -3057,9 +3065,19 @@ textarea:focus {
   width: auto;
   height: auto;
 }
-/* Sit the row checkbox on the candidate's name line, not the card's top edge. */
-.cand-row.with-select > input[type='checkbox'] {
-  margin-top: 6px;
+/* The 13px box is the visual; the label around it is the 34px hit area. The
+   negative margin keeps the column the width it was, so names do not shift. */
+.cand-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10.5px;
+  margin: -10.5px;
+}
+.cand-check input[type='checkbox'] {
+  width: auto;
+  height: auto;
+  margin: 0;
 }
 .dw-trash__body {
   flex: 1;

@@ -67,12 +67,14 @@ function CandidateRow({
         }
       >
         {onToggle && (
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={() => onToggle(c.id)}
-            aria-label={`Select ${c.surface_text}`}
-          />
+          <label className="cand-check">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => onToggle(c.id)}
+              aria-label={`Select ${c.surface_text}`}
+            />
+          </label>
         )}
         <div>
           <div className="cand-name">

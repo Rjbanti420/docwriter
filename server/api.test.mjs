@@ -437,6 +437,29 @@ test('GET /api/backup returns a whole, valid database', async (t) => {
   assert.equal(integrity, 'ok');
 });
 
+test('GET /api/backups keeps a real snapshot beside the book', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '1', title: 'One', text: 'Kael drew the blade. Kael ran.' },
+  });
+
+  const state = await call(srv.base, '/api/backups');
+  assert.equal(state.dir, join(srv.dir, 'backups'));
+  assert.equal(state.backups.length, 1);
+  assert.match(state.backups[0].name, /^book-\d{4}-\d{2}-\d{2}\.db$/);
+
+  const check = new DatabaseSync(state.backups[0].path, { readOnly: true });
+  assert.equal(check.prepare('SELECT COUNT(*) AS n FROM chapters').get().n, 1);
+  check.close();
+
+  // Asking twice must not pile up snapshots.
+  const again = await call(srv.base, '/api/backups');
+  assert.equal(again.backups.length, 1);
+});
+
 test('GET /api/projects answers instead of throwing', async (t) => {
   const srv = await startServer();
   t.after(srv.stop);

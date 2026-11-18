@@ -18,6 +18,7 @@ import TimelineView from './views/TimelineView';
 import SettingsView from './views/SettingsView';
 import { bindings, loadBindings, matchesAccelerator } from './shortcuts';
 import { openBookAt, pickBook } from './desktop';
+import { SAMPLE_CHAPTER } from './sample';
 
 function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -486,6 +487,9 @@ export default function App() {
     },
     [refresh, rememberChapter, writeDetail]
   );
+
+  // A blank book is one click from seeing the whole loop: paste, triage, cards.
+  const addSample = useCallback(() => addChapter({ ...SAMPLE_CHAPTER }), [addChapter]);
 
   // The text was already committed by saveChapter; this second request fills in
   // mentions, candidates and alerts without holding the editor open.
@@ -987,6 +991,7 @@ export default function App() {
               onOpenEntity={(id) => setEntityId(id)}
               onOpenCandidate={openCandidate}
               onAdd={openAdd}
+              onSample={addSample}
             />
           ))}
 

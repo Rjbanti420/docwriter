@@ -5,6 +5,8 @@ A writing app for novelists/worldbuilders. You keep writing in Word (or anywhere
 names, and triages them into a typed, cross-linked **worldbible**. It gets quieter the
 more you use it: once a name is known, future mentions are linked silently.
 
+![Reading a chapter in DocWriter: known names are solid-underlined, untriaged ones dotted](docs/read.png)
+
 ## Download and install
 
 DocWriter ships as a Linux desktop app (x64). Take the latest from
@@ -13,14 +15,14 @@ DocWriter ships as a Linux desktop app (x64). Take the latest from
 **AppImage — no install:**
 
 ```bash
-chmod +x DocWriter-1.0.0.AppImage
-./DocWriter-1.0.0.AppImage
+chmod +x DocWriter-1.0.1.AppImage
+./DocWriter-1.0.1.AppImage
 ```
 
 **.deb — installs a launcher entry (Debian/Ubuntu):**
 
 ```bash
-sudo apt install ./DocWriter-1.0.0.deb
+sudo apt install ./docwriter_1.0.1_amd64.deb
 ```
 
 Everything runs on your machine: no account, no network calls, no telemetry.
@@ -28,15 +30,18 @@ Everything runs on your machine: no account, no network calls, no telemetry.
 **Your book is one file.** First launch gives you an empty book at
 `~/.config/DocWriter/docwriter.db`. *Book → New book…* starts another, *Book → Open book…*
 switches to any file, and *Book → Export book file (.db)* writes a copy you can carry to
-another computer. Settings → Export writes Markdown for readers. The About dialog shows
-which file is open.
+another computer. A snapshot is saved automatically once a day into `backups/` beside the
+book (the last five are kept), so a lost file is not a lost book. Settings → Export writes
+Markdown for readers. The About dialog shows which file is open.
+
+New to the app? On an empty page, **Try a sample chapter** loads a short scene, detects its
+names and opens triage — the whole loop in one click.
 
 ### Known limits
 
 - Linux only for now: no Windows or macOS build, and no auto-update.
-- A few Review controls are smaller than the rest of the app's 34px floor.
-- "Compact" names both Bible card size and interface density in Settings.
-- Planning's summary line counts guns and questions, not duels.
+- The AppImage needs FUSE; `--appimage-extract-and-run` works without it, and the `.deb` avoids
+  the question entirely.
 
 ## Stack
 
@@ -71,7 +76,7 @@ PASTE a chapter → store revision → detect candidates
   ├─ new name?  → triage (Accept / Later / Ignore)
   │                Accept  → Entity + Mentions created
   │                Later   → Review › New names
-  │                Ignore  → silent forever (ignored_tokens)
+  │                Ignore  → silent forever ("Ignore for good", restorable from Rejected)
   ├─ known name? → auto-link, add Mention (silent)
   └─ tracked trails → Review › Trail alerts (reappeared / dormant)
 ```
@@ -87,6 +92,8 @@ PASTE a chapter → store revision → detect candidates
   required gap threshold.
 - **Delete chapter** cascades its mentions/scans/alerts and asks keep-gap vs renumber. A card
   that loses its only appearance is moved to **Trash**, not destroyed (recoverable).
+
+![The Review inbox: each new name with its evidence, a type guess, and one decision](docs/review.png)
 
 ## Cutting the noise
 

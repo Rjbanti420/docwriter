@@ -309,6 +309,13 @@ export interface ExportMeta {
   due: boolean;
 }
 
+/** Automatic snapshots kept beside the book by the server. */
+export interface BackupState {
+  dir: string;
+  /** Newest first; the server keeps the last few. */
+  backups: { name: string; path: string; size: number; mtime: string }[];
+}
+
 /* ---------- Duels ---------- */
 
 export type DuelRole = 'offense' | 'defense' | 'both' | 'none';

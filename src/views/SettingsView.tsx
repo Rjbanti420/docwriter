@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import type { ExportMeta } from '../types';
+import type { BackupState, ExportMeta } from '../types';
 import { applyDensity, applyFontReading, applyFontUi, applyTheme } from '../appearance';
 import {
   KEY_ACTIONS,
@@ -60,6 +60,7 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [meta, setMeta] = useState<ExportMeta | null>(null);
+  const [backupState, setBackupState] = useState<BackupState | null>(null);
   const [exporting, setExporting] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [notice, setNotice] = useState('');
@@ -93,6 +94,12 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     void loadBindings().then(() => setKeys({ ...bindings() }));
+  }, []);
+
+  // Asking for the list also makes sure today has a snapshot, so this line is
+  // never stale on a long-running window.
+  useEffect(() => {
+    api.backups().then(setBackupState).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -444,6 +451,13 @@ export default function SettingsView({ onClose }: { onClose: () => void }) {
         </p>
         <p className="card-note">
           This book is one file: <code className="book-path">{meta?.bookPath || '…'}</code>
+        </p>
+        <p className="card-note">
+          {backupState?.backups.length
+            ? `An automatic snapshot is taken daily into ${backupState.dir} — the newest is ${new Date(
+                backupState.backups[0].mtime
+              ).toLocaleDateString()}, and the last five are kept.`
+            : 'Automatic snapshots start with your first chapter, and the last five are kept.'}
         </p>
         <p className="card-note">
           To move a book to another computer, take that file with you and choose{' '}

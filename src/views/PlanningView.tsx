@@ -949,7 +949,8 @@ export default function PlanningView({
             {loaded && (
               <>
                 {guns.length} gun{guns.length === 1 ? '' : 's'} · {questions.length} question
-                {questions.length === 1 ? '' : 's'}, {counts.open} still open
+                {questions.length === 1 ? '' : 's'}, {counts.open} still open · {duelCount} duel
+                {duelCount === 1 ? '' : 's'}
               </>
             )}
           </p>

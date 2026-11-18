@@ -303,7 +303,7 @@ CREATE INDEX IF NOT EXISTS idx_gc_normalized ON gun_candidates(normalized);
 const BUILTIN_TYPES = [
   { name: 'Character', icon: '👤', color: '#d97706', hints: ['dialogue', 'frequency', 'name-list'] },
   { name: 'Country', icon: '🏳', color: '#059669', hints: ['kingdom', 'empire', 'republic', 'federation'] },
-  { name: 'Organisation', icon: '🏛', color: '#7c3aed', hints: ['guild', 'order', 'council', 'company'] },
+  { name: 'Organisation', icon: '🏛', color: '#35597e', hints: ['guild', 'order', 'council', 'company'] },
   { name: 'Location', icon: '📍', color: '#0284c7', hints: ['mount', 'river', 'city', 'vale'] },
   { name: 'Item', icon: '🗡', color: '#db2777', hints: [] },
 ];
@@ -331,4 +331,9 @@ export function migrate() {
     );
     BUILTIN_TYPES.forEach((t, i) => insert.run(t.name, t.icon, t.color, JSON.stringify(t.hints), i));
   }
+  // Organisation's violet was the one hue that did not belong to the palette.
+  // Only the untouched default is moved; a writer's own colour is theirs.
+  db.prepare(
+    "UPDATE types SET color = '#35597e' WHERE name = 'Organisation' AND built_in = 1 AND color = '#7c3aed'"
+  ).run();
 }

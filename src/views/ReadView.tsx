@@ -24,6 +24,7 @@ export default function ReadView({
   onOpenEntity,
   onOpenCandidate,
   onAdd,
+  onSample,
 }: {
   chapters: Chapter[];
   entities: Entity[];
@@ -40,6 +41,8 @@ export default function ReadView({
   onOpenEntity: (id: number) => void;
   onOpenCandidate: (id: number) => void;
   onAdd: () => void;
+  /** Adds the bundled sample chapter, so a blank book can show the loop. */
+  onSample: () => Promise<void>;
 }) {
   const [showDelete, setShowDelete] = useState(false);
   const [renumber, setRenumber] = useState(false);
@@ -49,6 +52,8 @@ export default function ReadView({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [sampleBusy, setSampleBusy] = useState(false);
+  const [sampleError, setSampleError] = useState('');
   // The editor owns the text it is showing. App is told only whether it is
   // dirty, so a chapter change cannot quietly overwrite what was typed.
   const [editing, setEditing] = useState(false);
@@ -196,12 +201,35 @@ export default function ReadView({
     return (
       <div className="main-inner">
         <div className="empty-state">
-          No chapters yet.
-          <div style={{ marginTop: 16 }}>
+          No chapters yet. Paste a chapter from your draft — or start with a sample and see
+          what the app does with it.
+          <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <button className="primary" onClick={onAdd}>
               Paste your first chapter
             </button>
+            <button
+              className="btn-secondary"
+              disabled={sampleBusy}
+              onClick={async () => {
+                setSampleBusy(true);
+                setSampleError('');
+                try {
+                  await onSample();
+                } catch {
+                  setSampleError('Could not add the sample chapter.');
+                } finally {
+                  setSampleBusy(false);
+                }
+              }}
+            >
+              {sampleBusy ? 'Adding…' : 'Try a sample chapter'}
+            </button>
           </div>
+          {sampleError && (
+            <p className="card-note" role="alert" style={{ marginTop: 12 }}>
+              {sampleError}
+            </p>
+          )}
         </div>
       </div>
     );
