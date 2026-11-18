@@ -1239,3 +1239,24 @@ the two Windows files, the AppImage and the `.deb`, and the draft carries all fi
 with notes attached — still a draft, since publishing is the owner's click.
 
 `v1.1.0` points at `3fff52f`; master is one docs commit ahead of it, which is deliberate.
+
+## 104) The landing page is live, and it is not on the domain
+`site/` was the last untracked thing in the tree, which is one `git clean` from gone; it is
+committed now. The copy leads Windows — `Download for Windows`, `Also for Linux`, the
+SmartScreen sentence in the guide, `%APPDATA%` beside the XDG path — and the guide's limits
+list lost three bullets 1.0.1 had already fixed (Review's 34px targets, the "Compact" clash,
+Planning counting guns). Those were false claims on a page anyone can read.
+
+Hosting is GitHub Pages through `.github/workflows/site.yml` (source: GitHub Actions), not
+the `gh-pages` branch the site's README used to describe, so the built output never lives in
+git. `www.docwriter.app` has no DNS records at all, so `public/CNAME` was removed: a CNAME file
+for a domain that does not resolve makes every visitor 404. The
+site is served from the project subpath and `VITE_BASE=/docwriter/` lives in the workflow,
+which keeps `vite.config.ts` ready for a domain-root deploy. The repo's homepage field now
+points at the live page.
+
+The hero screenshot was the one image showing a UI that no longer exists (the "Solid
+underlines are names in your Bible" legend, removed in 1.0.1). Re-captured from `data/demo.db`
+copied to a temp file, Sepia, `deviceScaleFactor: 2`, cropped to the `.paper` column and
+downsampled to 1840×1020 for a 920×510 slot. "CHAPTER 1" now sits alone, because the word
+count moved to the end of the chapter.
