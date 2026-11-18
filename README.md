@@ -9,8 +9,13 @@ more you use it: once a name is known, future mentions are linked silently.
 
 ## Download and install
 
-DocWriter ships as a Linux desktop app (x64). Take the latest from
+DocWriter ships for Windows and Linux (x64). Take the latest from
 [Releases](https://github.com/Rjbanti420/docwriter/releases).
+
+**Windows — installer:** run `DocWriter-1.0.1-win-x64.exe`. It is not code-signed, so
+Windows shows "Windows protected your PC" the first time: **More info → Run anyway**. If you
+would rather not run an installer, the `-win-x64.zip` unpacks to a folder with
+`DocWriter.exe` in it.
 
 **AppImage — no install:**
 
@@ -25,7 +30,9 @@ chmod +x DocWriter-1.0.1.AppImage
 sudo apt install ./docwriter_1.0.1_amd64.deb
 ```
 
-Everything runs on your machine: no account, no network calls, no telemetry.
+Everything runs on your machine: no account, no network calls, no telemetry. `SHA256SUMS.txt`
+on the release covers every download — `certutil -hashfile DocWriter-1.0.1-win-x64.exe SHA256`
+on Windows, `sha256sum -c` on Linux.
 
 **Your book is one file.** First launch gives you an empty book at
 `~/.config/DocWriter/docwriter.db`. *Book → New book…* starts another, *Book → Open book…*
@@ -39,7 +46,8 @@ names and opens triage — the whole loop in one click.
 
 ### Known limits
 
-- Linux only for now: no Windows or macOS build, and no auto-update.
+- Windows builds are unsigned, so SmartScreen warns once (see above). There is no macOS
+  build yet, and no auto-update — each release is a fresh download.
 - The AppImage needs FUSE; `--appimage-extract-and-run` works without it, and the `.deb` avoids
   the question entirely.
 
@@ -61,10 +69,12 @@ Then open http://localhost:5173 — a demo chapter is pre-loaded so you can see 
 Other scripts: `npm run build` (production bundle), `npm start` (serve the built app + API
 from `:5178` alone), `npm run dist` (Linux AppImage).
 
-Releases: push a `v*` tag and `.github/workflows/release.yml` runs the tests, builds the
-AppImage **and** the `.deb`, and attaches them to a draft GitHub release. Building the
-`.deb` on Arch locally needs `libxcrypt-compat` for electron-builder's bundled `fpm`; the
-AppImage builds everywhere.
+Releases: push a `v*` tag and `.github/workflows/release.yml` runs the tests on Linux and
+Windows, builds the AppImage, the `.deb`, the Windows installer and the portable zip, and
+attaches them plus a `SHA256SUMS.txt` to a draft GitHub release. Building the `.deb` on Arch
+locally needs `libxcrypt-compat` for electron-builder's bundled `fpm`; the AppImage builds
+everywhere. `npm run dist` builds the AppImage only, and the Windows targets need Windows
+(or Wine).
 
 Set `DOCWRITER_DB=/path/to/copy.db` to point the server at another project file (used by the
 tests so they never touch your real data).

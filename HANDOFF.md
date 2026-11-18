@@ -1181,3 +1181,34 @@ that untouched default.
 known-limits list are updated to match (the three fixed limits are gone; Linux-only and the
 AppImage's FUSE requirement remain). Deferred on purpose: auto-update, Windows, macOS, and
 the permanent-ignore undo in the triage modal (a Review restore already exists).
+
+## 102) Windows — unsigned, on purpose, and free
+Route A for reaching Windows: build it, ship it unsigned, say so out loud. Nothing in the
+app was Linux-specific, so the work was entirely packaging. `package.json` gained a `win`
+block (NSIS installer plus a portable `zip`, x64, `DocWriter-${version}-win-${arch}.${ext}`)
+and `nsis.oneClick: false` so the installer lets the writer pick a folder. The 512²
+`build/icon.png` already existed, and electron-builder derives the `.ico` from it. No
+`publish` block was needed: electron-builder infers GitHub from the `repository` field, the
+same way the Linux job already did.
+
+`release.yml` became a two-OS matrix (`ubuntu-latest` / `windows-latest`, `fail-fast: false`
+so a Windows failure cannot cancel the Linux artifacts) that runs the tests, the build and
+`electron-builder --${{ matrix.platform }} --publish always` on each. A last job, tag pushes
+only, downloads the draft's assets and attaches `SHA256SUMS.txt` covering the AppImage,
+`.deb`, `.exe` and `.zip` — the cheap half of what code signing would buy, and the only
+trust signal available at $0.
+
+README leads Windows with the truth rather than a download link: SmartScreen shows
+"Windows protected your PC" once, **More info → Run anyway**; the zip exists for people who
+will not run an installer; `certutil -hashfile … SHA256` verifies the download. Known limits
+now say "unsigned Windows, no macOS build, no auto-update" instead of "Linux only".
+
+Verified as far as this machine allows: config parses, YAML parses, `electron-builder --win
+--dir` reached win32 packaging and downloaded the Windows Electron before the network timed
+out on the next tool download. NSIS and `rcedit` need Wine or Windows, so the first CI run is
+the real check — including `npm test` on Windows, which has never run there before. The
+`~/.config/docwriter/projects.json` read in `GET /api/projects` stays XDG-only; it is
+read-only, nothing writes it, and on Windows it simply returns an empty list.
+
+Deferred on purpose: code signing (Apple's $99 for macOS, a Windows cert or the free Store
+listing later), arm64, and auto-update.
