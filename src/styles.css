@@ -5177,16 +5177,6 @@ button.primary {
   isolation: isolate;
   animation: dw-rise 0.4s cubic-bezier(0.22, 0.8, 0.24, 1) both;
 }
-.paper::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: 14px -7px -9px 12px;
-  border-radius: inherit;
-  background: color-mix(in srgb, var(--color-paper) 72%, var(--color-border-strong));
-  box-shadow: 0 16px 28px -20px color-mix(in srgb, var(--color-text) 45%, transparent);
-  pointer-events: none;
-}
 
 .overlay,
 .dw-ie-backdrop {
@@ -5266,8 +5256,8 @@ body {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    color-mix(in srgb, var(--color-accent) 55%, transparent) 45%,
-    color-mix(in srgb, var(--color-location) 45%, transparent) 55%,
+    var(--color-border-strong) 45%,
+    var(--color-border) 55%,
     transparent 100%
   );
   background-size: 200% 100%;
