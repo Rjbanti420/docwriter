@@ -8,12 +8,18 @@ import { backupBook, backupsDir, listBackups } from './backup.mjs';
 
 function book(t) {
   const dir = mkdtempSync(join(tmpdir(), 'docwriter-backup-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const path = join(dir, 'book.db');
   const db = new DatabaseSync(path);
-  t.after(() => db.close());
+  const handles = [db];
+  // Windows refuses to delete a folder while a database inside it is still open,
+  // and after hooks run in the order they were added — so one hook closes every
+  // handle the test opened, then removes the folder.
+  t.after(() => {
+    for (const handle of handles) handle.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
   db.exec('CREATE TABLE chapters (id INTEGER PRIMARY KEY, title TEXT)');
-  return { dir, path, db };
+  return { dir, path, db, track: (handle) => handles.push(handle) };
 }
 
 test('an empty book is not worth a snapshot', (t) => {
@@ -23,7 +29,7 @@ test('an empty book is not worth a snapshot', (t) => {
 });
 
 test('the snapshot is a whole database, and one is enough per day', (t) => {
-  const { path, db } = book(t);
+  const { path, db, track } = book(t);
   db.exec("INSERT INTO chapters (title) VALUES ('The Grey Harbour')");
   const now = new Date(2026, 10, 18, 9, 0, 0);
 
@@ -33,7 +39,7 @@ test('the snapshot is a whole database, and one is enough per day', (t) => {
 
   // The copy is a real book, not an empty file.
   const copy = new DatabaseSync(first.path);
-  t.after(() => copy.close());
+  track(copy);
   assert.deepEqual(copy.prepare('SELECT title FROM chapters').get().title, 'The Grey Harbour');
 
   // A second run on the same day must not vacuum again or make a second file.
@@ -43,11 +49,11 @@ test('the snapshot is a whole database, and one is enough per day', (t) => {
 });
 
 test('two books in one folder keep separate snapshots', (t) => {
-  const { path, db } = book(t);
+  const { path, db, track } = book(t);
   db.exec("INSERT INTO chapters (title) VALUES ('One')");
   const other = join(dirname(path), 'other.db');
   const otherDb = new DatabaseSync(other);
-  t.after(() => otherDb.close());
+  track(otherDb);
   otherDb.exec('CREATE TABLE chapters (id INTEGER PRIMARY KEY, title TEXT)');
   otherDb.exec("INSERT INTO chapters (title) VALUES ('Two')");
 
