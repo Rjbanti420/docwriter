@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://rjbanti420.github.io/docwriter/sitemap.xml

@@ -10,8 +10,41 @@
     />
     <meta name="theme-color" content="#e8e4db" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="canonical" href="https://rjbanti420.github.io/docwriter/" />
+    <meta property="og:title" content="DocWriter — paste a chapter, keep the bible" />
+    <meta
+      property="og:description"
+      content="An offline writing companion for novelists. Paste a chapter and DocWriter turns its names, places and things into a typed story bible, stored in one file on your machine."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://rjbanti420.github.io/docwriter/" />
+    <meta property="og:image" content="https://rjbanti420.github.io/docwriter/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="DocWriter — paste a chapter, keep the bible" />
+    <meta
+      name="twitter:description"
+      content="An offline writing companion for novelists. Paste a chapter and DocWriter turns its names, places and things into a typed story bible, stored in one file on your machine."
+    />
+    <meta name="twitter:image" content="https://rjbanti420.github.io/docwriter/og-image.png" />
     <link rel="stylesheet" href="/src/style.css" />
     <script type="module" src="/src/main.ts"></script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "DocWriter",
+        "description": "An offline paste-to-worldbible writing companion for novelists. Paste a chapter, triage the names, keep the bible in one SQLite file.",
+        "operatingSystem": "Windows, Linux",
+        "applicationCategory": "ProductivityApplication",
+        "softwareVersion": "1.1.0",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "license": "https://github.com/Rjbanti420/docwriter/blob/master/LICENSE",
+        "url": "https://rjbanti420.github.io/docwriter/"
+      }
+    </script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -26,9 +59,18 @@
             <li><a href="./guide.html">Guide</a></li>
           </ul>
         </nav>
-        <a class="pill-link" href="https://github.com/Rjbanti420/docwriter/releases" target="_blank" rel="noopener">
-          Download<span class="sr-only"> (opens the GitHub releases page in a new tab)</span>
-        </a>
+        <div class="masthead__actions">
+          <a class="pill-link" data-os-link data-dl="win-exe" href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/DocWriter-1.1.0-win-x64.exe">
+            Download<span class="sr-only"> (direct download)</span>
+          </a>
+          <a class="gh-link" href="https://github.com/Rjbanti420/docwriter" target="_blank" rel="noopener">
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"
+              ><path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
+              /></svg
+            >GitHub<span class="sr-only"> (opens GitHub in a new tab)</span>
+          </a>
+        </div>
       </div>
     </header>
 
@@ -36,15 +78,63 @@
       <section class="hero" aria-labelledby="hero-title">
         <div class="wrap hero__grid">
           <div class="hero__copy">
-            <h1 id="hero-title">DocWriter</h1>
-            <p class="hero__promise">Paste a chapter. Triage the names. Keep the bible in one file you own.</p>
+            <p class="kicker">An offline story bible</p>
+            <h1 id="hero-title">Paste a chapter. Triage the names. Keep the bible in one file you own.</h1>
             <div class="actions">
-              <a class="btn btn--primary" href="https://github.com/Rjbanti420/docwriter/releases" target="_blank" rel="noopener">
-                Download for Windows<span class="sr-only"> (opens the GitHub releases page in a new tab)</span>
+              <a
+                class="btn btn--primary"
+                data-primary
+                data-dl="win-exe"
+                href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/DocWriter-1.1.0-win-x64.exe"
+              >
+                Download for Windows
               </a>
               <a class="btn" href="#loop">See how it works</a>
+              <a class="btn" href="https://github.com/Rjbanti420/docwriter" target="_blank" rel="noopener">
+                View on GitHub<span class="sr-only"> (opens GitHub in a new tab)</span>
+              </a>
             </div>
-            <p class="hero__meta">Also for Linux · MIT · No account, no telemetry</p>
+            <p class="dl-none" data-primary-none hidden>
+              There is no DocWriter build for this system yet. The Windows and Linux downloads are in Other downloads
+              below.
+            </p>
+            <p class="dl-meta">
+              <span>Version <span data-version>1.1.0</span></span>
+              <span data-size-wrap><span aria-hidden="true">·</span> <span data-size>109.4 MB</span></span>
+              <span aria-hidden="true">·</span>
+              <a data-dl="sums" href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/SHA256SUMS.txt">
+                SHA256SUMS.txt<span class="sr-only"> (opens in a new tab)</span>
+              </a>
+            </p>
+            <p class="dl-note">
+              The Windows build is unsigned, so Windows shows “Windows protected your PC” the first time:
+              <strong>More info</strong> → <strong>Run anyway</strong>.
+            </p>
+            <div class="dl-extra">
+              <p class="dl-extra__label">Other downloads</p>
+              <ul class="dl-list" aria-label="Other downloads">
+                <li>
+                  <a data-dl="win-exe" href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/DocWriter-1.1.0-win-x64.exe">
+                    Windows installer (.exe) <span class="dl-list__size" data-size-for="win-exe">109.4 MB</span>
+                  </a>
+                </li>
+                <li>
+                  <a data-dl="win-zip" href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/DocWriter-1.1.0-win-x64.zip">
+                    Windows zip <span class="dl-list__size" data-size-for="win-zip">149.6 MB</span>
+                  </a>
+                </li>
+                <li>
+                  <a data-dl="appimage" href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/DocWriter-1.1.0.AppImage">
+                    Linux AppImage <span class="dl-list__size" data-size-for="appimage">122.9 MB</span>
+                  </a>
+                </li>
+                <li>
+                  <a data-dl="deb" href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/docwriter_1.1.0_amd64.deb">
+                    Linux .deb <span class="dl-list__size" data-size-for="deb">98.0 MB</span>
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
 
           <figure class="hero__figure">
@@ -63,6 +153,31 @@
               decision stay dotted.
             </figcaption>
           </figure>
+        </div>
+      </section>
+
+      <section class="section try-section" id="try" aria-labelledby="try-title">
+        <div class="wrap">
+          <div class="try">
+            <div>
+              <p class="kicker">Try it first</p>
+              <h2 class="h2" id="try-title">Open the sample book before you install anything.</h2>
+              <p class="try__body">
+                One short chapter, already pasted, and 137 cards ready to browse. It is a real book file: open it in
+                DocWriter with <strong>Book → Open book…</strong> and read the chapter beside the bible as it ships.
+              </p>
+              <div class="actions">
+                <a class="btn btn--primary" href="./sample-book.db" download>Download the sample book</a>
+                <a class="btn" href="./guide.html">How to open a book</a>
+              </div>
+            </div>
+            <div class="try__aside">
+              <p class="try__facts"><span>1 chapter</span><span>137 cards</span><span>Five types</span><span>332 KB file</span></p>
+              <p class="try__note">
+                The file is a plain SQLite database. Opening it uploads nothing and needs no install of its own.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -296,13 +411,40 @@
         </div>
       </section>
 
+      <section class="section section--ruled" id="long-books" aria-labelledby="long-books-title">
+        <div class="wrap split">
+          <p class="kicker split__label">Built for long books</p>
+          <div class="prose">
+            <h2 class="h2" id="long-books-title">A book that big stays open.</h2>
+            <p class="long-books__claim">
+              A 2,000-chapter, 5.0-million-word book settles at about 444 MB of memory.
+            </p>
+            <p>
+              The measurement is resident memory after the book has settled. The report calls it an upper estimate
+              rather than a guarantee for every machine, which is the honest way to read it.
+            </p>
+            <p>
+              The current build passes 214 automated tests (<code>npm test</code>, 214/214), including the Windows run.
+            </p>
+            <p>
+              <a
+                href="https://github.com/Rjbanti420/docwriter/blob/master/docs/ram-report.md"
+                target="_blank"
+                rel="noopener"
+                >Read the memory report<span class="sr-only"> (opens GitHub in a new tab)</span></a
+              >
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section class="band" id="lights" aria-labelledby="lights-title">
         <div class="wrap">
           <p class="kicker">Three lights</p>
           <h2 class="h2" id="lights-title">Sepia to read by. Mocha at night.</h2>
           <p class="lede">
-            Three themes ship with the app and are set per book. The reader above is Sepia; here it is in the other
-            two.
+            Three themes ship with the app and are set per book. The reader above is Sepia; below are full 1440×900
+            windows of the same chapter in Light and Mocha, so the ink and the surfaces can be compared directly.
           </p>
 
           <div class="lights">
@@ -310,11 +452,11 @@
               <div class="frame">
                 <img
                   src="./src/assets/screens/read-light-1440.png"
-                  width="870"
-                  height="350"
+                  width="1440"
+                  height="900"
                   loading="lazy"
                   decoding="async"
-                  alt="The same chapter in the Light theme: dark ink on a pale fog background, with linked names underlined."
+                  alt="The same chapter in the Light theme, shown as a full 1440×900 DocWriter window: dark ink on pale fog surfaces."
                 />
               </div>
               <figcaption>Light</figcaption>
@@ -324,17 +466,145 @@
               <div class="frame">
                 <img
                   src="./src/assets/screens/read-mocha-1440.png"
-                  width="870"
-                  height="350"
+                  width="1440"
+                  height="900"
                   loading="lazy"
                   decoding="async"
-                  alt="The same chapter in the Mocha theme: pale ink on dark harbor surfaces, with linked names underlined."
+                  alt="The same chapter in the Mocha theme, shown as a full 1440×900 DocWriter window: pale ink on dark harbour surfaces."
                 />
               </div>
               <figcaption>Mocha</figcaption>
             </figure>
           </div>
-          <p class="lights__note">Same paragraph in both: compare the ink and the page surface, not the words.</p>
+          <p class="lights__note">
+            Both captures are the whole window, scaled down together. Compare the ink, the page and the panel
+            surfaces, not the words.
+          </p>
+        </div>
+      </section>
+
+      <section class="section section--ruled" id="fit" aria-labelledby="fit-title">
+        <div class="wrap">
+          <p class="kicker">Who it is for</p>
+          <h2 class="h2" id="fit-title">A companion, not a word processor.</h2>
+          <p class="lede">
+            DocWriter does one job beside the draft. It is worth knowing what it will not do before you download it.
+          </p>
+
+          <div class="fit">
+            <div class="fit__col">
+              <h3 class="fit__head">It fits if</h3>
+              <ul class="fit__list">
+                <li>You write long fiction and keep the manuscript in Word, Scrivener or plain files.</li>
+                <li>You want the story bible derived from the prose, not typed a second time.</li>
+                <li>You would rather have one file on your own disk than an account in the cloud.</li>
+                <li>You work on Windows x64 or Linux x64.</li>
+              </ul>
+            </div>
+            <div class="fit__col">
+              <h3 class="fit__head">It is not</h3>
+              <ul class="fit__list fit__list--not">
+                <li>A word processor: the manuscript never moves into DocWriter.</li>
+                <li>Synced: no account, no cloud, no service to keep alive.</li>
+                <li>Available on macOS yet; there is no Mac build to download.</li>
+                <li>Self-updating: there is no auto-update, so each release is a fresh download.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--ruled" id="faq" aria-labelledby="faq-title">
+        <div class="wrap">
+          <p class="kicker">Questions</p>
+          <h2 class="h2" id="faq-title">Before you download.</h2>
+
+          <div class="faq">
+            <details>
+              <summary>Does it edit my Word file?</summary>
+              <p>
+                No. DocWriter never opens or writes your manuscript. You paste a chapter into it, and that text is
+                stored as a revision inside the book's own database. The .docx stays exactly where it was.
+              </p>
+            </details>
+
+            <details>
+              <summary>What happens to the book if the app disappears?</summary>
+              <p>
+                A book is one SQLite file, so it can be copied, moved or opened on another computer as it is. DocWriter
+                also saves a daily snapshot into a <code>backups/</code> folder beside the book and keeps the last five,
+                and <strong>Book → Export as Markdown</strong> writes the whole book out for readers. Nothing lives in
+                an account that could be switched off.
+              </p>
+            </details>
+
+            <details>
+              <summary>Which Linux package should I pick?</summary>
+              <p>
+                The AppImage runs without installing, but it needs FUSE. If FUSE is missing,
+                <code>./DocWriter-1.1.0.AppImage --appimage-extract-and-run</code> starts it anyway. The <code>.deb</code>
+                installs a launcher entry on Debian and Ubuntu and avoids the question entirely.
+              </p>
+            </details>
+
+            <details>
+              <summary>Is it free?</summary>
+              <p>
+                Yes. DocWriter is MIT licensed, so it is free to use, copy and change. There is no paid tier and no
+                account to create.
+              </p>
+            </details>
+
+            <details>
+              <summary>Is there a Mac build?</summary>
+              <p>
+                Not yet. The shipping builds are Windows x64 and Linux x64. If you are on a Mac, there is nothing to
+                download today.
+              </p>
+            </details>
+
+            <details>
+              <summary>Does it work for books that are not in English?</summary>
+              <p>
+                Detection of capitalised names works in any language. The bundled dictionary is an English word list,
+                so the step that demotes ordinary words only helps English books; elsewhere expect more candidates to
+                reach triage.
+              </p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--ruled" id="whats-new" aria-labelledby="whats-new-title">
+        <div class="wrap split">
+          <p class="kicker split__label">Version 1.1.0</p>
+          <div class="prose">
+            <h2 class="h2" id="whats-new-title">What changed in 1.1.0.</h2>
+            <p>
+              The first release with a Windows download: an installer and a portable zip, alongside the AppImage and
+              the .deb.
+            </p>
+            <p>
+              The Windows build is unsigned. <code>SHA256SUMS.txt</code> on the release covers all four files, so a
+              download can be checked before it runs.
+            </p>
+            <p>The Windows test run is green at 214/214, the same suite the Linux build runs.</p>
+            <p>
+              <a href="https://github.com/Rjbanti420/docwriter/releases/tag/v1.1.0" target="_blank" rel="noopener"
+                >Release notes for 1.1.0<span class="sr-only"> (opens GitHub in a new tab)</span></a
+              >
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="about" aria-labelledby="about-title">
+        <div class="wrap about__inner">
+          <h2 class="kicker" id="about-title">About</h2>
+          <p class="about__line">Made by Banteee. MIT licensed, free, and yours to keep.</p>
+          <p class="about__body">
+            DocWriter is an offline story bible for novelists: paste a chapter, triage the names, keep one file.
+          </p>
         </div>
       </section>
     </main>

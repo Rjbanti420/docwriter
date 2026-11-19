@@ -103,6 +103,7 @@ p { margin: 0; }
 ul, ol { margin: 0; padding: 0; }
 img { display: block; max-width: 100%; height: auto; }
 a { color: var(--link); }
+[hidden] { display: none !important; }
 
 :where(a, button, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--link);
@@ -159,6 +160,9 @@ a { color: var(--link); }
   min-height: 76px;
 }
 .brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
   margin-right: auto;
   font-family: var(--font-display);
   font-size: 22px;
@@ -201,6 +205,28 @@ a { color: var(--link); }
 }
 .pill-link:hover { background: var(--paper); border-color: var(--ink-faint); }
 
+.masthead__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gh-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding-inline: 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.gh-link:hover { background: var(--paper); border-color: var(--ink-faint); }
+.gh-link svg { width: 17px; height: 17px; flex: none; fill: currentColor; }
+
 /* ----------------------------------- Hero ------------------------------ */
 .hero { padding-block: clamp(40px, 6vw, 84px) clamp(56px, 8vw, 104px); }
 .hero__grid {
@@ -210,20 +236,14 @@ a { color: var(--link); }
   align-items: center;
 }
 .hero h1 {
+  max-width: 19ch;
+  margin-top: 20px;
   font-family: var(--font-display);
-  font-size: clamp(3rem, 6.2vw, 5.5rem);
+  font-size: clamp(2rem, 4.2vw, 3.4rem);
   font-weight: 500;
-  line-height: 0.96;
-  letter-spacing: -0.032em;
-}
-.hero__promise {
-  max-width: 26ch;
-  margin-top: 22px;
-  font-family: var(--font-display);
-  font-size: clamp(20px, 2vw, 26px);
-  line-height: 1.4;
-  letter-spacing: -0.012em;
-  color: var(--ink-soft);
+  line-height: 1.03;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
 }
 .actions {
   display: flex;
@@ -231,12 +251,64 @@ a { color: var(--link); }
   gap: 12px;
   margin-top: clamp(26px, 3vw, 36px);
 }
-.hero__meta {
-  margin-top: 26px;
+
+.dl-none {
+  max-width: 46ch;
+  margin-top: 18px;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.dl-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 10px;
+  min-height: 34px;
+  margin-top: 14px;
   font-family: var(--font-mono);
   font-size: 12px;
-  letter-spacing: 0.05em;
-  text-wrap: balance;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.dl-meta a { display: inline-flex; align-items: center; min-height: 34px; }
+.dl-note {
+  max-width: 54ch;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-faint);
+}
+.dl-note strong { color: var(--ink-soft); font-weight: 600; }
+.dl-extra {
+  max-width: 540px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.dl-extra__label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.dl-list { margin-top: 6px; list-style: none; }
+.dl-list a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 34px;
+  border-bottom: 1px solid transparent;
+  color: var(--ink-soft);
+  font-size: 15px;
+  text-decoration: none;
+}
+.dl-list a:hover { color: var(--ink); border-bottom-color: var(--link); }
+.dl-list__size {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
   color: var(--ink-faint);
 }
 
@@ -362,6 +434,174 @@ a { color: var(--link); }
 .prose > :first-child { margin-top: 0; }
 .prose h2 { color: var(--ink); }
 .prose em { font-style: italic; }
+
+/* ------------------------------- Try it first -------------------------- */
+.try-section { padding-block: 0 clamp(48px, 6vw, 80px); }
+.try {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 0.75fr);
+  gap: clamp(24px, 4vw, 48px);
+  align-items: start;
+  padding: clamp(24px, 3.4vw, 40px);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card), var(--top-light);
+}
+.try .h2 { max-width: 20ch; }
+.try .actions { margin-top: 24px; }
+.try__body {
+  max-width: 56ch;
+  margin-top: 16px;
+  font-size: 17px;
+  line-height: 1.62;
+  color: var(--ink-soft);
+}
+.try__aside {
+  padding-left: clamp(16px, 2.4vw, 28px);
+  border-left: 1px solid var(--border);
+}
+.try__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.try__facts span::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 10px;
+  border-radius: 50%;
+  background: var(--link);
+  vertical-align: 1px;
+}
+.try__note {
+  max-width: 34ch;
+  margin-top: 18px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-faint);
+}
+
+/* ----------------------------- Built for long books ------------------- */
+.long-books__claim {
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 2.2vw, 1.7rem);
+  line-height: 1.35;
+  letter-spacing: -0.012em;
+  color: var(--ink);
+}
+.faq code,
+.prose code {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.faq code { white-space: normal; overflow-wrap: break-word; }
+
+/* ------------------------------- Who it is for ------------------------- */
+.fit {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(24px, 4vw, 56px);
+  margin-top: clamp(32px, 4vw, 48px);
+}
+.fit__col { padding-top: 18px; border-top: 1px solid var(--border); }
+.fit__head {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.fit__list { max-width: 44ch; margin-top: 14px; list-style: none; }
+.fit__list li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 16.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.fit__list li + li { margin-top: 10px; }
+.fit__list li::before {
+  content: '';
+  position: absolute;
+  top: 0.72em;
+  left: 2px;
+  width: 8px;
+  height: 1px;
+  background: var(--link);
+}
+.fit__list--not li::before { background: var(--ink-faint); }
+
+/* ---------------------------------- FAQ -------------------------------- */
+.faq {
+  max-width: 780px;
+  margin-top: clamp(30px, 4vw, 44px);
+  border-top: 1px solid var(--border);
+}
+.faq details { border-bottom: 1px solid var(--border); }
+.faq summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 44px;
+  padding-block: 14px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  list-style: none;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: '+';
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--link);
+}
+.faq details[open] summary::after { content: '−'; }
+.faq details > p {
+  max-width: var(--prose);
+  padding-bottom: 18px;
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+}
+
+/* --------------------------------- About ------------------------------- */
+.about {
+  padding-block: clamp(48px, 6vw, 76px);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.about__inner { display: grid; gap: 14px; }
+.about__line {
+  max-width: 28ch;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  line-height: 1.2;
+  letter-spacing: -0.018em;
+  color: var(--ink);
+}
+.about__body { max-width: 54ch; font-size: 17px; line-height: 1.55; color: var(--ink-soft); }
 
 /* ---------------------------------- Loop ------------------------------- */
 .steps {
@@ -502,8 +742,8 @@ kbd {
 
 .lights {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 480px));
-  gap: clamp(20px, 3vw, 40px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(16px, 2.4vw, 32px);
   margin-top: clamp(32px, 4vw, 48px);
 }
 .light { margin: 0; }
@@ -561,7 +801,7 @@ kbd {
 .foot-nav a {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-height: 34px;
   color: var(--ink-soft);
   font-size: 16px;
   text-decoration: none;
@@ -614,7 +854,7 @@ kbd {
 .toc a {
   display: inline-flex;
   align-items: center;
-  min-height: 26px;
+  min-height: 34px;
   border-bottom: 1px solid transparent;
   color: var(--ink-soft);
   font-size: 16px;
@@ -752,9 +992,10 @@ kbd {
   }
 
   .hero__figure .frame { animation: hero-rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s both; }
-  .hero__promise { animation: hero-fade 0.6s ease 0.22s both; }
-  .actions { animation: hero-fade 0.6s ease 0.3s both; }
-  .hero__meta { animation: hero-fade 0.6s ease 0.38s both; }
+  .actions { animation: hero-fade 0.6s ease 0.24s both; }
+  .dl-meta { animation: hero-fade 0.6s ease 0.32s both; }
+  .dl-note { animation: hero-fade 0.6s ease 0.38s both; }
+  .dl-extra { animation: hero-fade 0.6s ease 0.44s both; }
 
   /* Reveal is opt-in from main.ts, so a failed script leaves the page readable. */
   html.has-reveal [data-reveal] {
@@ -782,7 +1023,7 @@ kbd {
 /* ------------------------------- Responsive ---------------------------- */
 @media (max-width: 1000px) {
   .hero__grid { grid-template-columns: minmax(0, 1fr); }
-  .hero__promise { max-width: 34ch; }
+  .hero h1 { max-width: 20ch; }
   .hero__figure { max-width: 720px; }
 }
 
@@ -803,23 +1044,42 @@ kbd {
     gap: 10px;
   }
   .index__plate { grid-column: 1; grid-row: auto; max-width: 100%; }
+  .try { grid-template-columns: minmax(0, 1fr); }
+  .try__aside { padding-top: 20px; padding-left: 0; border-top: 1px solid var(--border); border-left: 0; }
+  .try__note { max-width: 52ch; }
+}
+
+/* Inline links inside prose still carry a 34px target, without a colour change. */
+.prose p > a,
+.doc-body p > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  min-width: 34px;
+  vertical-align: middle;
 }
 
 @media (max-width: 760px) {
   .lights { grid-template-columns: minmax(0, 1fr); }
+  .fit { grid-template-columns: minmax(0, 1fr); gap: 28px; }
   .keylist li { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .masthead__inner {
     flex-wrap: wrap;
     gap: 6px 16px;
     padding-block: 12px;
   }
-  .brand { flex: 1 1 auto; }
+  .brand { flex: 0 0 auto; }
+  .masthead__actions { margin-left: auto; }
   .nav { order: 3; flex: 1 1 100%; border-top: 1px solid var(--border); padding-top: 10px; }
   .nav ul { justify-content: flex-start; gap: 20px; }
 }
 
 @media (max-width: 520px) {
   .actions .btn { flex: 1 1 100%; }
-  .hero h1 { font-size: clamp(2.9rem, 15vw, 3.6rem); }
+  .hero h1 { font-size: clamp(1.95rem, 8.6vw, 2.6rem); }
+  .brand { font-size: 20px; }
+  .pill-link,
+  .gh-link { padding-inline: 11px; font-size: 14px; }
+  .gh-link { gap: 6px; }
   .keylist li { grid-template-columns: minmax(0, 1fr); }
 }

@@ -1,11 +1,14 @@
 # DocWriter site
 
 The static promotional site that ships alongside the app. Plain Vite + TypeScript,
-two pages, no server, no forms, no analytics. Nothing here runs at runtime.
+three HTML entries (index, guide, 404), no server, no forms, no analytics. The
+page is fully readable and its download links work with JavaScript off; JS only
+updates the download block from GitHub's release API and adds the scroll marker.
 
-- `index.html` — one page with anchor nav: hero, the problem, the four-step loop, features, footer.
-- `guide.html` — first run, where the book file lives, backup/export, the full keyboard table, known limits.
-- Deploy target: **GitHub Pages** at `https://rjbanti420.github.io/docwriter/`, built by `.github/workflows/site.yml` with `VITE_BASE=/docwriter/`. The custom domain `www.docwriter.app` is not live (no DNS records) — see *Deploy* below for what changes when it is.
+- `index.html` — one page with anchor nav: hero, the problem, the four-step loop, features, three themes, try it first, built for long books, who it is for, FAQ, 1.1.0 notes, About, footer.
+- `guide.html` — first run, book file, backup/export, full keyboard table, known limits.
+- `404.html` — in the site's style; links use the public `/docwriter/` URLs.
+- Deploy target: **GitHub Pages** at `https://rjbanti420.github.io/docwriter/`, built by `.github/workflows/site.yml` with `VITE_BASE=/docwriter/`. The custom domain `www.docwriter.app` is not live (no DNS records).
 
 ## Preview
 
@@ -24,33 +27,59 @@ npm run dev -- --port 5174
 Production build and local preview of the built output:
 
 ```bash
-npm run build          # emits site/dist/ (index.html, guide.html, assets, CNAME)
+npm run build          # emits site/dist/
 npm run preview        # serves site/dist/ locally
 npm run typecheck      # tsc --noEmit
 ```
 
-To check a subpath deploy locally:
+To check the real deploy path locally, build **and preview** with the same base:
 
 ```bash
 VITE_BASE=/docwriter/ npm run build
+VITE_BASE=/docwriter/ npm run preview -- --port 4173
+# open http://localhost:4173/docwriter/
 ```
+
+Without `VITE_BASE` at preview time, Vite serves the output at `/` and every
+`/docwriter/…` asset URL falls through to the SPA shell — the page looks unstyled.
+Set the variable on both commands.
+
+## Downloads
+
+Every Download control links **directly to an asset**, never to the Releases page.
+The HTML ships working defaults for v1.1.0 so a visitor with JS off still gets a
+file:
+
+- `DocWriter-1.1.0-win-x64.exe` (Windows installer, default primary)
+- `DocWriter-1.1.0-win-x64.zip` (portable Windows)
+- `DocWriter-1.1.0.AppImage`
+- `docwriter_1.1.0_amd64.deb`
+- `SHA256SUMS.txt`
+
+`src/main.ts` fetches `https://api.github.com/repos/Rjbanti420/docwriter/releases/latest`
+once, matches assets by filename pattern and updates the hrefs, version label and
+file sizes. Any failure (offline, rate limit, missing asset) leaves the defaults
+untouched and silent. `navigator.userAgent` selects Windows (.exe) or Linux
+(AppImage); anything else gets a short "no build for this system yet" line, with
+all four artifacts still listed under **Other downloads**.
+
+The v1.1.0 release is published, so the direct URLs resolve publicly. Check its
+status at `https://github.com/Rjbanti420/docwriter/releases`.
 
 ## Deploy
 
 `.github/workflows/site.yml` builds `site/` and publishes it to GitHub Pages on
 every push that touches `site/**` (and on demand via *Run workflow*). Pages'
 source is **GitHub Actions**; there is no `gh-pages` branch and no CNAME file,
-because the site is served from the project subpath `rjbanti420.github.io/docwriter/`.
+because the site is served from the project subpath. The base path lives in the
+workflow (`VITE_BASE=/docwriter/`), not in `vite.config.ts`.
 
-The base path lives in the workflow (`VITE_BASE=/docwriter/`), not in
-`vite.config.ts` — the config still defaults to `/`, so a build without that
-variable is ready for a domain-root deploy.
+## Discoverability
 
-**When `www.docwriter.app` exists:** add a `public/CNAME` containing the domain,
-set `VITE_BASE` to `/` in the workflow, and point DNS at Pages
-(`185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`, plus
-a `www` CNAME to `rjbanti420.github.io`). Until then the CNAME file would make
-every visitor 404, which is why it was removed.
+`og-image.png` (1200×630, composed from the hero screenshot), `apple-touch-icon.png`,
+`robots.txt`, `sitemap.xml`, a canonical link, OG/Twitter tags on both pages, and
+JSON-LD SoftwareApplication on the index. All public URLs in the sitemap and 404
+page use `https://rjbanti420.github.io/docwriter/`.
 
 ## Where the screenshots came from
 
@@ -69,8 +98,8 @@ names the book from its filename. No app source file was changed.
 | --- | --- | --- | --- |
 | `read-sepia-1440.png` | Read (hero, cropped to the reading column) | Sepia | 1840×1020, shown at 920×510 |
 | `read-sepia-760.png` | Read | Sepia | 760 |
-| `read-light-1440.png` | Read (theme strip, same paragraph as Mocha) | Light | 870×350 crop |
-| `read-mocha-1440.png` | Read (theme strip, same paragraph as Light) | Mocha | 870×350 crop |
+| `read-light-1440.png` | Read (theme strip, full screen) | Light | 1440×900 |
+| `read-mocha-1440.png` | Read (theme strip, full screen) | Mocha | 1440×900 |
 | `paste-sepia-1440.png` | Paste a chapter modal, filled in | Sepia | 1440 |
 | `triage-sepia-1440.png` | Triage modal with quotes and key legend | Sepia | 1440 |
 | `cards-sepia-1440.png` | Bible, typed cards | Sepia | 1440 |
@@ -78,25 +107,25 @@ names the book from its filename. No app source file was changed.
 | `timeline-sepia-1440.png` | Timeline, Map | Sepia | 1440 |
 | `settings-sepia-1440.png` | Settings, Look / Profile / Export | Sepia | 1440 |
 
-The three Read images were cropped from their original 1440×900 viewport captures
-after a design critique found them too small to read at display size: the hero is
-cropped to the manuscript page (kicker, drop cap, dotted and solid linked names),
-and the Light/Mocha pair is cropped to the identical paragraph so the two themes
-can be compared directly. Cropping also cut their combined weight from ~410 KB to
-~121 KB.
+The hero is a `deviceScaleFactor: 2` capture cropped to the `.paper` column and
+downsampled to 1840×1020 for a 920×510 slot. The Light and Mocha images were
+re-captured full-screen at 1440×900, with the theme set in the book's `meta`
+table before starting the server; both show the same chapter in the same book.
 
-To re-capture them, run the app with a disposable `DOCWRITER_DB` (`npm run build`
-plus `PORT=5181 DOCWRITER_DB=… node server/index.mjs` is enough — no dev server
-needed), dismiss the export reminder, set the theme in the book's `meta` table
-before starting, and capture with `Page.captureScreenshot`. The hero is a
-`deviceScaleFactor: 2` capture cropped to the `.paper` column, which is why it is
-1840 px wide for a 920 px slot. The other images are `deviceScaleFactor: 1` whole
-viewports.
+`public/sample-book.db` (332 KB) was generated with `server/seed-demo.mjs` into a
+temporary file, then given chapter 1 from `src/sample.ts` ("The Drowned Bell")
+through the app's own API. It holds 137 entities and one chapter. Its WAL/SHM
+sidecars were checkpointed and removed before shipping.
+
+To re-capture the screenshots, run the app with a disposable `DOCWRITER_DB`
+(`npm run build` plus `PORT=<port> DOCWRITER_DB=… node server/index.mjs` is enough
+— no dev server needed), dismiss the export reminder, set `data-theme` or the
+book's `meta.theme`, and capture with `Page.captureScreenshot`.
 
 ## Deliberately left out
 
-- No testimonials, benchmarks, pricing, AI claims or comparison to other products.
-- No feature that is not in `PRODUCT.md`, `README.md` or `HANDOFF.md` §97–100, or visible in the app.
-- No relationship graph or link editor: removed from the app's UI, so not advertised.
-- No macOS build, no auto-update, no account or sync: stated as limits on the guide page.
-- No analytics, tracking or web fonts beyond the four families the app already ships.
+- No testimonials, user counts, benchmarks, press, pricing, AI claims or comparison to other products.
+- No feature that is not in `PRODUCT.md`, `README.md` or `HANDOFF.md`, or visible in the app.
+- No relationship graph or link editor; no macOS build, no auto-update, no account or sync beyond what the guide states.
+- No analytics, tracking or web fonts beyond the families the app already ships.
+- WebP variants of the screenshots: ImageMagick is available, but a second asset set plus `<picture>` markup would need a build step to stay in sync with the PNGs. The PNGs total about 1.3 MB and all but the hero load lazily.

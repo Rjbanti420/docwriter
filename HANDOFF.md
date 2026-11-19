@@ -1260,3 +1260,60 @@ underlines are names in your Bible" legend, removed in 1.0.1). Re-captured from 
 copied to a temp file, Sepia, `deviceScaleFactor: 2`, cropped to the `.paper` column and
 downsampled to 1840×1020 for a 920×510 slot. "CHAPTER 1" now sits alone, because the word
 count moved to the end of the chapter.
+
+## 105) The downloads go straight to the files
+
+The site stopped sending people to the Releases page. Every Download control now
+points at an asset: the masthead pill, the hero button and the four rows in
+**Other downloads** (Windows installer, Windows zip, AppImage, .deb). The HTML
+ships working v1.1.0 URLs so the page works with JavaScript off; `src/main.ts`
+then fetches `/releases/latest` once, matches by filename pattern (`.exe`,
+`-win-x64.zip`, `.AppImage`, `.deb`, `SHA256SUMS.txt`) and updates the hrefs,
+version label and file sizes. A failed, rate-limited or partial fetch leaves the
+defaults untouched and says nothing. `navigator.userAgent` picks **Download for
+Windows** (.exe) or **Download for Linux** (AppImage); anything else loses the
+primary button to a calm "no build for this system yet" line, with all four
+artifacts still listed. The Windows SmartScreen sentence comes from README's own
+wording. A distinct outlined GitHub button (inline SVG mark, word, sr-only new-tab
+note) sits beside Download in the masthead, and the hero has a **View on GitHub**
+secondary button. Both masthead buttons stay visible at 380px.
+
+**The release is published, not a draft.** `GET .../releases/tags/v1.1.0` returned
+`draft: false`, `published_at: 2026-11-18T16:28:22Z`, with all five assets attached;
+`/releases/latest` returns the same tag. So the direct links resolve publicly.
+Nothing was published or tagged in this session.
+
+**Copy work.** The hero H1 is now the promise; "DocWriter" is only the wordmark.
+Added **Try it first** (a 332 KB sample book generated with `server/seed-demo.mjs`,
+then given chapter 1 from `src/sample.ts` through the app API — 137 entities, one
+chapter, WAL checkpointed before shipping), **Built for long books** (2,000
+chapters / 5.0 M words settling at about 444 MB from `docs/ram-report.md`, plus
+214/214 tests), **Who it is for / not for**, a native `<details>` FAQ (Word file,
+lost app, FUSE vs .deb, price, Mac, non-English books — the dictionary is an
+English word list, so demotion is English-only), **What's new in 1.1.0** from §103,
+and an About line supplied by the owner: "Made by Banteee. MIT licensed, free, and
+yours to keep." The Light and Mocha strip images were re-captured full-screen at
+1440×900 from a book named `Ashen Harbor.db`; the hero crop did not change.
+
+**Discoverability.** Added OG/Twitter tags, canonical links, `apple-touch-icon.png`,
+a 1200×630 `og-image.png` composed from the hero screenshot, JSON-LD
+SoftwareApplication, `robots.txt`, `sitemap.xml` and a styled `404.html` (Vite's
+third input). All public URLs use `https://rjbanti420.github.io/docwriter/`.
+
+**Decisions.** WebP variants were skipped: a second asset set plus `<picture>`
+markup would need a build step to stay in sync with the PNGs. The Windows .exe
+stays the JS-off default because §104 made the page Windows-first. Inline prose
+links under 34px were given `min-height/min-width: 34px` in CSS rather than
+rewriting the sentences around them. `site/README.md` now records that preview
+needs `VITE_BASE=/docwriter/` on **both** build and preview: without it on
+preview, `/docwriter/assets/*` hits the SPA fallback and the page looks unstyled.
+
+**Verification.** `npm run typecheck`, `npm run build` and `VITE_BASE=/docwriter/
+npm run build` all exit 0. An independent CDP pass over the built site served at
+`/docwriter/` found no horizontal scroll, no control under 34px, no text under
+11px, no contrast failures and one H1 on index, guide and 404 at 1440/760/380.
+With scripts disabled the primary link still reads "Download for Windows" and
+points at the .exe; with mocked user agents Windows → .exe, Linux → AppImage and
+macOS → the no-build line. Mocked GitHub responses were tested for full, partial
+and 403 (silent) paths. Live release status was checked with `curl`, not from the
+browser (network blocked there). Nothing was committed or pushed.

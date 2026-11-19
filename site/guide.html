@@ -10,6 +10,25 @@
     />
     <meta name="theme-color" content="#e8e4db" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="canonical" href="https://rjbanti420.github.io/docwriter/guide.html" />
+    <meta property="og:title" content="How it works — DocWriter" />
+    <meta
+      property="og:description"
+      content="First run, where the book file lives, how to back it up or export it, every keyboard shortcut, and the known limits of DocWriter for Windows and Linux."
+    />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://rjbanti420.github.io/docwriter/guide.html" />
+    <meta property="og:image" content="https://rjbanti420.github.io/docwriter/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="How it works — DocWriter" />
+    <meta
+      name="twitter:description"
+      content="First run, where the book file lives, how to back it up or export it, every keyboard shortcut, and the known limits of DocWriter for Windows and Linux."
+    />
+    <meta name="twitter:image" content="https://rjbanti420.github.io/docwriter/og-image.png" />
     <link rel="stylesheet" href="/src/style.css" />
     <script type="module" src="/src/main.ts"></script>
   </head>
@@ -26,9 +45,18 @@
             <li><a href="./guide.html" aria-current="page">Guide</a></li>
           </ul>
         </nav>
-        <a class="pill-link" href="https://github.com/Rjbanti420/docwriter/releases" target="_blank" rel="noopener">
-          Download<span class="sr-only"> (opens the GitHub releases page in a new tab)</span>
-        </a>
+        <div class="masthead__actions">
+          <a class="pill-link" data-os-link data-dl="win-exe" href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/DocWriter-1.1.0-win-x64.exe">
+            Download<span class="sr-only"> (direct download)</span>
+          </a>
+          <a class="gh-link" href="https://github.com/Rjbanti420/docwriter" target="_blank" rel="noopener">
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"
+              ><path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
+              /></svg
+            >GitHub<span class="sr-only"> (opens GitHub in a new tab)</span>
+          </a>
+        </div>
       </div>
     </header>
 
@@ -58,22 +86,39 @@
 
           <h2 id="first-run">First run</h2>
           <p>
-            Take the latest Windows installer from
-            <a href="https://github.com/Rjbanti420/docwriter/releases" target="_blank" rel="noopener"
-              >Releases<span class="sr-only"> (opens GitHub in a new tab)</span></a
-            >: <code>DocWriter-&lt;version&gt;-win-x64.exe</code> installs, and the matching
-            <code>-win-x64.zip</code> unzips to a folder you can run in place. The build is not code-signed, so
-            Windows shows “Windows protected your PC” the first time — choose <strong>More info</strong> then
-            <strong>Run anyway</strong>.
+            On Windows, run the
+            <a
+              href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/DocWriter-1.1.0-win-x64.exe"
+              data-dl="win-exe"
+              >DocWriter-1.1.0-win-x64.exe installer</a
+            >, or unzip
+            <a href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/DocWriter-1.1.0-win-x64.zip"
+              data-dl="win-zip"
+              >DocWriter-1.1.0-win-x64.zip</a
+            >
+            to a folder and run the DocWriter.exe inside it. The build is not code-signed, so Windows shows “Windows
+            protected your PC” the first time — choose <strong>More info</strong> then <strong>Run anyway</strong>.
           </p>
           <p>
-            On Linux, the AppImage runs without installing, and the .deb installs a launcher entry on Debian and
-            Ubuntu.
+            On Linux, the
+            <a href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/DocWriter-1.1.0.AppImage"
+              data-dl="appimage"
+              >AppImage</a
+            >
+            runs without installing, and the
+            <a data-dl="deb" href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/docwriter_1.1.0_amd64.deb">.deb</a>
+            installs a launcher entry on Debian and Ubuntu.
           </p>
           <div class="codeblock">
             <code>chmod +x DocWriter-*.AppImage
 ./DocWriter-*.AppImage</code>
           </div>
+          <p>
+            <a data-dl="sums" href="https://github.com/Rjbanti420/docwriter/releases/download/v1.1.0/SHA256SUMS.txt"
+              >SHA256SUMS.txt<span class="sr-only"> (opens in a new tab)</span></a
+            >
+            on the release covers all four files, so a download can be checked before it runs.
+          </p>
           <p>
             First launch gives you an empty book, ready for a first chapter. There is nothing to sign in to: no
             account, no sync, and no network calls beyond the localhost port the app serves itself.
@@ -94,7 +139,8 @@
           <p>
             <strong>Book → Export book file (.db)</strong> writes a full copy of the open book; on another computer,
             <strong>Book → Open book…</strong> opens that copy. Nothing is re-rendered or converted on the way, so
-            everything travels.
+            everything travels. A snapshot is also saved into a <code>backups/</code> folder beside the book once a day,
+            and the last five are kept.
           </p>
           <p>
             <strong>Book → Export as Markdown</strong> writes the book as Markdown for readers. Settings → Export
@@ -211,6 +257,10 @@
             <li>
               The Windows build is unsigned, so SmartScreen warns once on first run. There is no macOS build yet, and
               no auto-update — each release is a fresh download.
+            </li>
+            <li>
+              The AppImage needs FUSE. Where FUSE is missing, <code>--appimage-extract-and-run</code> starts it anyway,
+              and the .deb avoids the question entirely.
             </li>
             <li>
               The desktop entry generated for the AppImage runs <code>AppRun --no-sandbox %U</code>. That is Electron's
