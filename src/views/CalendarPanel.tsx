@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '../api';
 import { chapterLabel } from '../chapters';
 import type {
@@ -103,7 +103,9 @@ export default function CalendarPanel({
   const [view, setView] = useState<CalendarMonthView | null>(null);
   const [cursor, setCursor] = useState<{ year: number; month: number } | null>(null);
   const [selected, setSelected] = useState<CalendarDay | null>(null);
+  const [pinned, setPinned] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const hoverTimer = useRef<number | null>(null);
   const [wizard, setWizard] = useState(false);
   const [clockFor, setClockFor] = useState<CalendarChapter | null>(null);
   const [busy, setBusy] = useState('');
@@ -149,6 +151,7 @@ export default function CalendarPanel({
         if (!alive) return;
         setView(next);
         setSelected(null);
+        setPinned(false);
         setShowAll(false);
       })
       .catch((err) => {
@@ -170,6 +173,33 @@ export default function CalendarPanel({
     } finally {
       setBusy('');
     }
+  };
+
+  // Moving from a day to the panel below crosses other cells. Hover needs a
+  // moment to settle, and a click pins the day so reading the panel cannot
+  // change it. Entering the panel cancels any hover still in flight.
+  const cancelHover = () => {
+    if (hoverTimer.current != null) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+  };
+  useEffect(() => cancelHover, []);
+
+  const showDay = (day: CalendarDay) => {
+    cancelHover();
+    setSelected(day);
+    setPinned(true);
+    setShowAll(false);
+  };
+  const hoverDay = (day: CalendarDay) => {
+    if (pinned) return;
+    cancelHover();
+    hoverTimer.current = window.setTimeout(() => {
+      hoverTimer.current = null;
+      setSelected(day);
+      setShowAll(false);
+    }, 220);
   };
 
   const createEarth = async () => {
@@ -385,18 +415,10 @@ export default function CalendarPanel({
                       key={day.day}
                       aria-label={label}
                       aria-pressed={selected?.day === day.day}
-                      onMouseEnter={() => {
-                        setSelected(day);
-                        setShowAll(false);
-                      }}
-                      onFocus={() => {
-                        setSelected(day);
-                        setShowAll(false);
-                      }}
-                      onClick={() => {
-                        setSelected(day);
-                        setShowAll(false);
-                      }}
+                      onMouseEnter={() => hoverDay(day)}
+                      onMouseLeave={cancelHover}
+                      onFocus={() => showDay(day)}
+                      onClick={() => showDay(day)}
                     >
                       <span className="cal-cell__num">{day.day}</span>
                       {day.season && <span className="cal-cell__season">{day.season}</span>}
@@ -415,7 +437,13 @@ export default function CalendarPanel({
             </>
           )}
 
-          <section className="cal-day" aria-live="polite" aria-label="Selected day">
+          <section
+            className="cal-day"
+            aria-live="polite"
+            aria-label="Selected day"
+            onMouseEnter={cancelHover}
+            onFocusCapture={cancelHover}
+          >
             {selected && view ? (
               <>
                 <div className="cal-day__head">
@@ -442,6 +470,9 @@ export default function CalendarPanel({
                           <span>{chapter.label}</span>
                           {chapter.title && <small>{chapter.title}</small>}
                           {chapter.starts && <em>Starts here</em>}
+                          <span className="cal-day__open" aria-hidden="true">
+                            Open →
+                          </span>
                         </button>
                       ))}
                     </div>

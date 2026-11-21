@@ -1381,6 +1381,14 @@ The custom wizard was driven end to end into "The Long Year" — 4 months, 30 da
 10-hour days, a 5-day week, a leap day every 3 years, three hand-built seasons,
 year 1980 AF — and produced a 10-cell Rise grid.
 
+**Hover fix.** The day panel sits below the grid, so moving from a cell toward it
+crossed other days and replaced the chapter list before it could be clicked. Hover
+now settles for 220ms before switching days, a click pins the day, and entering the
+panel cancels any hover in flight. Each chapter button also says "Open →". CDP
+reproduced the old failure (day 2 → day 30, chapter buttons gone) and confirmed both
+the hover and click paths now keep day 2's chapters clickable through to the Read
+view.
+
 **Limits.** Absolute detection is the phrase table, not a general date parser: "by
 the time the snows came" is not caught. Earth season boundaries are approximate in
 a leap year (the extra February day shifts the following seasons by one). v1

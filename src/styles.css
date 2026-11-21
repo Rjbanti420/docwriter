@@ -8448,6 +8448,12 @@ button.tl-link:hover {
   text-transform: uppercase;
   color: var(--color-accent);
 }
+.cal-day__open {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-accent);
+}
 .cal-day__empty {
   margin: 10px 0 0;
   color: var(--color-text-faint);
