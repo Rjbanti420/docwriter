@@ -408,3 +408,120 @@ export interface DuelCreatePayload {
   skilledSide?: 'A' | 'B' | null;
   title?: string;
 }
+
+// ---------- Book calendar ----------
+
+export interface CalendarDate {
+  year: number;
+  /** 0-based. */
+  month: number;
+  /** 1-based. */
+  day: number;
+  hour: number;
+}
+
+export interface CalendarMonthDef {
+  position: number;
+  name: string;
+  days: number;
+}
+
+export interface CalendarSeason {
+  id: number;
+  name: string;
+  weather: string;
+  start_day: number;
+  days: number;
+}
+
+export interface CalendarDef {
+  id: number;
+  name: string;
+  kind: 'earth' | 'custom';
+  hours_per_day: number;
+  daylight_hours: number;
+  days_per_week: number;
+  week_offset: number;
+  start_year: number;
+  era: string;
+  leap_every: number | null;
+  leap_month: number | null;
+  leap_anchor: number;
+  months: CalendarMonthDef[];
+}
+
+export interface CalendarChapter {
+  id: number;
+  number: string;
+  title: string;
+  sort_order: number;
+  manual: boolean;
+  flashback: boolean;
+  clock: CalendarDate | null;
+  end: CalendarDate | null;
+  label: string;
+}
+
+export interface CalendarMismatch {
+  id: number;
+  key: string;
+  chapter_id: number;
+  chapter_number: string;
+  chapter_title: string;
+  kind: 'month' | 'season' | 'year';
+  raw: string;
+  proposed: CalendarDate;
+  anchor: CalendarDate;
+  proposed_label: string;
+  clock: CalendarDate;
+  clock_label: string;
+}
+
+export interface CalendarElsewhere {
+  kind: 'chapter' | 'note';
+  chapter_id: number | null;
+  label: string;
+  title: string;
+  text?: string;
+}
+
+export interface CalendarState {
+  calendar: CalendarDef | null;
+  months: CalendarMonthDef[];
+  seasons: CalendarSeason[];
+  chapters: CalendarChapter[];
+  mismatches: CalendarMismatch[];
+  elsewhere: CalendarElsewhere[];
+  start?: CalendarDate;
+}
+
+export interface CalendarDayChapter {
+  id: number;
+  number: string;
+  title: string;
+  starts: boolean;
+  label: string;
+}
+
+export interface CalendarDay {
+  day: number;
+  weekday: number;
+  season: string | null;
+  weather: string;
+  chapters: CalendarDayChapter[];
+}
+
+export interface CalendarMonthView {
+  calendar: CalendarDef;
+  months: CalendarMonthDef[];
+  seasons: CalendarSeason[];
+  year: number;
+  month: number;
+  monthName: string;
+  firstWeekday: number;
+  daysInMonth: number;
+  days: CalendarDay[];
+  prev: { year: number; month: number };
+  next: { year: number; month: number };
+  weekdays: string[];
+}

@@ -1,5 +1,7 @@
 import type {
   BackupState,
+  CalendarMonthView,
+  CalendarState,
   Chapter,
   Duel,
   DuelCreatePayload,
@@ -167,6 +169,19 @@ export const api = {
     req(`/timeline/events/${id}`, { method: 'DELETE' }),
   reorderTimelineEvents: (ids: number[]) =>
     req('/timeline/events/reorder', { method: 'PUT', body: JSON.stringify({ ids }) }),
+
+  calendar: () => req<CalendarState>('/calendar'),
+  saveCalendar: (body: Record<string, unknown>) =>
+    req<CalendarState>('/calendar', { method: 'PUT', body: JSON.stringify(body) }),
+  refreshCalendar: () => req<CalendarState>('/calendar/refresh', { method: 'POST' }),
+  calendarMonth: (year: number, month: number) =>
+    req<CalendarMonthView>(`/calendar/month?year=${year}&month=${month}`),
+  setChapterClock: (id: number, body: Record<string, unknown>) =>
+    req<CalendarState>(`/chapters/${id}/clock`, { method: 'PUT', body: JSON.stringify(body) }),
+  applyCalendarMention: (id: number) =>
+    req<CalendarState>(`/calendar/mentions/${id}/apply`, { method: 'POST' }),
+  ignoreCalendarMention: (id: number) =>
+    req<CalendarState>(`/calendar/mentions/${id}/ignore`, { method: 'POST' }),
 
   entities: () => req('/entities'),
   createEntity: (body: Record<string, unknown>) =>

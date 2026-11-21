@@ -28,6 +28,17 @@ import { renderBookMarkdownChunks } from './exportmd.mjs';
 import { MAX_FIGHTERS_PER_SIDE, resolveDuel, snapshotCombatants } from './duel.mjs';
 import { detectGunCandidates } from './gunscan.mjs';
 import { extractEventCandidates } from './timeline-extract.mjs';
+import {
+  clampDate,
+  dayIndex,
+  daysInMonth,
+  earthCalendar,
+  formatDate,
+  fromIndex,
+  seasonOn,
+  validateCalendar,
+  walkChapters,
+} from './calendar.mjs';
 
 const require = createRequire(import.meta.url);
 const ENGLISH_WORDS = new Set(require('an-array-of-english-words'));
@@ -2280,6 +2291,539 @@ app.put('/api/timeline/events/:id', (req, res) => {
 app.delete('/api/timeline/events/:id', (req, res) => {
   db.prepare('DELETE FROM timeline_events WHERE id = ?').run(Number(req.params.id));
   res.json({ ok: true });
+});
+
+// ---------- Book calendar ----------
+//
+// The calendar is one definition per book, a clock per chapter, and a scanner.
+// The pure maths lives in calendar.mjs; this section only stores and exposes it.
+
+function calendarRow() {
+  return db.prepare('SELECT * FROM calendars ORDER BY id LIMIT 1').get() ?? null;
+}
+
+function calendarDef(row = calendarRow()) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    kind: row.kind,
+    hours_per_day: row.hours_per_day,
+    daylight_hours: row.daylight_hours,
+    days_per_week: row.days_per_week,
+    week_offset: row.week_offset ?? 0,
+    start_year: row.start_year,
+    era: row.era ?? '',
+    leap_every: row.leap_every ?? null,
+    leap_month: row.leap_month ?? null,
+    leap_anchor: row.leap_anchor ?? 0,
+    months: db
+      .prepare('SELECT position, name, days FROM calendar_months WHERE calendar_id = ? ORDER BY position')
+      .all(row.id),
+    seasons: db
+      .prepare('SELECT id, name, weather, start_day, days FROM calendar_seasons WHERE calendar_id = ? ORDER BY start_day')
+      .all(row.id),
+  };
+}
+
+function readCalendarInput(body = {}) {
+  if (body.kind === 'earth') return earthCalendar();
+  const months = Array.isArray(body.months)
+    ? body.months.map((month, index) => ({
+        position: index,
+        name: String(month?.name ?? '').trim(),
+        days: Number(month?.days),
+      }))
+    : [];
+  const seasons = Array.isArray(body.seasons)
+    ? body.seasons.map((season) => ({
+        name: String(season?.name ?? '').trim(),
+        weather: String(season?.weather ?? ''),
+        start_day: Number(season?.start_day),
+        days: Number(season?.days),
+      }))
+    : [];
+  const leapEvery = body.leap_every == null || body.leap_every === 0 || body.leap_every === '' ? null : Number(body.leap_every);
+  return {
+    name: String(body.name ?? '').trim() || 'My calendar',
+    kind: 'custom',
+    hours_per_day: Number(body.hours_per_day ?? 24),
+    daylight_hours: Number(body.daylight_hours ?? 12),
+    days_per_week: Number(body.days_per_week ?? 7),
+    week_offset: Number(body.week_offset ?? 0),
+    start_year: Number(body.start_year ?? 1),
+    era: String(body.era ?? ''),
+    leap_every: leapEvery,
+    leap_month: leapEvery ? Number(body.leap_month) : null,
+    leap_anchor: leapEvery ? Number(body.leap_anchor ?? body.start_year ?? 1) : 0,
+    months,
+    seasons,
+  };
+}
+
+/** Refuse an edit that would leave a saved clock outside the new month. */
+function clockBlockers(next) {
+  const rows = db
+    .prepare(
+      `SELECT id, number, title, clock_year, clock_month, clock_day,
+              clock_end_year, clock_end_month, clock_end_day
+       FROM chapters WHERE clock_year IS NOT NULL`
+    )
+    .all();
+  const blockers = [];
+  for (const row of rows) {
+    for (const [prefix, verb] of [
+      ['clock', 'starts'],
+      ['clock_end', 'ends'],
+    ]) {
+      const year = row[`${prefix}_year`];
+      const month = row[`${prefix}_month`];
+      const day = row[`${prefix}_day`];
+      if (year == null || month == null || day == null) continue;
+      let problem = '';
+      if (month < 0 || month >= next.months.length) problem = `month ${month + 1} no longer exists`;
+      else if (day < 1 || day > daysInMonth(next, year, month)) {
+        problem = `day ${day} of ${next.months[month].name} no longer exists`;
+      }
+      if (!problem) continue;
+      const label = `Chapter ${row.number || row.id}${row.title ? ` — ${row.title}` : ''}`;
+      blockers.push({ chapter_id: row.id, label, detail: `${label} ${verb} on ${problem}` });
+    }
+  }
+  return blockers;
+}
+
+// The write middleware wraps every POST/PUT in one transaction, so the replace
+// and the clock rebuild that follows either both land or neither does.
+function saveCalendar(def) {
+  db.prepare('DELETE FROM calendars').run();
+  const info = db
+    .prepare(
+      `INSERT INTO calendars
+       (name, kind, hours_per_day, daylight_hours, days_per_week, week_offset, start_year, era,
+        leap_every, leap_month, leap_anchor)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      def.name,
+      def.kind,
+      def.hours_per_day,
+      def.daylight_hours,
+      def.days_per_week,
+      def.week_offset,
+      def.start_year,
+      def.era,
+      def.leap_every,
+      def.leap_month,
+      def.leap_anchor
+    );
+  const calendarId = Number(info.lastInsertRowid);
+  const addMonth = db.prepare(
+    'INSERT INTO calendar_months (calendar_id, position, name, days) VALUES (?, ?, ?, ?)'
+  );
+  def.months.forEach((month, index) => addMonth.run(calendarId, index, month.name, month.days));
+  const addSeason = db.prepare(
+    'INSERT INTO calendar_seasons (calendar_id, name, weather, start_day, days) VALUES (?, ?, ?, ?, ?)'
+  );
+  for (const season of def.seasons) {
+    addSeason.run(calendarId, season.name, season.weather, season.start_day, season.days);
+  }
+  return calendarId;
+}
+
+function chapterLedger() {
+  return db
+    .prepare(
+      `SELECT c.id, c.number, c.title, c.sort_order, c.clock_manual, c.clock_flashback,
+              c.clock_year, c.clock_month, c.clock_day, c.clock_hour,
+              COALESCE(r.text, '') AS text
+       FROM chapters c
+       LEFT JOIN revisions r ON r.id = c.current_revision_id
+       ORDER BY c.sort_order, c.id`
+    )
+    .all();
+}
+
+function storeMismatches(chapterId, mismatches) {
+  const previous = new Map(
+    db
+      .prepare('SELECT key, status FROM time_mentions WHERE chapter_id = ?')
+      .all(chapterId)
+      .map((row) => [row.key, row.status])
+  );
+  db.prepare('DELETE FROM time_mentions WHERE chapter_id = ?').run(chapterId);
+  const insert = db.prepare(
+    'INSERT INTO time_mentions (chapter_id, key, kind, raw, proposed, anchor, clock, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  );
+  for (const mention of mismatches) {
+    insert.run(
+      chapterId,
+      mention.key,
+      mention.kind,
+      mention.raw,
+      JSON.stringify(mention.proposed),
+      JSON.stringify(mention.anchor ?? mention.proposed),
+      JSON.stringify(mention.clock),
+      previous.get(mention.key) === 'ignored' ? 'ignored' : 'open'
+    );
+  }
+}
+
+/** Re-read every chapter against the calendar and rebuild the clocks. */
+function refreshCalendar() {
+  const cal = calendarDef();
+  if (!cal) return;
+
+  const rows = chapterLedger();
+  const walked = walkChapters(
+    cal,
+    rows.map((row) => ({
+      id: row.id,
+      sort_order: row.sort_order,
+      text: row.text,
+      manualClock:
+        row.clock_manual && row.clock_year != null
+          ? { year: row.clock_year, month: row.clock_month, day: row.clock_day, hour: row.clock_hour ?? 0 }
+          : null,
+      flashback: row.clock_flashback == null ? undefined : row.clock_flashback === 1,
+    }))
+  );
+
+  const clearClock = db.prepare(
+    `UPDATE chapters SET clock_year = NULL, clock_month = NULL, clock_day = NULL, clock_hour = NULL,
+       clock_end_year = NULL, clock_end_month = NULL, clock_end_day = NULL, clock_end_hour = NULL
+     WHERE id = ?`
+  );
+  const setClock = db.prepare(
+    `UPDATE chapters SET clock_year = ?, clock_month = ?, clock_day = ?, clock_hour = ?,
+       clock_end_year = ?, clock_end_month = ?, clock_end_day = ?, clock_end_hour = ?
+     WHERE id = ?`
+  );
+  const detect = db.prepare('UPDATE chapters SET clock_flashback = 1 WHERE id = ? AND clock_flashback IS NULL');
+
+  for (const entry of walked) {
+    if (entry.flashback) {
+      clearClock.run(entry.id);
+      detect.run(entry.id);
+      storeMismatches(entry.id, []);
+      continue;
+    }
+    setClock.run(
+      entry.clock.year,
+      entry.clock.month,
+      entry.clock.day,
+      entry.clock.hour ?? 0,
+      entry.end.year,
+      entry.end.month,
+      entry.end.day,
+      entry.end.hour ?? 0,
+      entry.id
+    );
+    storeMismatches(entry.id, entry.mismatches);
+  }
+}
+
+function calendarState() {
+  const cal = calendarDef();
+  const empty = { calendar: null, months: [], seasons: [], chapters: [], mismatches: [], elsewhere: [] };
+  if (!cal) return empty;
+
+  const chapters = db
+    .prepare(
+      `SELECT id, number, title, sort_order, clock_manual, clock_flashback,
+              clock_year, clock_month, clock_day, clock_hour,
+              clock_end_year, clock_end_month, clock_end_day, clock_end_hour
+       FROM chapters ORDER BY sort_order, id`
+    )
+    .all()
+    .map((row) => ({
+      id: row.id,
+      number: row.number,
+      title: row.title,
+      sort_order: row.sort_order,
+      manual: !!row.clock_manual,
+      flashback: row.clock_flashback === 1,
+      clock:
+        row.clock_year == null
+          ? null
+          : { year: row.clock_year, month: row.clock_month, day: row.clock_day, hour: row.clock_hour ?? 0 },
+      end:
+        row.clock_end_year == null
+          ? null
+          : {
+              year: row.clock_end_year,
+              month: row.clock_end_month,
+              day: row.clock_end_day,
+              hour: row.clock_end_hour ?? 0,
+            },
+      label: formatDate(cal, row.clock_year == null ? null : { year: row.clock_year, month: row.clock_month, day: row.clock_day }, { hour: true }),
+    }));
+
+  const mismatches = db
+    .prepare(
+      `SELECT m.id, m.chapter_id, m.kind, m.raw, m.proposed, m.anchor, m.clock AS mention_clock, m.key,
+              c.number AS chapter_number, c.title AS chapter_title,
+              c.clock_year, c.clock_month, c.clock_day, c.clock_hour
+       FROM time_mentions m
+       JOIN chapters c ON c.id = m.chapter_id
+       WHERE m.status = 'open'
+       ORDER BY c.sort_order, m.id`
+    )
+    .all()
+    .map((row) => {
+      let proposed = null;
+      let anchor = null;
+      try {
+        proposed = JSON.parse(row.proposed || 'null');
+        anchor = JSON.parse(row.anchor || 'null') ?? proposed;
+      } catch {
+        proposed = null;
+        anchor = null;
+      }
+      let clock = null;
+      try {
+        clock = JSON.parse(row.mention_clock || 'null');
+      } catch {
+        clock = null;
+      }
+      if (!clock && row.clock_year != null) {
+        clock = { year: row.clock_year, month: row.clock_month, day: row.clock_day, hour: row.clock_hour ?? 0 };
+      }
+      return {
+        id: row.id,
+        key: row.key,
+        chapter_id: row.chapter_id,
+        chapter_number: row.chapter_number,
+        chapter_title: row.chapter_title,
+        kind: row.kind,
+        raw: row.raw,
+        proposed,
+        anchor,
+        proposed_label: proposed ? formatDate(cal, proposed, { hour: true }) : '',
+        clock,
+        clock_label: clock ? formatDate(cal, clock, { hour: true }) : '',
+      };
+    });
+
+  const elsewhere = [];
+  for (const chapter of chapters) {
+    if (!chapter.flashback) continue;
+    elsewhere.push({
+      kind: 'chapter',
+      chapter_id: chapter.id,
+      label: `Chapter ${chapter.number || chapter.id}`,
+      title: chapter.title,
+    });
+  }
+  const notes = db
+    .prepare(
+      `SELECT e.id, e.title, e.story_time, e.chapter_id, c.number AS chapter_number, c.title AS chapter_title
+       FROM timeline_events e
+       LEFT JOIN chapters c ON c.id = e.chapter_id
+       WHERE TRIM(COALESCE(e.story_time, '')) <> ''
+       ORDER BY e.story_order, e.id`
+    )
+    .all();
+  for (const note of notes) {
+    elsewhere.push({
+      kind: 'note',
+      chapter_id: note.chapter_id,
+      label: note.chapter_number ? `Chapter ${note.chapter_number}` : 'Unplaced',
+      title: note.title,
+      text: note.story_time,
+    });
+  }
+
+  return {
+    calendar: cal,
+    months: cal.months,
+    seasons: cal.seasons,
+    chapters,
+    mismatches,
+    elsewhere,
+    start: { year: cal.start_year, month: 0, day: 1, hour: 0 },
+  };
+}
+
+app.get('/api/calendar', (_req, res) => {
+  res.json(calendarState());
+});
+
+app.put('/api/calendar', (req, res) => {
+  const def = readCalendarInput(req.body ?? {});
+  const check = validateCalendar(def);
+  if (!check.ok) return res.status(400).json({ error: check.errors[0], errors: check.errors });
+  const existing = calendarDef();
+  if (existing) {
+    const blockers = clockBlockers(def);
+    if (blockers.length > 0) {
+      return res.status(409).json({
+        error: blockers[0].detail,
+        blockers,
+      });
+    }
+  }
+  saveCalendar(def);
+  refreshCalendar();
+  res.json(calendarState());
+});
+
+app.post('/api/calendar/refresh', (_req, res) => {
+  refreshCalendar();
+  res.json(calendarState());
+});
+
+const WEEKDAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+app.get('/api/calendar/month', (req, res) => {
+  const cal = calendarDef();
+  if (!cal) return res.json({ calendar: null });
+  let year = Number(req.query.year);
+  let month = Number(req.query.month);
+  if (!Number.isInteger(year)) year = cal.start_year;
+  if (!Number.isInteger(month)) month = 0;
+  month = Math.min(Math.max(month, 0), cal.months.length - 1);
+
+  const spans = db
+    .prepare(
+      `SELECT id, number, title, clock_year, clock_month, clock_day,
+              clock_end_year, clock_end_month, clock_end_day
+       FROM chapters WHERE clock_year IS NOT NULL
+       ORDER BY sort_order, id`
+    )
+    .all()
+    .map((row) => ({
+      id: row.id,
+      number: row.number,
+      title: row.title,
+      start: dayIndex(cal, { year: row.clock_year, month: row.clock_month, day: row.clock_day }),
+      end: dayIndex(cal, {
+        year: row.clock_end_year ?? row.clock_year,
+        month: row.clock_end_month ?? row.clock_month,
+        day: row.clock_end_day ?? row.clock_day,
+      }),
+    }));
+
+  const count = daysInMonth(cal, year, month);
+  const days = [];
+  for (let day = 1; day <= count; day += 1) {
+    const date = { year, month, day, hour: 0 };
+    const index = dayIndex(cal, date);
+    const season = seasonOn(cal, date);
+    days.push({
+      day,
+      weekday: ((index + (cal.week_offset ?? 0)) % cal.days_per_week + cal.days_per_week) % cal.days_per_week,
+      season: season?.name ?? null,
+      weather: season?.weather ?? '',
+      chapters: spans
+        .filter((span) => index >= span.start && index <= span.end)
+        .map((span) => ({
+          id: span.id,
+          number: span.number,
+          title: span.title,
+          starts: span.start === index,
+          label: `Chapter ${span.number || span.id}`,
+        })),
+    });
+  }
+
+  let prevMonth = month - 1;
+  let prevYear = year;
+  if (prevMonth < 0) {
+    prevMonth = cal.months.length - 1;
+    prevYear -= 1;
+  }
+  let nextMonth = month + 1;
+  let nextYear = year;
+  if (nextMonth >= cal.months.length) {
+    nextMonth = 0;
+    nextYear += 1;
+  }
+
+  res.json({
+    calendar: cal,
+    months: cal.months,
+    seasons: cal.seasons,
+    year,
+    month,
+    monthName: cal.months[month].name,
+    firstWeekday: days[0]?.weekday ?? 0,
+    daysInMonth: count,
+    days,
+    prev: { year: prevYear, month: prevMonth },
+    next: { year: nextYear, month: nextMonth },
+    yearLength: daysInMonth(cal, year, month),
+    weekdays: Array.from({ length: cal.days_per_week }, (_, index) =>
+      cal.days_per_week === 7 ? WEEKDAY_NAMES[index] : String(index + 1)
+    ),
+  });
+});
+
+app.put('/api/chapters/:id/clock', (req, res) => {
+  const cal = calendarDef();
+  if (!cal) return res.status(409).json({ error: 'set the calendar first' });
+  const id = Number(req.params.id);
+  const chapter = chapterRow(id);
+  if (!chapter) return res.status(404).json({ error: 'not found' });
+  const body = req.body ?? {};
+
+  if (body.flashback !== undefined) {
+    db.prepare(
+      `UPDATE chapters SET clock_flashback = ?, clock_manual = 0,
+         clock_year = NULL, clock_month = NULL, clock_day = NULL, clock_hour = NULL,
+         clock_end_year = NULL, clock_end_month = NULL, clock_end_day = NULL, clock_end_hour = NULL
+       WHERE id = ?`
+    ).run(body.flashback ? 1 : 0, id);
+  } else if (body.clear) {
+    db.prepare('UPDATE chapters SET clock_manual = 0 WHERE id = ?').run(id);
+  } else {
+    const year = Number(body.year);
+    const month = Number(body.month);
+    const day = Number(body.day);
+    const hour = Number(body.hour ?? 0);
+    if (![year, month, day, hour].every(Number.isInteger)) {
+      return res.status(400).json({ error: 'year, month, day and hour must be whole numbers' });
+    }
+    const date = clampDate(cal, { year, month, day, hour });
+    db.prepare(
+      `UPDATE chapters SET clock_manual = 1, clock_flashback = 0,
+         clock_year = ?, clock_month = ?, clock_day = ?, clock_hour = ?
+       WHERE id = ?`
+    ).run(date.year, date.month, date.day, date.hour, id);
+  }
+
+  refreshCalendar();
+  res.json(calendarState());
+});
+
+app.post('/api/calendar/mentions/:id/ignore', (req, res) => {
+  db.prepare("UPDATE time_mentions SET status = 'ignored' WHERE id = ?").run(Number(req.params.id));
+  res.json(calendarState());
+});
+
+app.post('/api/calendar/mentions/:id/apply', (req, res) => {
+  const cal = calendarDef();
+  if (!cal) return res.status(409).json({ error: 'set the calendar first' });
+  const mention = db.prepare('SELECT * FROM time_mentions WHERE id = ?').get(Number(req.params.id));
+  if (!mention) return res.status(404).json({ error: 'not found' });
+  let proposed = null;
+  let anchor = null;
+  try {
+    proposed = JSON.parse(mention.proposed || 'null');
+    anchor = JSON.parse(mention.anchor || 'null') ?? proposed;
+  } catch {
+    proposed = null;
+  }
+  if (!proposed) return res.status(400).json({ error: 'this mention has no date to apply' });
+  const date = clampDate(cal, anchor ?? proposed);
+  db.prepare(
+    `UPDATE chapters SET clock_manual = 1, clock_flashback = 0,
+       clock_year = ?, clock_month = ?, clock_day = ?, clock_hour = ?
+     WHERE id = ?`
+  ).run(date.year, date.month, date.day, date.hour, mention.chapter_id);
+  db.prepare("UPDATE time_mentions SET status = 'ignored' WHERE id = ?").run(mention.id);
+  refreshCalendar();
+  res.json(calendarState());
 });
 
 // ---------- static (production build, if present) ----------

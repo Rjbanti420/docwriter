@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { api } from '../api';
 import { chapterLabel } from '../chapters';
+import CalendarPanel from './CalendarPanel';
 import { parseFields } from '../entityMedia';
 import type {
   Chapter,
@@ -14,7 +15,7 @@ import type {
   TimelineRole,
 } from '../types';
 
-type Tab = 'map' | 'story';
+type Tab = 'map' | 'story' | 'calendar';
 type KindFilter = 'all' | TimelineKind;
 
 interface MapMarker {
@@ -565,7 +566,7 @@ export default function TimelineView({
   const [tab, setTab] = useState<Tab>('map');
   // Tabs follow the tablist pattern: one roving stop, arrows/Home/End select.
   const onTabKey = (ev: ReactKeyboardEvent<HTMLDivElement>) => {
-    const order: Tab[] = ['map', 'story'];
+    const order: Tab[] = ['map', 'story', 'calendar'];
     const index = order.indexOf(tab);
     const next =
       ev.key === 'ArrowRight'
@@ -1029,6 +1030,17 @@ export default function TimelineView({
           Story
           {liveEvents.length > 0 && <span className="dw-chip-count">{liveEvents.length}</span>}
         </button>
+        <button
+          role="tab"
+          id="tl-tab-calendar"
+          aria-controls="tl-panel-calendar"
+          aria-selected={tab === 'calendar'}
+          tabIndex={tab === 'calendar' ? 0 : -1}
+          className={tab === 'calendar' ? 'active' : ''}
+          onClick={() => setTab('calendar')}
+        >
+          Calendar
+        </button>
       </div>
 
       {error && (
@@ -1162,6 +1174,10 @@ export default function TimelineView({
               })}
             </ol>
           )}
+        </div>
+      ) : tab === 'calendar' ? (
+        <div role="tabpanel" id="tl-panel-calendar" aria-labelledby="tl-tab-calendar">
+          <CalendarPanel chapters={chapters} onOpenChapter={onOpenChapter} />
         </div>
       ) : (
         <div role="tabpanel" id="tl-panel-story" aria-labelledby="tl-tab-story">

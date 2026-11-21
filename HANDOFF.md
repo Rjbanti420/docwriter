@@ -1317,3 +1317,71 @@ points at the .exe; with mocked user agents Windows → .exe, Linux → AppImage
 macOS → the no-build line. Mocked GitHub responses were tested for full, partial
 and 403 (silent) paths. Live release status was checked with `curl`, not from the
 browser (network blocked there). Nothing was committed or pushed.
+
+## 106) v2 begins: a calendar inside Timeline
+
+**The deal.** The calendar is a book-level definition, one clock per chapter, and a
+scanner that compares the prose with the clock. It never invents a date: the clock
+moves only when a chapter names a time unit ("a day later", "an hour later"). A
+chapter with no time reference starts and ends where the previous chapter ended,
+so several chapters can share one day. A stated date that disagrees is a
+suggestion with three choices — set the clock, open the line, ignore — never a
+silent rewrite.
+
+**Where it lives.** Timeline gained a third tab, **Calendar**. The first time it is
+opened the book has no calendar, so it offers **Earth** (one click) or **Build my
+own**. Earth is not a special case in storage: it is the same tables with real
+month names and lengths.
+
+**Data.** `calendars`, `calendar_months`, `calendar_seasons`, plus `clock_year/
+_month/_day/_hour`, `clock_end_*`, `clock_manual` and `clock_flashback` on
+`chapters`, and `time_mentions` for open disagreements (a mention's `proposed`,
+`anchor` and the `clock` at the mention are JSON). Dates are stored as the writer
+reads them; the absolute day index is derived in `server/calendar.mjs` and never
+stored, so changing a month's length cannot silently move history.
+
+**The walk.** Chapters are visited in manuscript order. A flashback is skipped and
+listed under *Elsewhere* with its number only. A manual clock anchors a chapter;
+the rest start at the previous end. Relative phrases move a running clock; the
+chapter ends where the last one leaves it. "Set the clock to this" stores an anchor
+computed so the mention itself lands on the proposed date, not the chapter's first
+line.
+
+**Seasons.** Seasons are day-of-year ranges, may straddle months or leave gaps, and
+one may wrap the year end — Earth's winter runs from December into February.
+Weather is one editable line per season, not per day. The wizard can generate four
+believable seasons, let you build them by hand, or remove them entirely.
+
+**The wizard.** Months and names → days per month and week → hours and daylight →
+leap days (none, or every N years in a chosen month) → seasons → starting year,
+era and name. It validates each step and names the first problem. Season drafts are
+seeded when you choose "Build them myself", so months edited in an earlier step
+cannot leave overlapping drafts behind.
+
+**Editing a calendar with clocks.** The save is refused with a 409 when a saved
+clock would fall outside a shortened month; the response names the chapter. There
+is no re-mapping. Adding days, renaming a month or changing weather goes through,
+and the clocks are recomputed.
+
+**The month view.** One month at a time from `GET /api/calendar/month`: weekday,
+season and every chapter whose span touches the day. Each day cell is a button, so
+hover, focus and click open the same panel — date, season, weather, the chapters
+that touch it, and "Starts here" where one begins. Empty days stay silent.
+
+**Verification.** `server/calendar.test.mjs` has 12 pure tests (Earth leap years,
+round-trip day index, custom weeks/hours/leap, wrapping seasons, relative and
+absolute phrases, the clock walk, manual anchors, validation, generated seasons,
+flashback detection). The API suite is **229 passing**. `npx tsc --noEmit` and
+`npm run build` are clean. A disposable book on `/tmp/opencode` was driven through
+CDP: Earth January now renders as Winter, day 2 lists chapters 1–3 with "Starts
+here", applying "3rd of March" anchored chapter 3 at 1 March so the mention lands
+on 3 March, "Follow the calendar" brought the mismatch back, Ignore removed it,
+and the flashback toggle moved chapter 5 between the clock list and *Elsewhere*.
+The custom wizard was driven end to end into "The Long Year" — 4 months, 30 days,
+10-hour days, a 5-day week, a leap day every 3 years, three hand-built seasons,
+year 1980 AF — and produced a 10-cell Rise grid.
+
+**Limits.** Absolute detection is the phrase table, not a general date parser: "by
+the time the snows came" is not caught. Earth season boundaries are approximate in
+a leap year (the extra February day shifts the following seasons by one). v1
+free-text `story_time` events are read-only under *Elsewhere*.

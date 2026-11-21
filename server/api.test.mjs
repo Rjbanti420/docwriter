@@ -1781,3 +1781,134 @@ test('event candidates are read-only prose proposals, never events', async (t) =
   const missing = await callError(srv.base, '/api/chapters/999999/event-candidates');
   assert.equal(missing.status, 404);
 });
+
+test('the calendar walks chapter clocks, renders a month, and applies a correction', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  assert.equal((await call(srv.base, '/api/calendar')).calendar, null);
+
+  await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: {
+      number: '1',
+      title: 'The Gate',
+      text: 'A day later, she left. On the 3rd of March the frost broke.',
+    },
+  });
+  await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '2', title: 'After', text: 'She waited.' },
+  });
+
+  const state = await call(srv.base, '/api/calendar', { method: 'PUT', body: { kind: 'earth' } });
+  assert.equal(state.calendar.kind, 'earth');
+  assert.equal(state.months.length, 12);
+  assert.equal(state.chapters.length, 2);
+  assert.deepEqual(state.chapters[0].clock, { year: 1, month: 0, day: 1, hour: 0 });
+  assert.deepEqual(state.chapters[0].end, { year: 1, month: 0, day: 2, hour: 0 });
+  assert.deepEqual(state.chapters[1].clock, state.chapters[0].end);
+  assert.equal(state.mismatches.length, 1);
+  assert.equal(state.mismatches[0].kind, 'month');
+  assert.equal(state.mismatches[0].proposed_label, '3 March 1 CE, 00:00');
+
+  const january = await call(srv.base, '/api/calendar/month?year=1&month=0');
+  assert.equal(january.monthName, 'January');
+  assert.deepEqual(january.days[0].chapters.map((c) => c.number), ['1']);
+  assert.deepEqual(january.days[1].chapters.map((c) => c.number), ['1', '2']);
+
+  const applied = await call(srv.base, `/api/calendar/mentions/${state.mismatches[0].id}/apply`, {
+    method: 'POST',
+  });
+  assert.equal(applied.mismatches.length, 0);
+  // The chapter now starts before the stated day: "A day later" still moves it.
+  assert.deepEqual(applied.chapters[0].clock, { year: 1, month: 2, day: 2, hour: 0 });
+  assert.deepEqual(applied.chapters[0].end, { year: 1, month: 2, day: 3, hour: 0 });
+  assert.equal(applied.chapters[0].manual, true);
+
+  const followed = await call(srv.base, `/api/chapters/${applied.chapters[0].id}/clock`, {
+    method: 'PUT',
+    body: { clear: true },
+  });
+  assert.deepEqual(followed.chapters[0].clock, { year: 1, month: 0, day: 1, hour: 0 });
+  assert.equal(followed.mismatches.length, 1);
+
+  const ignored = await call(srv.base, `/api/calendar/mentions/${followed.mismatches[0].id}/ignore`, {
+    method: 'POST',
+  });
+  assert.equal(ignored.mismatches.length, 0);
+  const rescanned = await call(srv.base, '/api/calendar/refresh', { method: 'POST' });
+  assert.equal(rescanned.mismatches.length, 0, 'Ignore survives a re-scan');
+});
+
+test('a custom calendar refuses an edit that would orphan a saved clock', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const chapter = await call(srv.base, '/api/chapters', {
+    method: 'POST',
+    body: { number: '1', title: 'One', text: 'A day later, the ship moved.' },
+  });
+
+  const custom = {
+    name: 'The Long Year',
+    days_per_week: 5,
+    hours_per_day: 12,
+    daylight_hours: 7,
+    start_year: 1980,
+    era: 'AF',
+    leap_every: null,
+    months: [
+      { name: 'Rise', days: 10 },
+      { name: 'Deep', days: 5 },
+    ],
+    seasons: [{ name: 'Wet', weather: 'Rain.', start_day: 0, days: 6 }],
+  };
+  const state = await call(srv.base, '/api/calendar', { method: 'PUT', body: custom });
+  assert.equal(state.calendar.kind, 'custom');
+  assert.equal(state.calendar.days_per_week, 5);
+  assert.equal(state.seasons[0].name, 'Wet');
+  assert.deepEqual(state.chapters[0].clock, { year: 1980, month: 0, day: 1, hour: 0 });
+
+  const anchored = await call(srv.base, `/api/chapters/${chapter.chapter.id}/clock`, {
+    method: 'PUT',
+    body: { year: 1980, month: 0, day: 10, hour: 6 },
+  });
+  assert.deepEqual(anchored.chapters[0].clock, { year: 1980, month: 0, day: 10, hour: 6 });
+  assert.equal(anchored.chapters[0].manual, true);
+
+  const blocked = await callError(srv.base, '/api/calendar', {
+    method: 'PUT',
+    body: { ...custom, months: [{ name: 'Rise', days: 5 }, { name: 'Deep', days: 5 }] },
+  });
+  assert.equal(blocked.status, 409);
+  assert.match(blocked.body.blockers[0].detail, /Chapter 1/);
+
+  const flashback = await call(srv.base, `/api/chapters/${chapter.chapter.id}/clock`, {
+    method: 'PUT',
+    body: { flashback: true },
+  });
+  assert.equal(flashback.chapters[0].flashback, true);
+  assert.equal(flashback.chapters[0].clock, null);
+  assert.ok(flashback.elsewhere.some((item) => item.kind === 'chapter' && item.chapter_id === chapter.chapter.id));
+});
+
+test('calendar validation names the first bad field', async (t) => {
+  const srv = await startServer();
+  t.after(srv.stop);
+
+  const bad = await callError(srv.base, '/api/calendar', {
+    method: 'PUT',
+    body: {
+      name: 'Broken',
+      months: [{ name: 'One', days: 10 }, { name: 'one', days: 4 }],
+      hours_per_day: 24,
+      daylight_hours: 12,
+      days_per_week: 7,
+      start_year: 1,
+      seasons: [],
+    },
+  });
+  assert.equal(bad.status, 400);
+  assert.ok(Array.isArray(bad.body.errors) && bad.body.errors.length > 0);
+});

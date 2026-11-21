@@ -298,6 +298,63 @@ CREATE INDEX IF NOT EXISTS idx_qc_status ON question_candidates(status);
 CREATE INDEX IF NOT EXISTS idx_gc_chapter ON gun_candidates(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_gc_status ON gun_candidates(status);
 CREATE INDEX IF NOT EXISTS idx_gc_normalized ON gun_candidates(normalized);
+
+-- The calendar is book-level state. Dates are stored as the writer reads them
+-- (year, month, day, hour); the absolute day is derived in server/calendar.mjs,
+-- so editing a month's length cannot silently move the book's history.
+CREATE TABLE IF NOT EXISTS calendars (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'custom',
+  hours_per_day INTEGER NOT NULL DEFAULT 24,
+  daylight_hours INTEGER NOT NULL DEFAULT 12,
+  days_per_week INTEGER NOT NULL DEFAULT 7,
+  week_offset INTEGER NOT NULL DEFAULT 0,
+  start_year INTEGER NOT NULL DEFAULT 1,
+  era TEXT DEFAULT '',
+  leap_every INTEGER,
+  leap_month INTEGER,
+  leap_anchor INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS calendar_months (
+  id INTEGER PRIMARY KEY,
+  calendar_id INTEGER NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  days INTEGER NOT NULL,
+  UNIQUE (calendar_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS calendar_seasons (
+  id INTEGER PRIMARY KEY,
+  calendar_id INTEGER NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  weather TEXT DEFAULT '',
+  start_day INTEGER NOT NULL,
+  days INTEGER NOT NULL
+);
+
+-- Open absolute-date disagreements. The row remembers "Ignore" across re-scans;
+-- a resolved mention disappears when the clock agrees.
+CREATE TABLE IF NOT EXISTS time_mentions (
+  id INTEGER PRIMARY KEY,
+  chapter_id INTEGER NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  raw TEXT NOT NULL,
+  proposed TEXT DEFAULT '{}',
+  anchor TEXT DEFAULT '{}',
+  clock TEXT DEFAULT '{}',
+  status TEXT DEFAULT 'open',
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE (chapter_id, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_calendar_months ON calendar_months(calendar_id, position);
+CREATE INDEX IF NOT EXISTS idx_calendar_seasons ON calendar_seasons(calendar_id, start_day);
+CREATE INDEX IF NOT EXISTS idx_time_mentions_chapter ON time_mentions(chapter_id, status);
 `;
 
 const BUILTIN_TYPES = [
@@ -324,6 +381,20 @@ export function migrate() {
   ensureColumn('alerts', 'gun_id', 'gun_id INTEGER');
   // story_day is an authored day count; the app only subtracts, never dates it.
   ensureColumn('timeline_events', 'story_day', 'story_day INTEGER');
+  // The calendar clock: a chapter's start, its derived end, and whether the
+  // writer anchored it. clock_flashback NULL means "detect from the prose".
+  ensureColumn('chapters', 'clock_year', 'clock_year INTEGER');
+  ensureColumn('chapters', 'clock_month', 'clock_month INTEGER');
+  ensureColumn('chapters', 'clock_day', 'clock_day INTEGER');
+  ensureColumn('chapters', 'clock_hour', 'clock_hour INTEGER');
+  ensureColumn('chapters', 'clock_end_year', 'clock_end_year INTEGER');
+  ensureColumn('chapters', 'clock_end_month', 'clock_end_month INTEGER');
+  ensureColumn('chapters', 'clock_end_day', 'clock_end_day INTEGER');
+  ensureColumn('chapters', 'clock_end_hour', 'clock_end_hour INTEGER');
+  ensureColumn('chapters', 'clock_manual', 'clock_manual INTEGER DEFAULT 0');
+  ensureColumn('chapters', 'clock_flashback', 'clock_flashback INTEGER');
+  ensureColumn('time_mentions', 'anchor', "anchor TEXT DEFAULT '{}'");
+  ensureColumn('time_mentions', 'clock', "clock TEXT DEFAULT '{}'");
   const count = db.prepare('SELECT COUNT(*) AS n FROM types').get().n;
   if (count === 0) {
     const insert = db.prepare(
