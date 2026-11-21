@@ -103,7 +103,6 @@ export default function CalendarPanel({
   const [view, setView] = useState<CalendarMonthView | null>(null);
   const [cursor, setCursor] = useState<{ year: number; month: number } | null>(null);
   const [selected, setSelected] = useState<CalendarDay | null>(null);
-  const [pinned, setPinned] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const hoverTimer = useRef<number | null>(null);
   const [wizard, setWizard] = useState(false);
@@ -151,7 +150,6 @@ export default function CalendarPanel({
         if (!alive) return;
         setView(next);
         setSelected(null);
-        setPinned(false);
         setShowAll(false);
       })
       .catch((err) => {
@@ -175,9 +173,9 @@ export default function CalendarPanel({
     }
   };
 
-  // Moving from a day to the panel below crosses other cells. Hover needs a
-  // moment to settle, and a click pins the day so reading the panel cannot
-  // change it. Entering the panel cancels any hover still in flight.
+  // Moving from a day to the panel below crosses other cells. A short settle
+  // delay ignores that pass-through, and entering the panel cancels any hover
+  // still in flight. Hover keeps working after a click.
   const cancelHover = () => {
     if (hoverTimer.current != null) {
       clearTimeout(hoverTimer.current);
@@ -189,11 +187,9 @@ export default function CalendarPanel({
   const showDay = (day: CalendarDay) => {
     cancelHover();
     setSelected(day);
-    setPinned(true);
     setShowAll(false);
   };
   const hoverDay = (day: CalendarDay) => {
-    if (pinned) return;
     cancelHover();
     hoverTimer.current = window.setTimeout(() => {
       hoverTimer.current = null;
