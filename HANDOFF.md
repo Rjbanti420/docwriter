@@ -1383,11 +1383,12 @@ year 1980 AF — and produced a 10-cell Rise grid.
 
 **Hover fix.** The day panel sits below the grid, so moving from a cell toward it
 crossed other days and replaced the chapter list before it could be clicked. Hover
-now settles for 220ms before switching days, a click pins the day, and entering the
-panel cancels any hover in flight. Each chapter button also says "Open →". CDP
-reproduced the old failure (day 2 → day 30, chapter buttons gone) and confirmed both
-the hover and click paths now keep day 2's chapters clickable through to the Read
-view.
+now settles for 220ms before switching days and entering the panel cancels any
+hover in flight; hover keeps previewing other dates after a click. Each chapter
+button also says "Open →". CDP reproduced the old failure (day 2 → day 30,
+chapter buttons gone) and confirmed that hovering a day keeps its chapters
+clickable through to the Read view, both before and after clicking a different
+date.
 
 **Limits.** Absolute detection is the phrase table, not a general date parser: "by
 the time the snows came" is not caught. Earth season boundaries are approximate in
